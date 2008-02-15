@@ -17,6 +17,14 @@
  *		Mike McLagan	:	Routing by source
  */
 
+ /*
+ * Copyright (c) 2006 Motorola, Inc. 
+ * Revision History:
+    Date             Description of Changes
+----------------    -------------------------
+  06/07/2006         add a new sock option IP_USE_RECVTOS
+ */
+
 #include <linux/config.h>
 #include <linux/types.h>
 #include <linux/mm.h>
@@ -392,7 +400,8 @@ int ip_setsockopt(struct sock *sk, int level, int optname, char *optval, int opt
 			    (1<<IP_MTU_DISCOVER) | (1<<IP_RECVERR) | 
 			    (1<<IP_ROUTER_ALERT) | (1<<IP_FREEBIND))) || 
 				optname == IP_MULTICAST_TTL || 
-				optname == IP_MULTICAST_LOOP) { 
+				optname == IP_MULTICAST_LOOP ||
+            optname == IP_USE_RECVTOS) { 
 		if (optlen >= sizeof(int)) {
 			if (get_user(val, (int *) optval))
 				return -EFAULT;
@@ -514,6 +523,12 @@ int ip_setsockopt(struct sock *sk, int level, int optname, char *optval, int opt
 			sk->protinfo.af_inet.recverr = !!val;
 			if (!val)
 				skb_queue_purge(&sk->error_queue);
+			break;
+      case IP_USE_RECVTOS:
+			if (sk->type != SOCK_STREAM) {
+           goto e_inval; 
+         }
+			sk->protinfo.af_inet.use_recvtos = !!val;
 			break;
 		case IP_MULTICAST_TTL:
 			if (sk->type == SOCK_STREAM)
@@ -728,6 +743,9 @@ int ip_getsockopt(struct sock *sk, int level, int optname, char *optval, int *op
 		}
 		case IP_RECVERR:
 			val=sk->protinfo.af_inet.recverr;
+			break;
+		case IP_USE_RECVTOS:
+			val=sk->protinfo.af_inet.use_recvtos;
 			break;
 		case IP_MULTICAST_TTL:
 			val=sk->protinfo.af_inet.mc_ttl;

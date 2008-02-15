@@ -14,6 +14,13 @@
  *		modify it under the terms of the GNU General Public License
  *		as published by the Free Software Foundation; either version
  *		2 of the License, or (at your option) any later version.
+
+ *
+ * Copyright (c) 2006 Motorola, Inc. 
+ * Revision History:
+    Date             Description of Changes
+----------------    -------------------------
+  06/07/2006         add a new sock option IP_USE_RECVTOS
  */
 #ifndef _LINUX_IN_H
 #define _LINUX_IN_H
@@ -67,6 +74,9 @@ struct in_addr {
 #define	IP_RECVTOS	13
 #define IP_MTU		14
 #define IP_FREEBIND	15
+
+/* motorola extension */
+#define IP_USE_RECVTOS 101
 
 /* BSD compatibility */
 #define IP_RECVRETOPTS	IP_RETOPTS

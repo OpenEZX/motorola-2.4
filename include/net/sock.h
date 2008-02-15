@@ -30,6 +30,19 @@
  *		as published by the Free Software Foundation; either version
  *		2 of the License, or (at your option) any later version.
  */
+/*
+ *
+ *   2005-Apr-04 Motorola  Add security patch 
+ */
+/*
+ * Copyright (c) 2005 Motorola, Inc. 
+ * Revision History:
+    Date             Description of Changes
+----------------    -------------------------
+  09/15/2005         add ipsec nat
+  06/07/2006         add a new sock option IP_USE_RECVTOS
+*/
+
 #ifndef _SOCK_H
 #define _SOCK_H
 
@@ -52,6 +65,7 @@
 
 #include <linux/netdevice.h>
 #include <linux/skbuff.h>	/* struct sk_buff */
+#include <linux/security.h>
 #include <net/protocol.h>		/* struct inet_protocol */
 #if defined(CONFIG_X25) || defined(CONFIG_X25_MODULE)
 #include <net/x25.h>
@@ -207,7 +221,8 @@ struct inet_opt
 	__u8			mc_ttl;			/* Multicasting TTL */
 	__u8			mc_loop;		/* Loopback */
 	unsigned		recverr : 1,
-				freebind : 1;
+				freebind : 1,
+               use_recvtos : 1; /* motorola extension: use recv TOS for TCP socket */
 	__u16			id;			/* ID counter for DF pkts */
 	__u8			pmtudisc;
 	int			mc_index;		/* Multicast device index */
@@ -420,6 +435,12 @@ struct tcp_opt {
 	unsigned long last_synq_overflow; 
 };
 
+#if 1
+#define UDP_OPT_IN_SOCK 1
+struct udp_opt {
+	__u32 esp_in_udp;
+};
+#endif
  	
 /*
  * This structure really needs to be cleaned up.
@@ -585,6 +606,10 @@ struct sock {
 		struct spx_opt		af_spx;
 #endif /* CONFIG_SPX */
 
+#if 1
+		struct udp_opt          af_udp;
+#endif
+
 	} tp_pinfo;
 
 	int			err, err_soft;	/* Soft holds errors that don't
@@ -668,6 +693,11 @@ struct sock {
 
 	/* RPC layer private data */
 	void			*user_data;
+
+#ifdef CONFIG_SECURITY_NETWORK
+	/* LSM security field */
+	void 			*security;
+#endif
   
 	/* Callbacks */
 	void			(*state_change)(struct sock *sk);
@@ -679,6 +709,17 @@ struct sock {
 						struct sk_buff *skb);  
 	void                    (*destruct)(struct sock *sk);
 };
+
+static inline void clone_sk(struct sock *newsk, struct sock *sk) {
+#ifdef CONFIG_SECURITY_NETWORK 
+	/* Save/restore the LSM security pointer around the copy */
+	void *sptr = newsk->security; 
+	memcpy(newsk, sk, sizeof(*newsk));
+	newsk->security = sptr;
+#else
+	memcpy(newsk, sk, sizeof(*newsk));
+#endif
+}
 
 /* The per-socket spinlock must be held here. */
 #define sk_add_backlog(__sk, __skb)			\
@@ -1134,6 +1175,7 @@ static inline void skb_set_owner_w(struct sk_buff *skb, struct sock *sk)
 	skb->sk = sk;
 	skb->destructor = sock_wfree;
 	atomic_add(skb->truesize, &sk->wmem_alloc);
+	security_skb_set_owner_w(skb, sk);
 }
 
 static inline void skb_set_owner_r(struct sk_buff *skb, struct sock *sk)

@@ -12,6 +12,15 @@
  *  to bring the system back to freepages.high: 2.4.97, Rik van Riel.
  *  Zone aware kswapd started 02/00, Kanoj Sarcar (kanoj@sgi.com).
  *  Multiqueue VM started 5.8.00, Rik van Riel.
+ * 
+ *  Copyright (C) 2006 Motorola, Inc.
+ *
+ *  Revision history:
+ *
+ *  2006/04/22
+ *  - Add some printk log when CONFIG_NO_SWAP.
+ *  2006/05/29
+ *  - Made CONFIG_NO_SWAP includes the right code scope.
  */
 
 #include <linux/slab.h>
@@ -23,6 +32,8 @@
 #include <linux/init.h>
 #include <linux/highmem.h>
 #include <linux/file.h>
+#include <linux/proc_fs.h>
+#include <linux/oom.h>
 
 #include <asm/pgalloc.h>
 
@@ -124,6 +135,7 @@ drop_pte:
 	if (page->buffers)
 		goto preserve;
 
+#ifndef CONFIG_NO_SWAP
 	/*
 	 * This is a dirty, swappable page.  First of all,
 	 * get a suitable swap entry for it, and make sure
@@ -148,6 +160,8 @@ drop_pte:
 	}
 
 	/* No swap space left */
+#endif
+
 preserve:
 	set_pte(page_table, pte);
 	UnlockPage(page);
@@ -159,6 +173,8 @@ static inline int swap_out_pmd(struct mm_struct * mm, struct vm_area_struct * vm
 {
 	pte_t * pte;
 	unsigned long pmd_end;
+
+	DEFINE_LOCK_COUNT();
 
 	if (pmd_none(*dir))
 		return count;
@@ -184,6 +200,14 @@ static inline int swap_out_pmd(struct mm_struct * mm, struct vm_area_struct * vm
 					address += PAGE_SIZE;
 					break;
 				}
+				/* we reach this with a lock depth of 1 or 2 */
+#if 0
+				if (TEST_LOCK_COUNT(4)) {
+					if (conditional_schedule_needed())
+						return count;
+					RESET_LOCK_COUNT();
+				}
+#endif
 			}
 		}
 		address += PAGE_SIZE;
@@ -217,6 +241,9 @@ static inline int swap_out_pgd(struct mm_struct * mm, struct vm_area_struct * vm
 		count = swap_out_pmd(mm, vma, pmd, address, end, count, classzone);
 		if (!count)
 			break;
+		/* lock depth can be 1 or 2 */
+		if (conditional_schedule_needed())
+			return count;
 		address = (address + PMD_SIZE) & PMD_MASK;
 		pmd++;
 	} while (address && (address < end));
@@ -241,6 +268,9 @@ static inline int swap_out_vma(struct mm_struct * mm, struct vm_area_struct * vm
 		count = swap_out_pgd(mm, vma, pgdir, address, end, count, classzone);
 		if (!count)
 			break;
+		/* lock depth can be 1 or 2 */
+		if (conditional_schedule_needed())
+			return count;
 		address = (address + PGDIR_SIZE) & PGDIR_MASK;
 		pgdir++;
 	} while (address && (address < end));
@@ -263,6 +293,10 @@ static inline int swap_out_mm(struct mm_struct * mm, int count, int * mmcounter,
 	 * and ptes.
 	 */
 	spin_lock(&mm->page_table_lock);
+
+#if 0
+continue_scan:
+#endif
 	address = mm->swap_address;
 	if (address == TASK_SIZE || swap_mm != mm) {
 		/* We raced: don't count this mm but try again */
@@ -279,6 +313,13 @@ static inline int swap_out_mm(struct mm_struct * mm, int count, int * mmcounter,
 			vma = vma->vm_next;
 			if (!vma)
 				break;
+			/* we reach this with a lock depth of 1 and 2 */
+#if 0
+			if (conditional_schedule_needed()) {
+				break_spin_lock(&mm->page_table_lock);
+				goto continue_scan;
+			}
+#endif
 			if (!count)
 				goto out_unlock;
 			address = vma->vm_start;
@@ -300,6 +341,7 @@ static int swap_out(unsigned int priority, unsigned int gfp_mask, zone_t * class
 
 	counter = mmlist_nr;
 	do {
+		/* lock depth can be 0 or 1 */
 		if (unlikely(current->need_resched)) {
 			__set_current_state(TASK_RUNNING);
 			schedule();
@@ -345,6 +387,7 @@ static int shrink_cache(int nr_pages, zone_t * classzone, unsigned int gfp_mask,
 	while (--max_scan >= 0 && (entry = inactive_list.prev) != &inactive_list) {
 		struct page * page;
 
+		/* lock depth is 1 or 2 */
 		if (unlikely(current->need_resched)) {
 			spin_unlock(&pagemap_lru_lock);
 			__set_current_state(TASK_RUNNING);
@@ -390,7 +433,7 @@ static int shrink_cache(int nr_pages, zone_t * classzone, unsigned int gfp_mask,
 			continue;
 		}
 
-		if (PageDirty(page) && is_page_cache_freeable(page) && page->mapping) {
+		if ((PageDirty(page) || DelallocPage(page)) && is_page_cache_freeable(page) && page->mapping) {
 			/*
 			 * It is not critical here to write it only if
 			 * the page is unmapped beause any direct writer
@@ -470,7 +513,7 @@ static int shrink_cache(int nr_pages, zone_t * classzone, unsigned int gfp_mask,
 		/*
 		 * this is the non-racy check for busy page.
 		 */
-		if (!page->mapping || !is_page_cache_freeable(page)) {
+		if (!page->mapping || page_count(page) != 1) {
 			spin_unlock(&pagecache_lock);
 			UnlockPage(page);
 page_mapped:
@@ -645,8 +688,11 @@ static int kswapd_balance_pgdat(pg_data_t * pgdat)
 
 	for (i = pgdat->nr_zones-1; i >= 0; i--) {
 		zone = pgdat->node_zones + i;
+		debug_lock_break(0);
+#ifndef CONFIG_PREEMPT
 		if (unlikely(current->need_resched))
 			schedule();
+#endif
 		if (!zone->need_balance)
 			continue;
 		if (!try_to_free_pages_zone(zone, GFP_KSWAPD)) {
@@ -766,7 +812,50 @@ int kswapd(void *unused)
 
 static int __init kswapd_init(void)
 {
+#ifdef CONFIG_PRIORITIZED_OOM_KILL
+	static struct proc_dir_entry *root_oom_dir;
+	static struct proc_dir_entry *oom_proc;
+	int i;
+
+	printk("Setting up prioritized oom_kill functions\n");
+	oom_dontkill.next = NULL;
+	oom_killable.next = NULL;
+	for (i = 0; i < PROC_NAME_SIZE; i++) {
+		oom_dontkill.name[i] = oom_killable.name[i] = '\0';
+	}
+	/* create /proc/sys/kernel/oom */
+	root_oom_dir = proc_mkdir("sys/kernel/oom", 0);
+	if (!root_oom_dir) {
+		printk("couldn't make sys/kernel/oom\n");
+		return 0;
+	}
+	/* create /proc/sys/kernel/oom/killable */
+	oom_proc = create_proc_entry("killable", 0600, root_oom_dir);
+	if (!oom_proc) {
+		printk("couldn't make killable proc file\n");
+		return 0;
+	}
+	oom_proc->read_proc = killable_read_proc;
+	oom_proc->write_proc = killable_write_proc;
+        /* create /proc/sys/kernel/oom/dontkill */
+        oom_proc = create_proc_entry("dontkill", 0600, root_oom_dir);
+
+        if (!oom_proc) {
+		printk("couldn't make dontkill proc file\n");
+        	return 0;
+	}
+        oom_proc->read_proc = dontkill_read_proc;
+        oom_proc->write_proc = dontkill_write_proc;
+#endif /* CONFIG_PRIORITIZED_OOM_KILL */
+
+#ifndef CONFIG_EMBEDDED_OOM_KILLER
+	printk("Disabling the Out Of Memory Killer\n");
+#endif
+#ifdef CONFIG_NO_SWAP
+	printk("NO SWAP, kswapd acts as a background shrinking cache kernel daemon.\n");
+#else
 	printk("Starting kswapd\n");
+#endif
 	swap_setup();
 	kernel_thread(kswapd, NULL, CLONE_FS | CLONE_FILES | CLONE_SIGNAL);
 	return 0;

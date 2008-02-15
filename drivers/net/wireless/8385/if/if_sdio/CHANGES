@@ -1,0 +1,13 @@
+04/26/06:
+	updated file header
+
+02/21/06:
+	1)Remove sd8385.h and helper.h
+01/30/06:
+	1) Added FW/Helper downlaod support
+
+11/11/05:
+	1) change new firmware, since new dirver and old firmware are not backward compatible 
+
+09/07/05:
+	branch out from main line

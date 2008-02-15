@@ -46,6 +46,12 @@
  *	Andi Kleen		:	Fix new listen.
  *	Andi Kleen		:	Fix accept error reporting.
  */
+/*
+ *
+ * 2005-Apr-04 Motorola  Add security patch 
+ * 2006-May-10 Motorola  use recvived TOS for TCP socket 
+ */
+
 
 #include <linux/config.h>
 #include <linux/types.h>
@@ -53,6 +59,7 @@
 #include <linux/random.h>
 #include <linux/cache.h>
 #include <linux/init.h>
+#include <linux/security.h>
 
 #include <net/icmp.h>
 #include <net/tcp.h>
@@ -1299,6 +1306,8 @@ static int tcp_v4_send_synack(struct sock *sk, struct open_request *req,
 	if (skb) {
 		struct tcphdr *th = skb->h.th;
 
+		security_tcp_synack(sk, skb, req);
+
 		th->check = tcp_v4_check(th, skb->len,
 					 req->af.v4_req.loc_addr, req->af.v4_req.rmt_addr,
 					 csum_partial((char *)th, skb->len, skb->csum));
@@ -1506,6 +1515,8 @@ int tcp_v4_conn_request(struct sock *sk, struct sk_buff *skb)
 		isn = tcp_v4_init_sequence(sk, skb);
 	}
 	req->snt_isn = isn;
+
+	security_tcp_connection_request(sk, skb, req);
 
 	if (tcp_v4_send_synack(sk, req, dst))
 		goto drop_and_free;
@@ -1758,12 +1769,21 @@ process:
 	if(!ipsec_sk_policy(sk,skb))
 		goto discard_and_relse;
 
+	if (security_sock_rcv_skb(sk, skb))
+		goto discard_and_relse;
+
 	if (sk->state == TCP_TIME_WAIT)
 		goto do_time_wait;
 
 	skb->dev = NULL;
 
 	bh_lock_sock(sk);
+
+   if( sk->protinfo.af_inet.use_recvtos && sk->protinfo.af_inet.tos != skb->nh.iph->tos ) {
+       sk->protinfo.af_inet.tos = skb->nh.iph->tos;
+       sk->priority = rt_tos2priority(skb->nh.iph->tos);
+   }
+
 	ret = 0;
 	if (!sk->lock.users) {
 		if (!tcp_prequeue(sk, skb))

@@ -1,0 +1,121 @@
+9/9/06:
+   1.Comment out resetting dnld_sent in wlan_tx_timeout()
+     to avoid crashing firmware
+9/5/06:
+   1.Add code to avoid dead loop in wlan_main_thread. 
+9/5/06:
+   1.Add proc interface to trigger recovery mechanism.
+9/1/06:
+   1.Add more code to avoid dead loop in wlan_scan_networks()function.
+8/31/06:
+   1.Add code to support recovery mechanism.
+8/16/06:
+   1. fix memory overflow issue in hostcmd ioctl
+8/02/06:
+   1. move function int string_to_number(char *s) to wlan_proc.c
+7/17/06:
+   1. Add code to read firmware from proc.
+6/07/06:
+   1.Fix direct access user mode memory in wlan_hostcmd_ioctl funciton.
+5/11/06:
+   1. Add variable Adapter->bScanDone and fix no scan result issue
+
+5/3/06:
+   1. Add auto_tx hostcmd for NAT Keep Alive
+
+04/28/06:
+   1. implemented generic hostcmd API
+
+04/26/06:
+   1. updated file header
+
+4/13/06:
+   1.Support Manufacturing firmware.
+   2.Add MODULE_PARM(mfgmode, "i")
+
+4/03/06:
+   1. Remove HARDCODED_REGION_CODE test condition.
+   2. Copy EEPROM regioncode to Adapter->RegionCode w/o 8-bit shift.
+
+3/31/06:
+   1. changed kfree to vfree in fw_read function.
+
+3/30/06:
+   1. Chenged to use vmalloc to allocate buffer for fw/herlper download.
+
+3/22/06:
+   1. wlan_wext.c: Add a while loop in wlan_scan_networks to fix a scan bug.
+
+3/22/06:
+   1. wlan_config.c: Add BYTE_ORDER preproc check; undef BIG_ENDIAN accordingly
+
+3/14/06:
+   1. change to load binary format firmware file.
+
+3/10/06:
+   1. support "iwprive ethx getSNR 4" command to return Rxpd data rate.
+   2. "iwpriv ethx getSNR" will return Rxpd data rate too.
+
+3/02/06:
+   1. when sleep period != 0, we don't apply HostSleep config
+
+3/01/06:
+    1. remove wlancis.c from the project
+
+2/22/06:
+    1. fix external fw image loading problem in DOS mode
+
+2/22/06:
+    1. Add Read RTSthr/Fragthr/RetryCount from firmware
+
+2/16/06:
+    1. Clear scan in progress flag when scan command failed and dropped.
+
+2/08/06:
+    1. fix memory SSID with wrong size
+
+1/31/06:
+    1. Added support for the channel scan filter in firmware.
+
+01/30/06:
+	1) Added FW/Helper downlaod support
+
+01/12/06:
+	1. Fix insmod/rmmod loop test failure due to FW load failure & memory leak
+
+12/30/05:
+	1. Fix WIFI test wpa-psk roaming test fail to roaming back broadcom AP.
+
+12/19/05:
+	1. Ported the command to support NULL packet generation interval in PS mode.
+
+12/19/05:
+	1. Fix adapter not exit deep sleep mode during remove card 
+	2. Fix memory not been properly free
+
+12/13/05:
+	1. Support MOT wildcard SSID in BGSCAN
+
+11/23/05:
+	1. Add SLIDING_WIN_AVG define to support new SNR/NF Average Calculation
+
+11/10/05:
+	1. Set the unused PowerMode filed to 0 in HostCmd_DS_802_11_PS_MODE structure.
+
+11/10/05:
+	1. When defined _MAINSTONE, watchdogtimeout is set to 2 second, otherwise
+        it will be set to 50 ms. 
+	2. Added support for dynamic WMM Parameter IE updates from the firmware.
+
+11/03/05:
+	1.Enable TX queue data with PS mode when WMM is enabled
+
+09/28/05:
+	1.If We find client is disconnected, we will call PSWakeup(priv, 0) function in 
+	Enter_PS command response. 
+
+09/26/05:
+	1. Added back VALID_SRANGE for RxPD SNR/NF
+
+09/07/05:
+	branch out from main line

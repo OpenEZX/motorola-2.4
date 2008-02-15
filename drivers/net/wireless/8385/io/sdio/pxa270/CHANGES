@@ -1,0 +1,18 @@
+05/23/06:
+	1. Update file header
+
+04/27/06:
+	1. Update file header
+
+04/26/06:
+	1. Set MMC_CMD to CMD0 in sdio_resume() to fix KB88
+		polling IO_READY timeout issue
+
+02/21/06:
+	1. Fix power suspend/resume issue 
+
+09/23/05:
+	1. Set mask register to allow MMC_I_MASK_SDIO_INT only if the state
+		to be set is FSM_IDLE in __set_state()
+09/07/05:
+	branch out from main line

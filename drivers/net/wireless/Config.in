@@ -1,12 +1,32 @@
+#==========================================================================
 #
-# Wireless LAN device configuration
+#   File: Config.in
 #
+#   General Description:
+#               Wireless LAN device configuration
+#
+#==========================================================================
+#  Copyright (C) 2005-2006 Motorola Inc.
+#
+#  Changelog:
+#
+#  2005-Feb-01 Motorola - Change for Martinique product
+#  2006-Aug-16 Motorola - Remove 8385_mfg driver
+#==========================================================================
+if [ "$CONFIG_ARCH_EZX_MARTINIQUE" = "y" ]; then
+   define_bool CONFIG_NET_RADIO y
+fi
+
+if [ "$CONFIG_NET_RADIO" = "y" ]; then
+   tristate '  Marvell SD8385 module' CONFIG_MARVELL_WIFI
+   tristate '  Marvell SDIO module' CONFIG_MARVELL_SDIO
+fi
 
 if [ "$CONFIG_ISA" = "y" -o "$CONFIG_PCI" = "y" ]; then
    tristate '  Cisco/Aironet 34X/35X/4500/4800 ISA and PCI cards' CONFIG_AIRO
 fi
 
-tristate '  Hermes chipset 802.11b support (Orinoco/Prism2/Symbol)' CONFIG_HERMES
+#tristate '  Hermes chipset 802.11b support (Orinoco/Prism2/Symbol)' CONFIG_HERMES
 
 if [ "$CONFIG_ALL_PPC" = "y" ]; then
    dep_tristate '    Apple Airport support (built-in)' CONFIG_APPLE_AIRPORT $CONFIG_HERMES
@@ -27,7 +47,9 @@ fi
 
 # yes, this works even when no drivers are selected
 if [ "$CONFIG_ISA" = "y" -o "$CONFIG_PCI" = "y" -o \
-     "$CONFIG_ALL_PPC" = "y" -o "$CONFIG_PCMCIA" != "n" ]; then
+     "$CONFIG_ALL_PPC" = "y" -o "$CONFIG_PCMCIA" != "n" -o \
+     "$CONFIG_MARVELL_WIFI" = "m" -o \
+     "$CONFIG_MARVELL_SDIO" = "m"]; then 
    define_bool CONFIG_NET_WIRELESS y
 else
    define_bool CONFIG_NET_WIRELESS n

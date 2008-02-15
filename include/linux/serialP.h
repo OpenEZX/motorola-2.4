@@ -2,9 +2,15 @@
  * Private header file for the (dumb) serial driver
  *
  * Copyright (C) 1997 by Theodore Ts'o.
+ * Copyright (C) 2004 Motorola, Inc.
  * 
  * Redistribution of this file is permitted under the terms of the GNU 
  * Public License (GPL)
+ */
+/*
+ * Revision History:
+ *     03/14/2004  add uart pm support
+ *
  */
 
 #ifndef _LINUX_SERIALP_H
@@ -30,6 +36,10 @@
 #include <linux/serial.h>
 #endif
 
+#ifdef CONFIG_PM
+#include <linux/pm.h>
+#endif
+
 struct serial_state {
 	int	magic;
 	int	baud_base;
@@ -53,6 +63,9 @@ struct serial_state {
 	int	io_type;
 	struct async_struct *info;
 	struct pci_dev	*dev;
+#ifdef CONFIG_PM
+	struct pm_dev *pm_dev;
+#endif
 };
 
 struct async_struct {

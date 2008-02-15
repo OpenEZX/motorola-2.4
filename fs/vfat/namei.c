@@ -13,6 +13,10 @@
  *
  *  Support Multibyte character and cleanup by
  *  				OGAWA Hirofumi <hirofumi@mail.parknet.co.jp>
+ *
+ *  Copyright (C) 2005 Motorola Inc.
+ *
+ *  modified  2005/04
  */
 
 #include <linux/module.h>
@@ -894,6 +898,12 @@ static int vfat_add_entry(struct inode *dir,struct qstr* qname,
 	int dummy_ino;
 	loff_t dummy;
 
+	/* if create a hidden dir on linux OS, set ATTR_HIDDEN for windows */
+	int is_hid = 0;  
+
+	if (qname->name[0] == '.')
+	    is_hid = 1;
+
 	dir_slots = (struct msdos_dir_slot *)
 	       kmalloc(sizeof(struct msdos_dir_slot) * MSDOS_SLOTS, GFP_KERNEL);
 	if (dir_slots == NULL)
@@ -943,6 +953,9 @@ static int vfat_add_entry(struct inode *dir,struct qstr* qname,
 	fat_date_unix2dos(dir->i_mtime, &(*de)->time, &(*de)->date);
 	(*de)->ctime = (*de)->time;
 	(*de)->adate = (*de)->cdate = (*de)->date;
+	
+	if (is_hid)
+	    (*de)->attr |= ATTR_HIDDEN; 
 
 	fat_mark_buffer_dirty(sb, *bh);
 
@@ -1095,6 +1108,10 @@ int vfat_rmdir(struct inode *dir,struct dentry* dentry)
 	/* releases bh */
 	vfat_remove_entry(dir,&sinfo,bh,de);
 	dir->i_nlink--;
+
+	/* to sync dir */
+	fsync_dev(dentry->d_inode->i_dev);
+			
 	return 0;
 }
 
@@ -1147,6 +1164,9 @@ int vfat_mkdir(struct inode *dir,struct dentry* dentry,int mode)
 		goto mkdir_failed;
 	dentry->d_time = dentry->d_parent->d_inode->i_version;
 	d_instantiate(dentry,inode);
+
+	/* to sync dir */
+	fsync_dev(inode->i_dev);
 out:
 	fat_brelse(sb, bh);
 	return res;
