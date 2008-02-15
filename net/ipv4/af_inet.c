@@ -62,6 +62,17 @@
  *		as published by the Free Software Foundation; either version
  *		2 of the License, or (at your option) any later version.
  */
+/*
+ * Copyright (C) 2005 Motorola Inc.
+ *
+ * Motorola EzX changes:
+ *    remove admin priority requirement for bind to port 500
+ * Revision History:
+                    Modification
+    Date             Description of Changes
+----------------   -----------------------
+   09/15/2005         change for ipsec nat
+ */
 
 #include <linux/config.h>
 #include <linux/errno.h>
@@ -503,9 +514,14 @@ static int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		return -EADDRNOTAVAIL;
 
 	snum = ntohs(addr->sin_port);
-	if (snum && snum < PROT_SOCK && !capable(CAP_NET_BIND_SERVICE))
-		return -EACCES;
 
+/*
+ *  wangwei:  we give all people rights to bind to  port 500.
+ *  wangwei:  In A780/760 serial, vpn will bind to port 500.
+ */
+	if (snum && snum != 500 && snum < PROT_SOCK && !capable(CAP_NET_BIND_SERVICE))
+		return -EACCES;
+		
 	/*      We keep a pair of addresses. rcv_saddr is the one
 	 *      used by hash lookups, and saddr is used for transmit.
 	 *
@@ -1178,6 +1194,17 @@ static int __init inet_init(void)
 #if defined(CONFIG_IP_MROUTE)
 	ip_mr_init();
 #endif
+
+#if defined(CONFIG_KLIPS)
+	{
+                extern /* void */ int ipsec_klips_init(void);
+		/*
+		 *  Initialise AF_INET ESP and AH protocol support including 
+		 *  e-routing and SA tables
+		 */
+		ipsec_klips_init();
+	}
+#endif /* CONFIG_KLIPS */
 
 	/*
 	 *	Create all the /proc entries.

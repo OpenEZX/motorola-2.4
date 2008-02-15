@@ -1,3 +1,18 @@
+/*
+ * Copyright 2003,2005 Motorola, Inc. 
+ */
+/*
+ * Revision History:
+ *                    Modification     Tracking
+ *     Date             Description of Changes
+ * ----------------    -------------------------
+ * 12/23/2003          port A760 drivers to E680
+ * 01/18/2005          add ldisc number for new ldisc modem_ppp_async and modem_relay
+ * 10/08/2005          BT UART quality promotion 
+ * 11/29/2005          add change log to DataNetwork kernel related codes for GPL issue
+ *
+ */
+
 #ifndef _LINUX_TTY_H
 #define _LINUX_TTY_H
 
@@ -9,6 +24,12 @@
  * These constants are also useful for user-level apps (e.g., VC
  * resizing).
  */
+
+/*
+ * Motorola EzX changes:
+ *    add one more line displine for GPRSV
+ */
+
 #define MIN_NR_CONSOLES 1       /* must be at least 1 */
 #define MAX_NR_CONSOLES	63	/* serial lines start at 64 */
 #define MAX_NR_USER_CONSOLES 63	/* must be root to allocate above this */
@@ -34,7 +55,9 @@
  * hardcoded at present.)
  */
 #define NR_PTYS		256	/* ptys/major */
-#define NR_LDISCS	16
+/* porting from A760 GPRS feature    2003-12-17 */
+/*#define NR_LDISCS	16 */
+#define NR_LDISCS	20
 
 /*
  * Unix98 PTY's can be defined as any multiple of NR_PTYS up to
