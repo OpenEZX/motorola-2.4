@@ -32,8 +32,6 @@
 #include <linux/module.h>
 #include <linux/init.h>
 
-MODULE_LICENSE("GPL");
-
 /*================ Forward declarations ================*/
 
 static void hfs_read_inode(struct inode *);

@@ -11,7 +11,7 @@
  * not going to guess how to send commands to them, plus I expect they will
  * all speak CFI..
  *
- * $Id: jedec.c,v 1.13 2002/02/08 15:57:21 rkaiser Exp $
+ * $Id: jedec.c,v 1.12 2001/11/06 14:37:35 dwmw2 Exp $
  */
 
 #include <linux/mtd/jedec.h>
@@ -34,12 +34,14 @@ static unsigned long my_bank_size;
 /* Listing of parts and sizes. We need this table to learn the sector
    size of the chip and the total length */
 static const struct JEDECTable JEDEC_table[] = 
-  {{0x013D,"AMD Am29F017D",2*1024*1024,64*1024,MTD_CAP_NORFLASH},
+  {{0x0137,"AMD Am29LV008B",1*1024*1024,64*1024,MTD_CAP_NORFLASH},
+   {0x013D,"AMD Am29F017D",2*1024*1024,64*1024,MTD_CAP_NORFLASH},
    {0x01AD,"AMD Am29F016",2*1024*1024,64*1024,MTD_CAP_NORFLASH},
    {0x01D5,"AMD Am29F080",1*1024*1024,64*1024,MTD_CAP_NORFLASH},
    {0x01A4,"AMD Am29F040",512*1024,64*1024,MTD_CAP_NORFLASH},
    {0x20E3,"AMD Am29W040B",512*1024,64*1024,MTD_CAP_NORFLASH},
    {0xC2AD,"Macronix MX29F016",2*1024*1024,64*1024,MTD_CAP_NORFLASH},
+   {0x014F,"AMD Am29LV040B",512*1024,64*1024,MTD_CAP_NORFLASH},
    {}};
 
 static const struct JEDECTable *jedec_idtoinf(__u8 mfr,__u8 id);
@@ -736,9 +738,9 @@ static int flash_erase(struct mtd_info *mtd, struct erase_info *instr)
 	    priv->chips[J].length = 0;
       }      
    }
-       	    
-   //printk("done\n");
+
    instr->state = MTD_ERASE_DONE;
+   //printk("done\n");
    if (instr->callback)
 	instr->callback(instr);
    return 0;

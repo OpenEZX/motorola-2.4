@@ -1,6 +1,7 @@
 #ifndef LED_H
 #define LED_H
 
+
 #define	LED7		0x80		/* top (or furthest right) LED */
 #define	LED6		0x40
 #define	LED5		0x20
@@ -15,27 +16,18 @@
 #define	LED_DISK_IO	LED2		/* for disk activity */
 #define	LED_HEARTBEAT	LED3		/* heartbeat */
 
-/* values for pdc_chassis_lcd_info_ret_block.model: */
-#define DISPLAY_MODEL_LCD  0		/* KittyHawk LED or LCD */
-#define DISPLAY_MODEL_NONE 1		/* no LED or LCD */
-#define DISPLAY_MODEL_LASI 2		/* LASI style 8 bit LED */
-#define DISPLAY_MODEL_OLD_ASP 0x7F	/* faked: ASP style 8 x 1 bit LED (only very old ASP versions) */
 
-#define LED_CMD_REG_NONE NULL		/* NULL == no addr for the cmd register */
+/* irq function */
+extern void led_interrupt_func(void);
 
-/* led tasklet struct */
-extern struct tasklet_struct led_tasklet;
-
-/* register_led_driver() */
-int __init register_led_driver( int model, char *cmd_reg, char *data_reg );
+/* LASI & ASP specific LED initialization funcs */
+extern void __init lasi_led_init( unsigned long lasi_hpa );
+extern void __init asp_led_init( unsigned long led_ptr );
 
 /* registers the LED regions for procfs */
-void __init register_led_regions(void);
+extern void __init register_led_regions(void);
 
-/* writes a string to the LCD display (if possible on this h/w) */
-int lcd_print(char *str);
-
-/* main LED initialization function (uses PDC) */ 
-int __init led_init(void);
+/* main LED initialization function (uses the PDC) */ 
+extern int __init led_init(void);
 
 #endif /* LED_H */

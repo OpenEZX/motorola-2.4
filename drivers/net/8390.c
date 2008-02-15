@@ -68,7 +68,6 @@ static const char version[] =
 #include <linux/in.h>
 #include <linux/interrupt.h>
 #include <linux/init.h>
-#include <linux/crc32.h>
 
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
@@ -100,6 +99,10 @@ static const char version[] =
 #define ei_block_output (ei_local->block_output)
 #define ei_block_input (ei_local->block_input)
 #define ei_get_8390_hdr (ei_local->get_8390_hdr)
+
+#ifdef CONFIG_REDWOOD_4
+#include "8390_redwood.h"
+#endif
 
 /* use 0 for production, 1 for verification, >2 for debug */
 #ifndef ei_debug
@@ -726,7 +729,11 @@ static void ei_receive(struct net_device *dev)
 			ei_local->stat.rx_errors++;
 			ei_local->stat.rx_length_errors++;
 		}
+#ifdef CONFIG_REDWOOD_4
+		 else if ((pkt_stat & 0x1F) == ENRSR_RXOK) 
+#else
 		 else if ((pkt_stat & 0x0F) == ENRSR_RXOK) 
+#endif
 		{
 			struct sk_buff *skb;
 			
@@ -886,6 +893,27 @@ static struct net_device_stats *get_stats(struct net_device *dev)
 }
 
 /*
+ * Update the given Autodin II CRC value with another data byte.
+ */
+
+static inline u32 update_crc(u8 byte, u32 current_crc)
+{
+	int bit;
+	u8 ah = 0;
+	for (bit=0; bit<8; bit++) 
+	{
+		u8 carry = (current_crc>>31);
+		current_crc <<= 1;
+		ah = ((ah<<1) | carry) ^ byte;
+		if (ah&1)
+			current_crc ^= 0x04C11DB7;	/* CRC polynomial */
+		ah >>= 1;
+		byte >>= 1;
+	}
+	return current_crc;
+}
+
+/*
  * Form the 64 bit 8390 multicast table from the linked list of addresses
  * associated with this dev structure.
  */
@@ -896,13 +924,16 @@ static inline void make_mc_bits(u8 *bits, struct net_device *dev)
 
 	for (dmi=dev->mc_list; dmi; dmi=dmi->next) 
 	{
+		int i;
 		u32 crc;
 		if (dmi->dmi_addrlen != ETH_ALEN) 
 		{
 			printk(KERN_INFO "%s: invalid multicast address length given.\n", dev->name);
 			continue;
 		}
-		crc = ether_crc(ETH_ALEN, dmi->dmi_addr);
+		crc = 0xffffffff;	/* initial CRC value */
+		for (i=0; i<ETH_ALEN; i++)
+			crc = update_crc(dmi->dmi_addr[i], crc);
 		/* 
 		 * The 8390 uses the 6 most significant bits of the
 		 * CRC to index the multicast table.
@@ -1036,9 +1067,15 @@ void NS8390_init(struct net_device *dev, int startp)
 	long e8390_base = dev->base_addr;
 	struct ei_device *ei_local = (struct ei_device *) dev->priv;
 	int i;
+#ifdef CONFIG_REDWOOD_4
+	int endcfg = ei_local->word16
+	    ? (0x28 | ENDCFG_WTS                                         )
+	    : 0x28;
+#else
 	int endcfg = ei_local->word16
 	    ? (0x48 | ENDCFG_WTS | (ei_local->bigendian ? ENDCFG_BOS : 0))
 	    : 0x48;
+#endif
     
 	if(sizeof(struct e8390_pkt_hdr)!=4)
     		panic("8390.c: header struct mispacked\n");    

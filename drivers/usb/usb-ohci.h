@@ -1,3 +1,6 @@
+#ifndef _USB_OHCI_H
+#define _USB_OHCI_H
+
 /*
  * URB OHCI HCD (Host Controller Driver) for USB.
  * 
@@ -111,7 +114,7 @@ struct td {
   	__u8 index;
   	struct ed * ed;
   	struct td * next_dl_td;
-  	struct urb * urb;
+  	urb_t * urb;
 
 	dma_addr_t td_dma;
 	dma_addr_t data_dma;
@@ -381,7 +384,6 @@ typedef struct ohci {
 	atomic_t resume_count;		/* defending against multiple resumes */
 	unsigned long flags;		/* for HC bugs */
 #define	OHCI_QUIRK_AMD756	0x01		/* erratum #4 */
-#define OHCI_QUIRK_SUCKYIO	0x02		/* NSC superio */
 
 	struct ohci_regs * regs;	/* OHCI controller's memory */
 	struct list_head ohci_hcd_list;	/* list of all ohci_hcd */
@@ -404,6 +406,7 @@ typedef struct ohci {
 
 	/* PCI device handle, settings, ... */
 	struct pci_dev	*ohci_dev;
+	const char	*slot_name;
 	u8		pci_latency;
 	struct pci_pool	*td_cache;
 	struct pci_pool	*dev_cache;
@@ -431,16 +434,16 @@ static int ep_unlink(ohci_t * ohci, ed_t * ed);
 static ed_t * ep_add_ed(struct usb_device * usb_dev, unsigned int pipe, int interval, int load, int mem_flags);
 static void ep_rm_ed(struct usb_device * usb_dev, ed_t * ed);
 /* td */
-static void td_fill(ohci_t * ohci, unsigned int info, dma_addr_t data, int len, struct urb * urb, int index);
-static void td_submit_urb(struct urb * urb);
+static void td_fill(ohci_t * ohci, unsigned int info, dma_addr_t data, int len, urb_t * urb, int index);
+static void td_submit_urb(urb_t * urb);
 /* root hub */
-static int rh_submit_urb(struct urb * urb);
-static int rh_unlink_urb(struct urb * urb);
-static int rh_init_int_timer(struct urb * urb);
+static int rh_submit_urb(urb_t * urb);
+static int rh_unlink_urb(urb_t * urb);
+static int rh_init_int_timer(urb_t * urb);
 
 /*-------------------------------------------------------------------------*/
 
-#define ALLOC_FLAGS (in_interrupt () || current->state != TASK_RUNNING ? GFP_ATOMIC : GFP_KERNEL)
+#define ALLOC_FLAGS (in_interrupt () ? GFP_ATOMIC : GFP_KERNEL)
 
 #ifdef DEBUG
 #	define OHCI_MEM_FLAGS	SLAB_POISON
@@ -449,7 +452,7 @@ static int rh_init_int_timer(struct urb * urb);
 #endif
  
 #ifndef CONFIG_PCI
-#	error "usb-ohci currently requires PCI-based controllers"
+//#	error "usb-ohci currently requires PCI-based controllers"
 	/* to support non-PCI OHCIs, you need custom bus/mem/... glue */
 #endif
 
@@ -642,3 +645,4 @@ dev_free (struct ohci *hc, struct ohci_device *dev)
 	pci_pool_free (hc->dev_cache, dev, dev->dma);
 }
 
+#endif

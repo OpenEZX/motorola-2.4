@@ -63,7 +63,9 @@ integrator_fixup(struct machine_desc *desc, struct param_struct *unused,
 MACHINE_START(INTEGRATOR, "ARM-Integrator")
 	MAINTAINER("ARM Ltd/Deep Blue Solutions Ltd")
 	BOOT_MEM(0x00000000, 0x16000000, 0xf1600000)
+#if	0
 	BOOT_PARAMS(0x00000100)
+#endif
 	FIXUP(integrator_fixup)
 	MAPIO(integrator_map_io)
 	INITIRQ(integrator_init_irq)

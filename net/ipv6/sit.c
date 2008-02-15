@@ -64,8 +64,7 @@ static int ipip6_fb_tunnel_init(struct net_device *dev);
 static int ipip6_tunnel_init(struct net_device *dev);
 
 static struct net_device ipip6_fb_tunnel_dev = {
-	name: 		"sit0", 
-	init:		ipip6_fb_tunnel_init,
+	"sit0", 0x0, 0x0, 0x0, 0x0, 0, 0, 0, 0, 0, NULL, ipip6_fb_tunnel_init,
 };
 
 static struct ip_tunnel ipip6_fb_tunnel = {
@@ -396,7 +395,7 @@ int ipip6_rcv(struct sk_buff *skb)
 		skb->mac.raw = skb->nh.raw;
 		skb->nh.raw = skb->data;
 		memset(&(IPCB(skb)->opt), 0, sizeof(struct ip_options));
-		skb->protocol = htons(ETH_P_IPV6);
+		skb->protocol = __constant_htons(ETH_P_IPV6);
 		skb->pkt_type = PACKET_HOST;
 		tunnel->stat.rx_packets++;
 		tunnel->stat.rx_bytes += skb->len;
@@ -470,7 +469,7 @@ static int ipip6_tunnel_xmit(struct sk_buff *skb, struct net_device *dev)
 		goto tx_error;
 	}
 
-	if (skb->protocol != htons(ETH_P_IPV6))
+	if (skb->protocol != __constant_htons(ETH_P_IPV6))
 		goto tx_error;
 
 	if (!dst)
@@ -518,11 +517,7 @@ static int ipip6_tunnel_xmit(struct sk_buff *skb, struct net_device *dev)
 		goto tx_error;
 	}
 
-	if (tiph->frag_off)
-		mtu = rt->u.dst.pmtu - sizeof(struct iphdr);
-	else
-		mtu = skb->dst ? skb->dst->pmtu : dev->mtu;
-
+	mtu = rt->u.dst.pmtu - sizeof(struct iphdr);
 	if (mtu < 68) {
 		tunnel->stat.collisions++;
 		ip_rt_put(rt);
@@ -588,7 +583,7 @@ static int ipip6_tunnel_xmit(struct sk_buff *skb, struct net_device *dev)
 	iph->version		=	4;
 	iph->ihl		=	sizeof(struct iphdr)>>2;
 	if (mtu > IPV6_MIN_MTU)
-		iph->frag_off	=	htons(IP_DF);
+		iph->frag_off	=	__constant_htons(IP_DF);
 	else
 		iph->frag_off	=	0;
 
@@ -659,10 +654,10 @@ ipip6_tunnel_ioctl (struct net_device *dev, struct ifreq *ifr, int cmd)
 
 		err = -EINVAL;
 		if (p.iph.version != 4 || p.iph.protocol != IPPROTO_IPV6 ||
-		    p.iph.ihl != 5 || (p.iph.frag_off&htons(~IP_DF)))
+		    p.iph.ihl != 5 || (p.iph.frag_off&__constant_htons(~IP_DF)))
 			goto done;
 		if (p.iph.ttl)
-			p.iph.frag_off |= htons(IP_DF);
+			p.iph.frag_off |= __constant_htons(IP_DF);
 
 		t = ipip6_tunnel_locate(&p, cmd == SIOCADDTUNNEL);
 

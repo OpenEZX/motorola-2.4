@@ -35,11 +35,7 @@ struct pa_psw {
 	unsigned int i:1;
 };
 
-#ifdef __LP64__
-#define pa_psw(task) ((struct pa_psw *) ((char *) (task) + TASK_PT_PSW + 4))
-#else
 #define pa_psw(task) ((struct pa_psw *) ((char *) (task) + TASK_PT_PSW))
-#endif
 
 struct task_struct;
 
@@ -50,7 +46,20 @@ extern struct task_struct *_switch_to(struct task_struct *, struct task_struct *
 	(last) = _switch_to(prev, next);			\
 } while(0)
 
-
+/* borrowed this from sparc64 -- probably the SMP case is hosed for us */
+#ifdef CONFIG_SMP
+#define smp_mb()	mb()
+#define smp_rmb()	rmb()
+#define smp_wmb()	wmb()
+#else
+/* This is simply the barrier() macro from linux/kernel.h but when serial.c
+ * uses tqueue.h uses smp_mb() defined using barrier(), linux/kernel.h
+ * hasn't yet been included yet so it fails, thus repeating the macro here.
+ */
+#define smp_mb()	__asm__ __volatile__("":::"memory");
+#define smp_rmb()	__asm__ __volatile__("":::"memory");
+#define smp_wmb()	__asm__ __volatile__("":::"memory");
+#endif
 
 /* interrupt control */
 #define __save_flags(x)	__asm__ __volatile__("ssm 0, %0" : "=r" (x) : : "memory")
@@ -60,31 +69,17 @@ extern struct task_struct *_switch_to(struct task_struct *, struct task_struct *
 
 #define local_irq_save(x) \
 	__asm__ __volatile__("rsm %1,%0" : "=r" (x) :"i" (PSW_I) : "memory" )
-#define local_irq_set(x) \
-	__asm__ __volatile__("ssm %1,%0" : "=r" (x) :"i" (PSW_I) : "memory" )
 #define local_irq_restore(x) \
 	__asm__ __volatile__("mtsm %0" : : "r" (x) : "memory" )
 #define local_irq_disable() __cli()
 #define local_irq_enable()  __sti()
 
 #ifdef CONFIG_SMP
-extern void __global_cli(void);
-extern void __global_sti(void);
-extern unsigned long __global_save_flags(void);
-extern void __global_restore_flags(unsigned long);
-
-#define cli() __global_cli()
-#define sti() __global_sti()
-#define save_flags(x) ((x)=__global_save_flags())
-#define restore_flags(x) __global_restore_flags(x)
- 
 #else
-
 #define cli() __cli()
 #define sti() __sti()
 #define save_flags(x) __save_flags(x)
 #define restore_flags(x) __restore_flags(x)
-
 #endif
 
 
@@ -125,42 +120,22 @@ static inline void set_eiem(unsigned long val)
 		: "r" (gr), "i" (cr))
 
 
-/*
-** This is simply the barrier() macro from linux/kernel.h but when serial.c
-** uses tqueue.h uses smp_mb() defined using barrier(), linux/kernel.h
-** hasn't yet been included yet so it fails, thus repeating the macro here.
-**
-** PA-RISC architecture allows for weakly ordered memory accesses although
-** none of the processors use it. There is a strong ordered bit that is
-** set in the O-bit of the page directory entry. Operating systems that
-** can not tolerate out of order accesses should set this bit when mapping
-** pages. The O-bit of the PSW should also be set to 1 (I don't believe any
-** of the processor implemented the PSW O-bit). The PCX-W ERS states that
-** the TLB O-bit is not implemented so the page directory does not need to
-** have the O-bit set when mapping pages (section 3.1). This section also
-** states that the PSW Y, Z, G, and O bits are not implemented.
-** So it looks like nothing needs to be done for parisc-linux (yet).
-** (thanks to chada for the above comment -ggg)
-**
-** The __asm__ op below simple prevents gcc/ld from reordering
-** instructions across the mb() "call".
-*/
-#define mb()		__asm__ __volatile__("":::"memory");	/* barrier() */
-#define rmb()		mb()
-#define wmb()		mb()
-#define smp_mb()	mb()
-#define smp_wmb()	mb()
+#define mb()  __asm__ __volatile__ ("sync" : : :"memory")
+#define wmb() mb()
+#define set_mb(var, value)  do { var = value; mb(); } while (0)
+#define set_wmb(var, value) do { var = value; wmb(); } while (0)
 
-#define set_mb(var, value) do { var = value; mb(); } while (0)
+extern unsigned long __xchg(unsigned long, unsigned long *, int);
 
+#define xchg(ptr,x) \
+ (__typeof__(*(ptr)))__xchg((unsigned long)(x),(unsigned long*)(ptr),sizeof(*(ptr)))
 
-/* LDCW, the only atomic read-write operation PA-RISC has. *sigh*.  */
+/* LDCW, the only atomic read-write operation PA-RISC has.  Sigh. */
 #define __ldcw(a) ({ \
 	unsigned __ret; \
 	__asm__ __volatile__("ldcw 0(%1),%0" : "=r" (__ret) : "r" (a)); \
 	__ret; \
 })
-
 
 #ifdef CONFIG_SMP
 /*

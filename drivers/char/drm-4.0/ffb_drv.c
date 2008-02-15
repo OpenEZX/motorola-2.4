@@ -1,4 +1,4 @@
-/* $Id: ffb_drv.c,v 1.14 2001/05/24 12:01:47 davem Exp $
+/* $Id: ffb_drv.c,v 1.1 2002/07/18 19:28:20 trini Exp $
  * ffb_drv.c: Creator/Creator3D direct rendering driver.
  *
  * Copyright (C) 2000 David S. Miller (davem@redhat.com)
@@ -710,7 +710,8 @@ static int ffb_lock(struct inode *inode, struct file *filp, unsigned int cmd, un
 		/* Contention */
 		atomic_inc(&dev->total_sleeps);
 		current->state = TASK_INTERRUPTIBLE;
-		yield();
+		current->policy |= SCHED_YIELD;
+		schedule();
 		if (signal_pending(current)) {
 			ret = -ERESTARTSYS;
 			break;

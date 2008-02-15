@@ -224,6 +224,16 @@ static int genprobe_new_chip(struct map_info *map, struct chip_probe *cp,
 		break;
 #endif /* CFIDEV_BUSWIDTH_4 */
 
+#ifdef CFIDEV_BUSWIDTH_8
+	case CFIDEV_BUSWIDTH_8:
+#ifdef CFIDEV_INTERLEAVE_4
+		cfi->interleave = CFIDEV_INTERLEAVE_4;
+		cfi->device_type = CFI_DEVICETYPE_X16;
+		if (cp->probe_chip(map, 0, NULL, cfi))
+			return 1;
+#endif
+		break;
+#endif
 	default:
 		printk(KERN_WARNING "genprobe_new_chip called with unsupported buswidth %d\n", map->buswidth);
 		return 0;

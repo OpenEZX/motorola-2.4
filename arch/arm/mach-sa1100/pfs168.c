@@ -1,29 +1,172 @@
 /*
  * linux/arch/arm/mach-sa1100/pfs168.c
  */
+
 #include <linux/config.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
+#include <linux/sched.h>
 #include <linux/tty.h>
+#include <linux/module.h>
 #include <linux/errno.h>
 
 #include <asm/hardware.h>
+#include <asm/irq.h>
+#include <asm/arch/pfs168.h>
+#include <asm/hardware/sa1111.h>
 #include <asm/setup.h>
+#include <asm/page.h>
+#include <asm/pgtable.h>
 
 #include <asm/mach/arch.h>
+#include <asm/mach/irq.h>
+#include <asm/arch/irq.h>
 #include <asm/mach/map.h>
 #include <asm/mach/serial_sa1100.h>
+#include <linux/serial_core.h>
 
 #include "generic.h"
 #include "sa1111.h"
 
+
+void PFS168_SYSC1RTS_set(uint bit)
+{
+	unsigned long flags;
+	local_irq_save(flags);
+	PFS168_SYSC1RTS |= bit;
+	local_irq_restore(flags);
+}
+
+void PFS168_SYSC1RTS_clear(uint bit)
+{
+	unsigned long flags;
+	local_irq_save(flags);
+	PFS168_SYSC1RTS &= ~bit;
+	local_irq_restore(flags);
+}
+
+void PFS168_SYSLED_set(uint bit)
+{
+	unsigned long flags;
+	local_irq_save(flags);
+	PFS168_SYSLED |= bit;
+	local_irq_restore(flags);
+}
+
+void PFS168_SYSLED_clear(uint bit)
+{
+	unsigned long flags;
+	local_irq_save(flags);
+	PFS168_SYSLED &= ~bit;
+	local_irq_restore(flags);
+}
+
+void PFS168_SYSLCDDE_set(uint bit)
+{
+	unsigned long flags;
+	local_irq_save(flags);
+	PFS168_SYSLCDDE |= bit;
+	local_irq_restore(flags);
+}
+
+void PFS168_SYSLCDDE_clear(uint bit)
+{
+	unsigned long flags;
+	local_irq_save(flags);
+	PFS168_SYSLCDDE &= ~bit;
+	local_irq_restore(flags);
+}
+
+void PFS168_SYSC3TEN_set(uint bit)
+{
+	unsigned long flags;
+	local_irq_save(flags);
+	PFS168_SYSC3TEN |= bit;
+	local_irq_restore(flags);
+}
+
+void PFS168_SYSC3TEN_clear(uint bit)
+{
+	unsigned long flags;
+	local_irq_save(flags);
+	PFS168_SYSC3TEN &= ~bit;
+	local_irq_restore(flags);
+}
+
+void PFS168_SYSCTLA_set(uint bit)
+{
+	unsigned long flags;
+	local_irq_save(flags);
+	PFS168_SYSCTLA |= bit;
+	local_irq_restore(flags);
+}
+
+void PFS168_SYSCTLA_clear(uint bit)
+{
+	unsigned long flags;
+	local_irq_save(flags);
+	PFS168_SYSCTLA &= ~bit;
+	local_irq_restore(flags);
+}
+
+void PFS168_SYSCTLB_set(uint bit)
+{
+	unsigned long flags;
+	local_irq_save(flags);
+	PFS168_SYSCTLB |= bit;
+	local_irq_restore(flags);
+}
+
+void PFS168_SYSCTLB_clear(uint bit)
+{
+	unsigned long flags;
+	local_irq_save(flags);
+	PFS168_SYSCTLB &= ~bit;
+	local_irq_restore(flags);
+}
+
+
+EXPORT_SYMBOL(PFS168_SYSC1RTS_set);
+EXPORT_SYMBOL(PFS168_SYSC1RTS_clear);
+EXPORT_SYMBOL(PFS168_SYSLED_set);
+EXPORT_SYMBOL(PFS168_SYSLED_clear);
+EXPORT_SYMBOL(PFS168_SYSLCDDE_set);
+EXPORT_SYMBOL(PFS168_SYSLCDDE_clear);
+EXPORT_SYMBOL(PFS168_SYSC3TEN_set);
+EXPORT_SYMBOL(PFS168_SYSC3TEN_clear);
+EXPORT_SYMBOL(PFS168_SYSCTLA_set);
+EXPORT_SYMBOL(PFS168_SYSCTLA_clear);
+EXPORT_SYMBOL(PFS168_SYSCTLB_set);
+EXPORT_SYMBOL(PFS168_SYSCTLB_clear);
+
+
+static void pfs168_backlight_power(int on)
+{
+	if (on)
+		PFS168_SYSCTLA_set(PFS168_SYSCTLA_BKLT);
+	else
+		PFS168_SYSCTLA_clear(PFS168_SYSCTLA_BKLT);
+}
+
+static void pfs168_lcd_power(int on)
+{
+#if	defined(CONFIG_PFS168_SASTN)
+	if (on)
+               	PFS168_SYSLCDDE_set(PFS168_SYSLCDDE_STNDE);
+	else
+		PFS168_SYSLCDDE_clear(PFS168_SYSLCDDE_STNDE);
+#endif
+}
 
 static int __init pfs168_init(void)
 {
 	int ret;
 
 	if (!machine_is_pfs168())
-		return -ENODEV;
+		return -EINVAL;
+
+	sa1100fb_lcd_power = pfs168_lcd_power;
+	sa1100fb_backlight_power = pfs168_backlight_power;
 
 	/*
 	 * Ensure that the memory bus request/grant signals are setup,
@@ -87,17 +230,51 @@ static void __init pfs168_init_irq(void)
 	set_GPIO_IRQ_edge(GPIO_UCB1300_IRQ, GPIO_RISING_EDGE);
 }
 
+extern void convert_to_tag_list(struct param_struct *params, int mem_init);
 
 static void __init
 fixup_pfs168(struct machine_desc *desc, struct param_struct *params,
-	     char **cmdline, struct meminfo *mi)
+	      char **cmdline, struct meminfo *mi)
 {
-	SET_BANK( 0, 0xc0000000, 16*1024*1024 );
-	mi->nr_banks = 1;
+	struct tag *t = (struct tag *)params;
 
-	ROOT_DEV = MKDEV(RAMDISK_MAJOR,0);
-	setup_ramdisk( 1, 0, 0, 8192 );
-	setup_initrd( 0xc0800000, 3*1024*1024 );
+	/*
+	 * Apparantly bootldr uses a param_struct.  Groan.
+	 */
+	if (t->hdr.tag != ATAG_CORE)
+		convert_to_tag_list(params, 1);
+
+	if (t->hdr.tag != ATAG_CORE) {
+		t->hdr.tag = ATAG_CORE;
+		t->hdr.size = tag_size(tag_core);
+		t->u.core.flags = 0;
+		t->u.core.pagesize = PAGE_SIZE;
+		t->u.core.rootdev = RAMDISK_MAJOR << 8 | 0;
+		t = tag_next(t);
+
+		t->hdr.tag = ATAG_MEM;
+		t->hdr.size = tag_size(tag_mem32);
+		t->u.mem.start = 0xc0000000;
+		t->u.mem.size  = 32 * 1024 * 1024;
+		t = tag_next(t);
+
+
+		t->hdr.tag = ATAG_RAMDISK;
+		t->hdr.size = tag_size(tag_ramdisk);
+		t->u.ramdisk.flags = 1;
+		t->u.ramdisk.size = 8192;
+		t->u.ramdisk.start = 0;
+		t = tag_next(t);
+
+		t->hdr.tag = ATAG_INITRD;
+		t->hdr.size = tag_size(tag_initrd);
+		t->u.initrd.start = 0xc0800000;
+		t->u.initrd.size = 3 * 1024 * 1024;
+		t = tag_next(t);
+
+		t->hdr.tag = ATAG_NONE;
+		t->hdr.size = 0;
+	}
 }
 
 static struct map_desc pfs168_io_desc[] __initdata = {
@@ -124,15 +301,13 @@ static void __init pfs168_map_io(void)
 	sa1100_map_io();
 	iotable_init(pfs168_io_desc);
 
-	sa1100_register_uart(0, 3);
-	sa1100_register_uart(1, 1);
+	sa1100_register_uart(0, 1);
+	sa1100_register_uart(1, 3);
 }
 
-MACHINE_START(PFS168, "Tulsa")
+MACHINE_START(PFS168, "Radisys-Tulsa")
 	BOOT_MEM(0xc0000000, 0x80000000, 0xf8000000)
-#if defined(CONFIG_PFS168_CMDLINE)
 	BOOT_PARAMS(0xc0000100)
-#endif
 	FIXUP(fixup_pfs168)
 	MAPIO(pfs168_map_io)
 	INITIRQ(pfs168_init_irq)

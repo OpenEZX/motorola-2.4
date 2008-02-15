@@ -45,7 +45,7 @@ typedef unsigned long long u64;
 
 /* DMA addresses come in generic and 64-bit flavours.  */
 
-#ifdef CONFIG_HIGHMEM64G
+#ifdef CONFIG_HIGHMEM
 typedef u64 dma_addr_t;
 #else
 typedef u32 dma_addr_t;

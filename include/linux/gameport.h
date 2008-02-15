@@ -38,7 +38,6 @@ struct gameport;
 struct gameport {
 
 	void *private;
-	void *driver;
 
 	int number;
 

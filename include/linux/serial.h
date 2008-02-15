@@ -16,9 +16,9 @@
 /*
  * Counters of the input lines (CTS, DSR, RI, CD) interrupts
  */
-
+/* add DTR for ezx(ezx as DCE) by WUL */
 struct async_icount {
-	__u32	cts, dsr, rng, dcd, tx, rx;
+	__u32	cts, dtr, dsr, rng, dcd, tx, rx;
 	__u32	frame, parity, overrun, brk;
 	__u32	buf_overrun;
 };
@@ -75,11 +75,14 @@ struct serial_struct {
 #define PORT_16654	11
 #define PORT_16850	12
 #define PORT_RSA	13	/* RSA-DV II/S card */
-#define PORT_MAX	13
+#define PORT_PXA	14
+#define PORT_IXP1200	15
+#define PORT_MAX	15
 
 #define SERIAL_IO_PORT	0
 #define SERIAL_IO_HUB6	1
 #define SERIAL_IO_MEM	2
+#define SERIAL_IO_GSC	3
 
 struct serial_uart_config {
 	char	*name;
@@ -165,7 +168,7 @@ struct serial_multiport_struct {
  * Four lines can interrupt: CTS, DSR, RI, DCD
  */
 struct serial_icounter_struct {
-	int cts, dsr, rng, dcd;
+	int cts, dtr, dsr, rng, dcd;
 	int rx, tx;
 	int frame, overrun, parity, brk;
 	int buf_overrun;
@@ -181,8 +184,22 @@ extern void unregister_serial(int line);
 /* Allow complicated architectures to specify rs_table[] at run time */
 extern int early_serial_setup(struct serial_struct *req);
 
-/* tty port reserved for the HCDP serial console port */
-#define HCDP_SERIAL_CONSOLE_PORT	4
+/* Liu Changhui */
+/* Export to allow MUX to use this */
+extern struct tty_driver *serial_for_mux_driver;
+extern struct tty_struct *serial_for_mux_tty;
+extern void (*serial_mux_dispatcher)(struct tty_struct *tty);
+extern void (*serial_mux_sender)(void);
+extern struct list_head *tq_serial_for_mux;
+/* Liu Changhui */
+
+#ifdef CONFIG_ACPI
+/* tty ports reserved for the ACPI serial console port and debug port */
+#define ACPI_SERIAL_CONSOLE_PORT        4
+#define ACPI_SERIAL_DEBUG_PORT          5
+#endif
 
 #endif /* __KERNEL__ */
 #endif /* _LINUX_SERIAL_H */
+
+

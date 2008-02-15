@@ -354,7 +354,7 @@ MODULE_LICENSE("GPL");
    board probes now that kmalloc() can allocate ISA DMA-able regions.
    This also allows the LANCE driver to be used as a module.
    */
-int __init lance_probe(struct net_device *dev)
+int lance_probe(struct net_device *dev)
 {
 	int *port, result;
 
@@ -383,7 +383,7 @@ int __init lance_probe(struct net_device *dev)
 					return 0;
 				}
 			}
-			release_region(ioaddr, LANCE_TOTAL_SIZE);
+			release_resource(r);
 		}
 	}
 	return -ENODEV;

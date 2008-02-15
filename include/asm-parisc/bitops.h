@@ -6,12 +6,6 @@
 #include <asm/byteorder.h>
 #include <asm/atomic.h>
 
-/*
- * HP-PARISC specific bit operations
- * for a detailed description of the functions please refer
- * to include/asm-i386/bitops.h or kerneldoc
- */
-
 #ifdef __LP64__
 #   define SHIFT_PER_LONG 6
 #ifndef BITS_PER_LONG
@@ -26,69 +20,6 @@
 
 #define CHOP_SHIFTCOUNT(x) ((x) & (BITS_PER_LONG - 1))
 
-
-#define smp_mb__before_clear_bit()      smp_mb()
-#define smp_mb__after_clear_bit()       smp_mb()
-
-static __inline__ void set_bit(int nr, void * address)
-{
-	unsigned long mask;
-	unsigned long *addr = (unsigned long *) address;
-	unsigned long flags;
-
-	addr += (nr >> SHIFT_PER_LONG);
-	mask = 1L << CHOP_SHIFTCOUNT(nr);
-	SPIN_LOCK_IRQSAVE(ATOMIC_HASH(addr), flags);
-	*addr |= mask;
-	SPIN_UNLOCK_IRQRESTORE(ATOMIC_HASH(addr), flags);
-}
-
-static __inline__ void __set_bit(int nr, void * address)
-{
-	unsigned long mask;
-	unsigned long *addr = (unsigned long *) address;
-
-	addr += (nr >> SHIFT_PER_LONG);
-	mask = 1L << CHOP_SHIFTCOUNT(nr);
-	*addr |= mask;
-}
-
-static __inline__ void clear_bit(int nr, void * address)
-{
-	unsigned long mask;
-	unsigned long *addr = (unsigned long *) address;
-	unsigned long flags;
-
-	addr += (nr >> SHIFT_PER_LONG);
-	mask = 1L << CHOP_SHIFTCOUNT(nr);
-	SPIN_LOCK_IRQSAVE(ATOMIC_HASH(addr), flags);
-	*addr &= ~mask;
-	SPIN_UNLOCK_IRQRESTORE(ATOMIC_HASH(addr), flags);
-}
-
-static __inline__ void change_bit(int nr, void * address)
-{
-	unsigned long mask;
-	unsigned long *addr = (unsigned long *) address;
-	unsigned long flags;
-
-	addr += (nr >> SHIFT_PER_LONG);
-	mask = 1L << CHOP_SHIFTCOUNT(nr);
-	SPIN_LOCK_IRQSAVE(ATOMIC_HASH(addr), flags);
-	*addr ^= mask;
-	SPIN_UNLOCK_IRQRESTORE(ATOMIC_HASH(addr), flags);
-}
-
-static __inline__ void __change_bit(int nr, void * address)
-{
-	unsigned long mask;
-	unsigned long *addr = (unsigned long *) address;
-
-	addr += (nr >> SHIFT_PER_LONG);
-	mask = 1L << CHOP_SHIFTCOUNT(nr);
-	*addr ^= mask;
-}
-
 static __inline__ int test_and_set_bit(int nr, void * address)
 {
 	unsigned long mask;
@@ -97,25 +28,13 @@ static __inline__ int test_and_set_bit(int nr, void * address)
 	unsigned long flags;
 
 	addr += (nr >> SHIFT_PER_LONG);
-	mask = 1L << CHOP_SHIFTCOUNT(nr);
 	SPIN_LOCK_IRQSAVE(ATOMIC_HASH(addr), flags);
-	oldbit = (*addr & mask) ? 1 : 0;
-	*addr |= mask;
-	SPIN_UNLOCK_IRQRESTORE(ATOMIC_HASH(addr), flags);
 
-	return oldbit;
-}
-
-static __inline__ int __test_and_set_bit(int nr, void * address)
-{
-	unsigned long mask;
-	unsigned long *addr = (unsigned long *) address;
-	int oldbit;
-
-	addr += (nr >> SHIFT_PER_LONG);
 	mask = 1L << CHOP_SHIFTCOUNT(nr);
 	oldbit = (*addr & mask) ? 1 : 0;
 	*addr |= mask;
+
+	SPIN_UNLOCK_IRQRESTORE(ATOMIC_HASH(addr), flags);
 
 	return oldbit;
 }
@@ -128,25 +47,13 @@ static __inline__ int test_and_clear_bit(int nr, void * address)
 	unsigned long flags;
 
 	addr += (nr >> SHIFT_PER_LONG);
-	mask = 1L << CHOP_SHIFTCOUNT(nr);
 	SPIN_LOCK_IRQSAVE(ATOMIC_HASH(addr), flags);
-	oldbit = (*addr & mask) ? 1 : 0;
-	*addr &= ~mask;
-	SPIN_UNLOCK_IRQRESTORE(ATOMIC_HASH(addr), flags);
 
-	return oldbit;
-}
-
-static __inline__ int __test_and_clear_bit(int nr, void * address)
-{
-	unsigned long mask;
-	unsigned long *addr = (unsigned long *) address;
-	int oldbit;
-
-	addr += (nr >> SHIFT_PER_LONG);
 	mask = 1L << CHOP_SHIFTCOUNT(nr);
 	oldbit = (*addr & mask) ? 1 : 0;
 	*addr &= ~mask;
+
+	SPIN_UNLOCK_IRQRESTORE(ATOMIC_HASH(addr), flags);
 
 	return oldbit;
 }
@@ -159,30 +66,20 @@ static __inline__ int test_and_change_bit(int nr, void * address)
 	unsigned long flags;
 
 	addr += (nr >> SHIFT_PER_LONG);
-	mask = 1L << CHOP_SHIFTCOUNT(nr);
 	SPIN_LOCK_IRQSAVE(ATOMIC_HASH(addr), flags);
+
+	mask = 1L << CHOP_SHIFTCOUNT(nr);
 	oldbit = (*addr & mask) ? 1 : 0;
 	*addr ^= mask;
+
 	SPIN_UNLOCK_IRQRESTORE(ATOMIC_HASH(addr), flags);
 
 	return oldbit;
 }
 
-static __inline__ int __test_and_change_bit(int nr, void * address)
-{
-	unsigned long mask;
-	unsigned long *addr = (unsigned long *) address;
-	int oldbit;
+/* again, the read-only case doesn't have to do any locking */
 
-	addr += (nr >> SHIFT_PER_LONG);
-	mask = 1L << CHOP_SHIFTCOUNT(nr);
-	oldbit = (*addr & mask) ? 1 : 0;
-	*addr ^= mask;
-
-	return oldbit;
-}
-
-static __inline__ int test_bit(int nr, const void *address)
+static __inline__ int test_bit(int nr, const volatile void *address)
 {
 	unsigned long mask;
 	unsigned long *addr = (unsigned long *) address;
@@ -193,12 +90,21 @@ static __inline__ int test_bit(int nr, const void *address)
 	return !!(*addr & mask);
 }
 
+/* sparc does this, other arch's don't -- what's the right answer? XXX */
+#define smp_mb__before_clear_bit()	do { } while(0)
+#define smp_mb__after_clear_bit()	do { } while(0)
+#define set_bit(nr,addr)	((void)test_and_set_bit(nr,addr))
+#define clear_bit(nr,addr)	((void)test_and_clear_bit(nr,addr))
+#define change_bit(nr,addr)	((void)test_and_change_bit(nr,addr))
+
+/* XXX We'd need some binary search here */
+
 extern __inline__ unsigned long ffz(unsigned long word)
 {
 	unsigned long result;
 
 	result = 0;
-	while (word & 1) {
+	while(word & 1) {
 		result++;
 		word >>= 1;
 	}
@@ -276,13 +182,8 @@ found_middle:
  * test_and_{set,clear}_bit guarantee atomicity without
  * disabling interrupts.
  */
-#ifdef __LP64__
-#define ext2_set_bit(nr, addr)		test_and_set_bit((nr) ^ 0x38, addr)
-#define ext2_clear_bit(nr, addr)	test_and_clear_bit((nr) ^ 0x38, addr)
-#else
 #define ext2_set_bit(nr, addr)		test_and_set_bit((nr) ^ 0x18, addr)
 #define ext2_clear_bit(nr, addr)	test_and_clear_bit((nr) ^ 0x18, addr)
-#endif
 
 #endif	/* __KERNEL__ */
 
@@ -338,9 +239,8 @@ found_middle:
 }
 
 /* Bitmap functions for the minix filesystem.  */
-#define minix_test_and_set_bit(nr,addr) ext2_set_bit(nr,addr)
-#define minix_set_bit(nr,addr) ((void)ext2_set_bit(nr,addr))
-#define minix_test_and_clear_bit(nr,addr) ext2_clear_bit(nr,addr)
+#define minix_set_bit(nr,addr) ext2_set_bit(nr,addr)
+#define minix_clear_bit(nr,addr) ext2_clear_bit(nr,addr)
 #define minix_test_bit(nr,addr) ext2_test_bit(nr,addr)
 #define minix_find_first_zero_bit(addr,size) ext2_find_first_zero_bit(addr,size)
 

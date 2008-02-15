@@ -46,12 +46,11 @@ static void dma_mmu_release_scsi_one (struct NCR_ESP *esp, Scsi_Cmnd *sp);
 static void dma_mmu_release_scsi_sgl (struct NCR_ESP *esp, Scsi_Cmnd *sp);
 static void dma_advance_sg (Scsi_Cmnd *sp);
 
-#if 0
-/* This is where all commands are put before they are trasfered to the ESP chip
- * via PIO.
- */
 static volatile unsigned char cmd_buffer[16];
-#endif
+                                /* This is where all commands are put
+                                 * before they are trasfered to the ESP chip
+                                 * via PIO.
+                                 */
 
 /* Detecting ESP chips on the machine.  This is the simple and easy
  * version.
@@ -355,7 +354,7 @@ static void dma_mmu_get_scsi_sgl (struct NCR_ESP *esp, Scsi_Cmnd *sp)
 
 static void dma_mmu_release_scsi_one (struct NCR_ESP *esp, Scsi_Cmnd *sp)
 {
-    dvma_unmap((char *)sp->SCp.have_data_in);
+    dvma_unmap(sp->SCp.have_data_in);
 }
 
 static void dma_mmu_release_scsi_sgl (struct NCR_ESP *esp, Scsi_Cmnd *sp)
@@ -364,7 +363,7 @@ static void dma_mmu_release_scsi_sgl (struct NCR_ESP *esp, Scsi_Cmnd *sp)
     struct mmu_sglist *sg = (struct mmu_sglist *)sp->buffer;
                         
     while(sz >= 0) {
-        dvma_unmap((char *)sg[sz].dvma_addr);
+        dvma_unmap(sg[sz].dvma_addr);
         sz--;
     }
 }
@@ -377,5 +376,3 @@ static void dma_advance_sg (Scsi_Cmnd *sp)
 static Scsi_Host_Template driver_template = SCSI_SUN3X_ESP;
 
 #include "scsi_module.c"
-
-MODULE_LICENSE("GPL");

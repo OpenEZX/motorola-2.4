@@ -8,7 +8,6 @@
 #define PSCHED_CLOCK_SOURCE	PSCHED_JIFFIES
 
 #include <linux/config.h>
-#include <linux/types.h>
 #include <linux/pkt_sched.h>
 #include <net/pkt_cls.h>
 
@@ -222,7 +221,7 @@ extern psched_time_t	psched_time_base;
 
 #define PSCHED_EXPORTLIST_2
 
-#if BITS_PER_LONG <= 32
+#if ~0UL == 0xFFFFFFFF
 
 #define PSCHED_WATCHER unsigned long
 
@@ -359,8 +358,8 @@ extern int psched_tod_diff(int delta_sec, int bound);
 #define PSCHED_TDIFF(tv1, tv2) (long)((tv1) - (tv2))
 #define PSCHED_TDIFF_SAFE(tv1, tv2, bound, guard) \
 ({ \
-	   long long __delta = (tv1) - (tv2); \
-	   if ( __delta > (long long)(bound)) {  __delta = (bound); guard; } \
+	   long __delta = (tv1) - (tv2); \
+	   if ( __delta > (bound)) {  __delta = (bound); guard; } \
 	   __delta; \
 })
 

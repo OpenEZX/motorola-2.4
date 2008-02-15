@@ -100,6 +100,13 @@ extern void smp_flush_tlb_page(struct mm_struct *mm, unsigned long page);
 
 #endif /* ! CONFIG_SMP */
 
+#define VPTE_BASE_SPITFIRE	0xfffffffe00000000
+#if 1
+#define VPTE_BASE_CHEETAH	VPTE_BASE_SPITFIRE
+#else
+#define VPTE_BASE_CHEETAH	0xffe0000000000000
+#endif
+
 extern __inline__ void flush_tlb_pgtables(struct mm_struct *mm, unsigned long start,
 					  unsigned long end)
 {
@@ -121,6 +128,8 @@ extern __inline__ void flush_tlb_pgtables(struct mm_struct *mm, unsigned long st
 			vpte_base + (s >> (PAGE_SHIFT - 3)),
 			vpte_base + (e >> (PAGE_SHIFT - 3)));
 }
+#undef VPTE_BASE_SPITFIRE
+#undef VPTE_BASE_CHEETAH
 
 /* Page table allocation/freeing. */
 #ifdef CONFIG_SMP

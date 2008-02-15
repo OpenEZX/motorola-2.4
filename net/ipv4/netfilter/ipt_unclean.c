@@ -211,14 +211,15 @@ check_udp(const struct iphdr *iph,
 
 	/* Bad checksum?  Don't print, just say it's unclean. */
 	/* FIXME: SRC ROUTE packets won't match checksum --RR */
-	if (!more_frags && !embedded && udph->check
+	if (!more_frags && !embedded
 	    && csum_tcpudp_magic(iph->saddr, iph->daddr, datalen, IPPROTO_UDP,
 				 csum_partial((char *)udph, datalen, 0)) != 0)
 		return 0;
 
-	/* CHECK: Destination port can't be zero. */
-	if (!udph->dest) {
-		limpk("UDP zero destination port\n");
+	/* CHECK: Ports can't be zero. */
+	if (!udph->source || !udph->dest) {
+		limpk("UDP zero ports %u/%u\n",
+		      ntohs(udph->source), ntohs(udph->dest));
 		return 0;
 	}
 

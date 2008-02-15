@@ -16,7 +16,7 @@
  *	Each contributing author retains all rights to their own work.
  *
  *  (C) 1998 Dave Boynton
- *  (C) 1998-2001 Ben Fennema
+ *  (C) 1998-2000 Ben Fennema
  *  (C) 1999-2000 Stelias Computing Inc
  *
  * HISTORY
@@ -26,24 +26,45 @@
 
 #include "udfdecl.h"
 
+#if defined(__linux__) && defined(__KERNEL__)
+
+#include "udf_sb.h"
+#include "udf_i.h"
+
 #include <linux/fs.h>
 #include <linux/string.h>
 #include <linux/udf_fs.h>
 
-#include "udf_i.h"
-#include "udf_sb.h"
+#else
 
-uint32_t
-udf64_low32(uint64_t indat)
+#include <sys/types.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <string.h>
+
+int udf_blocksize=0;
+int udf_errno=0;
+
+void 
+udf_setblocksize(int size)
+{
+	udf_blocksize=size;
+}
+#endif
+
+Uint32
+udf64_low32(Uint64 indat)
 {
 	return indat & 0x00000000FFFFFFFFULL;
 }
 
-uint32_t
-udf64_high32(uint64_t indat)
+Uint32
+udf64_high32(Uint64 indat)
 {
 	return indat >> 32;
 }
+
+#if defined(__linux__) && defined(__KERNEL__)
 
 extern struct buffer_head *
 udf_tgetblk(struct super_block *sb, int block)
@@ -63,11 +84,11 @@ udf_tread(struct super_block *sb, int block)
 		return sb_bread(sb, block);
 }
 
-extern struct genericFormat *
-udf_add_extendedattr(struct inode * inode, uint32_t size, uint32_t type,
-	uint8_t loc, struct buffer_head **bh)
+extern struct GenericAttrFormat *
+udf_add_extendedattr(struct inode * inode, Uint32 size, Uint32 type,
+	Uint8 loc, struct buffer_head **bh)
 {
-	uint8_t *ea = NULL, *ad = NULL;
+	Uint8 *ea = NULL, *ad = NULL;
 	long_ad eaicb;
 	int offset;
 
@@ -75,26 +96,26 @@ udf_add_extendedattr(struct inode * inode, uint32_t size, uint32_t type,
 
 	if (UDF_I_EXTENDED_FE(inode) == 0)
 	{
-		struct fileEntry *fe;
+		struct FileEntry *fe;
 
-		fe = (struct fileEntry *)(*bh)->b_data;
+		fe = (struct FileEntry *)(*bh)->b_data;
 		eaicb = lela_to_cpu(fe->extendedAttrICB);
-		offset = sizeof(struct fileEntry);
+		offset = sizeof(struct FileEntry);
 	}
 	else
 	{
-		struct extendedFileEntry *efe;
+		struct ExtendedFileEntry *efe;
 
-		efe = (struct extendedFileEntry *)(*bh)->b_data;
+		efe = (struct ExtendedFileEntry *)(*bh)->b_data;
 		eaicb = lela_to_cpu(efe->extendedAttrICB);
-		offset = sizeof(struct extendedFileEntry);
+		offset = sizeof(struct ExtendedFileEntry);
 	}
 
 	ea = &(*bh)->b_data[offset];
 	if (UDF_I_LENEATTR(inode))
 		offset += UDF_I_LENEATTR(inode);
 	else
-		size += sizeof(struct extendedAttrHeaderDesc);
+		size += sizeof(struct ExtendedAttrHeaderDesc);
 
 	ad = &(*bh)->b_data[offset];
 	if (UDF_I_LENALLOC(inode))
@@ -106,8 +127,8 @@ udf_add_extendedattr(struct inode * inode, uint32_t size, uint32_t type,
 
 	if (loc & 0x01 && offset >= size)
 	{
-		struct extendedAttrHeaderDesc *eahd;
-		eahd = (struct extendedAttrHeaderDesc *)ea;
+		struct ExtendedAttrHeaderDesc *eahd;
+		eahd = (struct ExtendedAttrHeaderDesc *)ea;
 
 		if (UDF_I_LENALLOC(inode))
 		{
@@ -117,7 +138,7 @@ udf_add_extendedattr(struct inode * inode, uint32_t size, uint32_t type,
 		if (UDF_I_LENEATTR(inode))
 		{
 			/* check checksum/crc */
-			if (le16_to_cpu(eahd->descTag.tagIdent) != TAG_IDENT_EAHD ||
+			if (le16_to_cpu(eahd->descTag.tagIdent) != TID_EXTENDED_ATTRE_HEADER_DESC ||
 				le32_to_cpu(eahd->descTag.tagLocation) != UDF_I_LOCATION(inode).logicalBlockNum)
 			{
 				udf_release_data(*bh);
@@ -126,9 +147,9 @@ udf_add_extendedattr(struct inode * inode, uint32_t size, uint32_t type,
 		}
 		else
 		{
-			size -= sizeof(struct extendedAttrHeaderDesc);
-			UDF_I_LENEATTR(inode) += sizeof(struct extendedAttrHeaderDesc);
-			eahd->descTag.tagIdent = cpu_to_le16(TAG_IDENT_EAHD);
+			size -= sizeof(struct ExtendedAttrHeaderDesc);
+			UDF_I_LENEATTR(inode) += sizeof(struct ExtendedAttrHeaderDesc);
+			eahd->descTag.tagIdent = cpu_to_le16(TID_EXTENDED_ATTRE_HEADER_DESC);
 			eahd->descTag.descVersion = cpu_to_le16(2);
 			eahd->descTag.tagSerialNum = cpu_to_le16(1);
 			eahd->descTag.tagLocation = cpu_to_le32(UDF_I_LOCATION(inode).logicalBlockNum);
@@ -141,7 +162,7 @@ udf_add_extendedattr(struct inode * inode, uint32_t size, uint32_t type,
 		{
 			if (le32_to_cpu(eahd->appAttrLocation) < UDF_I_LENEATTR(inode))
 			{
-				uint32_t aal = le32_to_cpu(eahd->appAttrLocation);
+				Uint32 aal = le32_to_cpu(eahd->appAttrLocation);
 				memmove(&ea[offset - aal + size],
 					&ea[aal], offset - aal);
 				offset -= aal;
@@ -149,7 +170,7 @@ udf_add_extendedattr(struct inode * inode, uint32_t size, uint32_t type,
 			}
 			if (le32_to_cpu(eahd->impAttrLocation) < UDF_I_LENEATTR(inode))
 			{
-				uint32_t ial = le32_to_cpu(eahd->impAttrLocation);
+				Uint32 ial = le32_to_cpu(eahd->impAttrLocation);
 				memmove(&ea[offset - ial + size],
 					&ea[ial], offset - ial);
 				offset -= ial;
@@ -160,7 +181,7 @@ udf_add_extendedattr(struct inode * inode, uint32_t size, uint32_t type,
 		{
 			if (le32_to_cpu(eahd->appAttrLocation) < UDF_I_LENEATTR(inode))
 			{
-				uint32_t aal = le32_to_cpu(eahd->appAttrLocation);
+				Uint32 aal = le32_to_cpu(eahd->appAttrLocation);
 				memmove(&ea[offset - aal + size],
 					&ea[aal], offset - aal);
 				offset -= aal;
@@ -169,7 +190,7 @@ udf_add_extendedattr(struct inode * inode, uint32_t size, uint32_t type,
 		}
 		/* rewrite CRC + checksum of eahd */
 		UDF_I_LENEATTR(inode) += size;
-		return (struct genericFormat *)&ea[offset];
+		return (struct GenericAttrFormat *)&ea[offset];
 	}
 	if (loc & 0x02)
 	{
@@ -178,31 +199,31 @@ udf_add_extendedattr(struct inode * inode, uint32_t size, uint32_t type,
 	return NULL;
 }
 
-extern struct genericFormat *
-udf_get_extendedattr(struct inode * inode, uint32_t type, uint8_t subtype,
+extern struct GenericAttrFormat *
+udf_get_extendedattr(struct inode * inode, Uint32 type, Uint8 subtype,
 	struct buffer_head **bh)
 {
-	struct genericFormat *gaf;
-	uint8_t *ea = NULL;
+	struct GenericAttrFormat *gaf;
+	Uint8 *ea = NULL;
 	long_ad eaicb;
-	uint32_t offset;
+	Uint32 offset;
 
 	*bh = udf_tread(inode->i_sb, inode->i_ino);
 
 	if (UDF_I_EXTENDED_FE(inode) == 0)
 	{
-		struct fileEntry *fe;
+		struct FileEntry *fe;
 
-		fe = (struct fileEntry *)(*bh)->b_data;
+		fe = (struct FileEntry *)(*bh)->b_data;
 		eaicb = lela_to_cpu(fe->extendedAttrICB);
 		if (UDF_I_LENEATTR(inode))
 			ea = fe->extendedAttr;
 	}
 	else
 	{
-		struct extendedFileEntry *efe;
+		struct ExtendedFileEntry *efe;
 
-		efe = (struct extendedFileEntry *)(*bh)->b_data;
+		efe = (struct ExtendedFileEntry *)(*bh)->b_data;
 		eaicb = lela_to_cpu(efe->extendedAttrICB);
 		if (UDF_I_LENEATTR(inode))
 			ea = efe->extendedAttr;
@@ -210,11 +231,11 @@ udf_get_extendedattr(struct inode * inode, uint32_t type, uint8_t subtype,
 
 	if (UDF_I_LENEATTR(inode))
 	{
-		struct extendedAttrHeaderDesc *eahd;
-		eahd = (struct extendedAttrHeaderDesc *)ea;
+		struct ExtendedAttrHeaderDesc *eahd;
+		eahd = (struct ExtendedAttrHeaderDesc *)ea;
 
 		/* check checksum/crc */
-		if (le16_to_cpu(eahd->descTag.tagIdent) != TAG_IDENT_EAHD ||
+		if (le16_to_cpu(eahd->descTag.tagIdent) != TID_EXTENDED_ATTRE_HEADER_DESC ||
 			le32_to_cpu(eahd->descTag.tagLocation) != UDF_I_LOCATION(inode).logicalBlockNum)
 		{
 			udf_release_data(*bh);
@@ -222,7 +243,7 @@ udf_get_extendedattr(struct inode * inode, uint32_t type, uint8_t subtype,
 		}
 	
 		if (type < 2048)
-			offset = sizeof(struct extendedAttrHeaderDesc);
+			offset = sizeof(struct ExtendedAttrHeaderDesc);
 		else if (type < 65536)
 			offset = le32_to_cpu(eahd->impAttrLocation);
 		else
@@ -230,7 +251,7 @@ udf_get_extendedattr(struct inode * inode, uint32_t type, uint8_t subtype,
 
 		while (offset < UDF_I_LENEATTR(inode))
 		{
-			gaf = (struct genericFormat *)&ea[offset];
+			gaf = (struct GenericAttrFormat *)&ea[offset];
 			if (le32_to_cpu(gaf->attrType) == type && gaf->attrSubtype == subtype)
 				return gaf;
 			else
@@ -246,6 +267,22 @@ udf_get_extendedattr(struct inode * inode, uint32_t type, uint8_t subtype,
 	return NULL;
 }
 
+extern struct buffer_head *
+udf_read_untagged(struct super_block *sb, Uint32 block, Uint32 offset)
+{
+	struct buffer_head *bh = NULL;
+
+	/* Read the block */
+	bh = udf_tread(sb, block+offset);
+	if (!bh)
+	{
+		printk(KERN_ERR "udf: udf_read_untagged(%p,%d,%d) failed\n",
+			sb, block, offset);
+		return NULL;
+	}
+	return bh;
+}
+
 /*
  * udf_read_tagged
  *
@@ -257,11 +294,11 @@ udf_get_extendedattr(struct inode * inode, uint32_t type, uint8_t subtype,
  *	Written, tested, and released.
  */
 extern struct buffer_head *
-udf_read_tagged(struct super_block *sb, uint32_t block, uint32_t location, uint16_t *ident)
+udf_read_tagged(struct super_block *sb, Uint32 block, Uint32 location, Uint16 *ident)
 {
 	tag *tag_p;
 	struct buffer_head *bh = NULL;
-	register uint8_t checksum;
+	register Uint8 checksum;
 	register int i;
 
 	/* Read the block */
@@ -289,9 +326,9 @@ udf_read_tagged(struct super_block *sb, uint32_t block, uint32_t location, uint1
 	/* Verify the tag checksum */
 	checksum = 0U;
 	for (i = 0; i < 4; i++)
-		checksum += (uint8_t)(bh->b_data[i]);
+		checksum += (Uint8)(bh->b_data[i]);
 	for (i = 5; i < 16; i++)
-		checksum += (uint8_t)(bh->b_data[i]);
+		checksum += (Uint8)(bh->b_data[i]);
 	if (checksum != tag_p->tagChecksum) {
 		printk(KERN_ERR "udf: tag checksum failed block %d\n", block);
 		goto error_out;
@@ -322,7 +359,7 @@ error_out:
 }
 
 extern struct buffer_head *
-udf_read_ptagged(struct super_block *sb, lb_addr loc, uint32_t offset, uint16_t *ident)
+udf_read_ptagged(struct super_block *sb, lb_addr loc, Uint32 offset, Uint16 *ident)
 {
 	return udf_read_tagged(sb, udf_get_lb_pblock(sb, loc, offset),
 		loc.logicalBlockNum + offset, ident);
@@ -333,6 +370,8 @@ void udf_release_data(struct buffer_head *bh)
 	if (bh)
 		brelse(bh);
 }
+
+#endif
 
 void udf_update_tag(char *data, int length)
 {
@@ -347,11 +386,11 @@ void udf_update_tag(char *data, int length)
 
 	for (i=0; i<16; i++)
 		if (i != 4)
-			tptr->tagChecksum += (uint8_t)(data[i]);
+			tptr->tagChecksum += (Uint8)(data[i]);
 }
 
-void udf_new_tag(char *data, uint16_t ident, uint16_t version, uint16_t snum,
-	uint32_t loc, int length)
+void udf_new_tag(char *data, Uint16 ident, Uint16 version, Uint16 snum,
+	Uint32 loc, int length)
 {
 	tag *tptr = (tag *)data;
 	tptr->tagIdent = le16_to_cpu(ident);
@@ -360,3 +399,114 @@ void udf_new_tag(char *data, uint16_t ident, uint16_t version, uint16_t snum,
 	tptr->tagLocation = le32_to_cpu(loc);
 	udf_update_tag(data, length);
 }
+
+#ifndef __KERNEL__
+/*
+ * udf_read_tagged_data
+ *
+ * PURPOSE
+ *	Read the first block of a tagged descriptor.
+ *	Usable from user-land.
+ *
+ * HISTORY
+ *	  10/4/98 dgb: written
+ */
+int
+udf_read_tagged_data(char *buffer, int size, int fd, int block, int offset)
+{
+	tag *tag_p;
+	register Uint8 checksum;
+	register int i;
+	unsigned long offs;
+
+	if (!buffer)
+	{
+		udf_errno = 1;
+		return -1;
+	}
+
+	if ( !udf_blocksize )
+	{
+		udf_errno = 2;
+		return -1;
+	}
+
+	if ( size < udf_blocksize )
+	{
+		udf_errno = 3;
+		return -1;
+	}
+	udf_errno = 0;
+	
+	offs = (long)block * udf_blocksize;
+	if ( lseek(fd, offs, SEEK_SET) != offs )
+	{
+		udf_errno = 4;
+		return -1;
+	}
+
+	i = read(fd, buffer, udf_blocksize);
+	if ( i < udf_blocksize )
+	{
+		udf_errno = 5;
+		return -1;
+	}
+
+	tag_p = (tag *)(buffer);
+
+	/* Verify the tag location */
+	if ((block-offset) != tag_p->tagLocation)
+	{
+#ifdef __KERNEL__
+		printk(KERN_ERR "udf: location mismatch block %d, tag %d\n",
+			block, tag_p->tagLocation);
+#else
+		udf_errno = 6;
+#endif
+		goto error_out;
+	}
+	
+	/* Verify the tag checksum */
+	checksum = 0U;
+	for (i = 0; i < 4; i++)
+		checksum += (Uint8)(buffer[i]);
+	for (i = 5; i < 16; i++)
+		checksum += (Uint8)(buffer[i]);
+	if (checksum != tag_p->tagChecksum)
+	{
+#ifdef __KERNEL__
+		printk(KERN_ERR "udf: tag checksum failed\n");
+#else
+		udf_errno = 7;
+#endif
+		goto error_out;
+	}
+
+	/* Verify the tag version */
+	if (tag_p->descVersion != 0x0002U)
+	{
+#ifdef __KERNEL__
+		printk(KERN_ERR "udf: tag version 0x%04x != 0x0002U\n",
+			tag_p->descVersion);
+#else
+		udf_errno = 8;
+#endif
+		goto error_out;
+	}
+
+	/* Verify the descriptor CRC */
+	if (tag_p->descCRC == udf_crc(buffer + 16, tag_p->descCRCLength, 0))
+	{
+		udf_errno = 0;
+		return 0;
+	}
+#ifdef __KERNEL__
+	printk(KERN_ERR "udf: crc failure in udf_read_tagged\n");
+#else
+	udf_errno = 9;
+#endif
+
+error_out:
+	return -1;
+}
+#endif

@@ -1,0 +1,84 @@
+
+# USB device configuration from the device viewpoint (e.g. Linux running inside a USB device, not as host)
+#
+# Copyright (c) 2002-2003 Belcarra
+# Copyright (C) 2001 Lineo, Inc.
+# Copyright (C) 2001 Hewlett-Packard Co.
+mainmenu_option next_comment
+comment 'Bus Interface(s)'
+
+bool '  USB Device Register Tracing' CONFIG_USBD_REGISTER_TRACE
+
+comment ''
+
+# StrongArm
+if [ "$CONFIG_ARCH_SA1100" = "y" ]; then
+    dep_tristate '  Intel StrongArm SA-1110 (Assabet, Ipaq) support' CONFIG_USBD_SA1100_BUS $CONFIG_USBD
+
+    if [ "$CONFIG_USBD_SA1100_BUS" = "y" -o "$CONFIG_USBD_SA1100_BUS" = "m" ]; then
+       bool '    USB traffic keeps device awake' CONFIG_USBD_TRAFFIC_KEEPAWAKE $CONFIG_SA1110_CALYPSO
+       int '    USBD Stall watchdog timeout (seconds, 0 for none)' CONFIG_USBD_STALL_TIMEOUT "0" $CONFIG_USBD_SA1100_BUS
+       int '    USBD Stall disconnect duration (seconds)' CONFIG_USBD_STALL_DISCONNECT_DURATION "2" $CONFIG_USBD_SA1100_BUS
+    fi
+    comment ''
+fi
+
+# LH7A400 - Sharpsec
+if [ "$CONFIG_ARCH_LH7A400" = "y" ]; then
+    dep_tristate '  LH7A400 (Sharpsec) support' CONFIG_USBD_LH7A400_BUS $CONFIG_USBD
+    comment ''
+fi
+
+# AU1X00 - Alchemy Semi
+if [ "$CONFIG_MIPS_PB1100" = "y" -o "$CONFIG_MIPS_AU1000" = "y" -o "$CONFIG_AU1X00_USB_DEVICE" = "y" ]; then
+    dep_tristate '  AU1X00 (AMD/Alchemy) support' CONFIG_USBD_AU1X00_BUS $CONFIG_USBD
+    if [ "$CONFIG_USBD_AU1X00_BUS" = "m" -o "$CONFIG_USBD_AU1X00_BUS" = "y"  ]; then
+       dep_mbool '  Use AU1X00 builtin eth0 MAC addr as serial number' CONFIG_USBD_AU1X00_USE_ETH0 
+       if [ "$CONFIG_USBD_REGISTER_TRACE" = "y" ]; then
+   	   int       '  AU1X00  System Clock' CONFIG_USBD_AU1X00_SCLOCK 400 
+       fi
+    fi
+    comment ''
+fi
+
+# SMDK2500 - Samsung
+if [ "$CONFIG_ARCH_SAMSUNG" = "y" ]; then
+    dep_tristate '  SMDK2500 (Samsung 2500) support' CONFIG_USBD_SMDK2500_BUS $CONFIG_USBD 
+    if [ "$CONFIG_USBD_SMDK2500_BUS" = "m" ]; then
+       bool '  Use SMDK2500 builtin eth0 MAC Addr' CONFIG_USBD_SMDK2500_USE_ETH0 $CONFIG_USBD_SMDK2500_BUS
+       bool '  Use SMDK2500 builtin eth1 MAC Addr' CONFIG_USBD_SMDK2500_USE_ETH1 $CONFIG_USBD_SMDK2500_BUS
+       if [ "$CONFIG_USBD_REGISTER_TRACE" = "y" ]; then
+	   int       '  SMDK2500  Bus Clock' CONFIG_USBD_SMDK2500_BCLOCK 66
+       fi
+    fi
+    comment ''
+fi
+
+# Linkup
+if [ "$CONFIG_ARCH_L7200" = "y" ]; then
+    dep_tristate '  L7205 (Linkup) support' CONFIG_USBD_L7205_BUS $CONFIG_USBD
+    dep_mbool    '    L7210-AB fix' CONFIG_USBD_L7210AB_FIX $CONFIG_USBD_L7205_BUS
+    comment ''
+fi
+
+# PXA250 - Xscale
+if [ "$CONFIG_ARCH_PXA" = "y" -o "$CONFIG_CPU_XSCALE" = "y" ]; then
+    dep_tristate '  PXA (Xscale) support' CONFIG_USBD_PXA_BUS $CONFIG_USBD
+    comment ''
+fi
+
+# Hitachi SH7622 or SH7727
+if [ "$CONFIG_CPU_SUBTYPE_SH7622" = "y" -o "$CONFIG_CPU_SUBTYPE_SH7727" = "y" ]; then
+    dep_tristate '  SuperH Device support' CONFIG_USBD_SUPERH_BUS $CONFIG_USBD
+    comment ''
+fi
+
+# Scanlogic
+if [ "$CONFIG_SUPERH" = "y" -o "$CONFIG_X86" = "y" ]; then
+    dep_tristate '  Scanlogic SL11 Device support' CONFIG_USBD_SL11_BUS $CONFIG_USBD
+    comment ''
+fi
+
+dep_tristate '  Generic Bus Interface support' CONFIG_USBD_GENERIC_BUS $CONFIG_USBD
+
+endmenu

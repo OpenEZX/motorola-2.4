@@ -2,8 +2,6 @@
  * m8xx_pcmcia.c - Linux PCMCIA socket driver for the mpc8xx series.
  *
  * (C) 1999-2000 Magnus Damm <damm@bitsmart.com>
- * (C) 2001-2002 Montavista Software, Inc.
- *     <mlocke@mvista.com>
  *
  * "The ExCA standard specifies that socket controllers should provide 
  * two IO and five memory windows per socket, which can be independently 
@@ -65,7 +63,7 @@ MODULE_PARM(pc_debug, "i");
 #define PCMCIA_INFO(args...) printk(KERN_INFO "m8xx_pcmcia: "args)
 #define PCMCIA_ERROR(args...) printk(KERN_ERR "m8xx_pcmcia: "args)
 
-static const char *version = "Version 0.05, 14-Apr-2002";
+static const char *version = "Version 0.03, 14-Feb-2000, Magnus Damm";
 MODULE_LICENSE("Dual MPL/GPL");
 
 /* The RPX series use SLOT_B */

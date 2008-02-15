@@ -2915,18 +2915,13 @@ int acornscsi_detect(Scsi_Host_Template * tpnt)
 	ecs[count]->irqaddr	= (char *)ioaddr(host->card.io_intr);
 	ecs[count]->irqmask	= 0x0a;
 
-	if (!request_region(instance->io_port + 0x800,  2, "acornscsi(sbic)"))
-		goto err_1;
-	if (!request_region(host->card.io_intr,  1, "acornscsi(intr)"))
-		goto err_2;
-	if (!request_region(host->card.io_page,  1, "acornscsi(page)"))
-		goto err_3;
+	request_region(instance->io_port + 0x800,  2, "acornscsi(sbic)");
+	request_region(host->card.io_intr,  1, "acornscsi(intr)");
+	request_region(host->card.io_page,  1, "acornscsi(page)");
 #ifdef USE_DMAC
-	if (!request_region(host->dma.io_port, 256, "acornscsi(dmac)"))
-		goto err_4;
+	request_region(host->dma.io_port, 256, "acornscsi(dmac)");
 #endif
-	if (!request_region(instance->io_port, 2048, "acornscsi(ram)"))
-		goto err_5;
+	request_region(instance->io_port, 2048, "acornscsi(ram)");
 
 	if (request_irq(host->scsi.irq, acornscsi_intr, SA_INTERRUPT, "acornscsi", host)) {
 	    printk(KERN_CRIT "scsi%d: IRQ%d not free, interrupts disabled\n",
@@ -2939,20 +2934,6 @@ int acornscsi_detect(Scsi_Host_Template * tpnt)
 	++count;
     }
     return count;
-    
-err_5:
-#ifdef USE_DMAC
-    release_region(host->dma.io_port, 256);
-#endif
-err_4:
-    release_region(host->card.io_page, 1);
-err_3:
-    release_region(host->card.io_intr, 1);    
-err_2:
-    release_region(instance->io_port + 0x800, 2);
-err_1:
-    scsi_unregister(instance);
-    return 0;
 }
 
 /*

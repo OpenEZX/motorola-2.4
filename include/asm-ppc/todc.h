@@ -1,6 +1,6 @@
 /*
  * include/asm-ppc/todc.h
- *
+ * 
  * Definitions for the M48Txx and mc146818 series of Time of day/Real Time
  * Clock chips.
  *
@@ -25,58 +25,47 @@
 #define __PPC_KERNEL_TODC_H
 
 typedef struct {
-	uint rtc_type;		/* your particular chip */
+	uint	rtc_type;	/* your particular chip */
 
 	/*
 	 * Following are the addresses of the AS0, AS1, and DATA registers
 	 * of these chips.  Note that these are board-specific.
 	 */
-	unsigned char *nvram_as0;
-	unsigned char *nvram_as1;
-	unsigned char *nvram_data;
+	u_char	*nvram_as0;
+	u_char	*nvram_as1;
+	u_char	*nvram_data;
 
 	/*
 	 * Define bits to stop external set of regs from changing so
 	 * the chip can be read/written reliably.
 	 */
-	unsigned char enable_read;
-	unsigned char enable_write;
-
+	u_char	enable_read;
+	u_char	enable_write;
+	
 	/*
 	 * Following is the number of AS0 address bits.  This is normally
 	 * 8 but some bad hardware routes address lines incorrectly.
 	 */
-	int as0_bits;
-
-	int nvram_size;	/* Size of NVRAM on chip */
-	int sw_flags;	/* Software control flags */
+	int	as0_bits;
 
 	/* Following are the register offsets for the particular chip */
-	int year;
-	int month;
-	int day_of_month;
-	int day_of_week;
-	int hours;
-	int minutes;
-	int seconds;
-	int control_b;
-	int control_a;
-	int watchdog;
-	int interrupts;
-	int alarm_date;
-	int alarm_hour;
-	int alarm_minutes;
-	int alarm_seconds;
-	int century;
-	int flags;
-
-	/*
-	 * Some RTC chips have their NVRAM buried behind a addr/data pair of
-	 * regs on the first level/clock registers.  The following fields
-	 * are the addresses for those addr/data regs.
-	 */
-	int nvram_addr_reg;
-	int nvram_data_reg;
+	int	year;
+	int	month;
+	int	day_of_month;
+	int	day_of_week;
+	int	hours;
+	int	minutes;
+	int	seconds;
+	int	control_b;
+	int	control_a;
+	int	watchdog;
+	int	interrupts;
+	int	alarm_date;
+	int	alarm_hour;
+	int	alarm_minutes;
+	int	alarm_seconds;
+	int	century;
+	int	flags;
 } todc_info_t;
 
 /*
@@ -91,15 +80,15 @@ typedef struct {
 #define	TODC_TYPE_MK48T35		1
 #define	TODC_TYPE_MK48T37		2
 #define	TODC_TYPE_MK48T59		3
-#define	TODC_TYPE_DS1693		4	/* Dallas DS1693 RTC */
-#define	TODC_TYPE_DS1743		5	/* Dallas DS1743 RTC */
-#define	TODC_TYPE_DS1746		6	/* Dallas DS1746 RTC */
-#define	TODC_TYPE_DS1747		7	/* Dallas DS1747 RTC */
-#define	TODC_TYPE_DS1501		8	/* Dallas DS1501 RTC */
-#define TODC_TYPE_DS1643		9	/* Dallas DS1643 RTC */
-#define TODC_TYPE_PC97307		10	/* PC97307 internal RTC */
-#define TODC_TYPE_DS1557		11	/* Dallas DS1557 RTC */
-#define	TODC_TYPE_MC146818		100	/* Leave room for m48txx's */
+#define	TODC_TYPE_DS1693		4   /* Dallas DS1693 RTC */
+#define	TODC_TYPE_DS1743		5   /* Dallas DS1743 RTC */
+#define	TODC_TYPE_DS1746		6   /* Dallas DS1746 RTC */
+#define	TODC_TYPE_DS1747		7   /* Dallas DS1747 RTC */
+#define	TODC_TYPE_DS1501		8   /* Dallas DS1501 RTC */
+#define TODC_TYPE_DS1643		9   /* Dallas DS1643 RTC */
+#define TODC_TYPE_PC97307		10  /* PC97307 internal RTC */
+#define TODC_TYPE_DS1557		11  /* Dallas DS1557 RTC */
+#define	TODC_TYPE_MC146818		100 /* Leave room for more m48txx's */
 
 /*
  * Bit to clear/set to enable reads/writes to the chip
@@ -111,18 +100,9 @@ typedef struct {
 #define	TODC_DS1501_CNTL_B_TE		0x80
 
 /*
- * Define flag bits used by todc routines.
- */
-#define	TODC_FLAG_2_LEVEL_NVRAM		0x00000001
-
-/*
  * Define the values for the various RTC's that should to into the todc_info
  * table.
- * Note: The XXX_NVRAM_SIZE, XXX_NVRAM_ADDR_REG, and XXX_NVRAM_DATA_REG only
- * matter if XXX_SW_FLAGS has TODC_FLAG_2_LEVEL_NVRAM set.
  */
-#define	TODC_TYPE_MK48T35_NVRAM_SIZE		0x7ff8
-#define	TODC_TYPE_MK48T35_SW_FLAGS		0
 #define	TODC_TYPE_MK48T35_YEAR			0x7fff
 #define	TODC_TYPE_MK48T35_MONTH			0x7ffe
 #define	TODC_TYPE_MK48T35_DOM			0x7ffd	/* Day of Month */
@@ -140,11 +120,7 @@ typedef struct {
 #define	TODC_TYPE_MK48T35_ALARM_SECONDS		0x0000
 #define	TODC_TYPE_MK48T35_CENTURY		0x0000
 #define	TODC_TYPE_MK48T35_FLAGS			0x0000
-#define	TODC_TYPE_MK48T35_NVRAM_ADDR_REG	0
-#define	TODC_TYPE_MK48T35_NVRAM_DATA_REG	0
 
-#define	TODC_TYPE_MK48T37_NVRAM_SIZE		0x7ff0
-#define	TODC_TYPE_MK48T37_SW_FLAGS		0
 #define	TODC_TYPE_MK48T37_YEAR			0x7fff
 #define	TODC_TYPE_MK48T37_MONTH			0x7ffe
 #define	TODC_TYPE_MK48T37_DOM			0x7ffd	/* Day of Month */
@@ -162,11 +138,7 @@ typedef struct {
 #define	TODC_TYPE_MK48T37_ALARM_SECONDS		0x7ff2
 #define	TODC_TYPE_MK48T37_CENTURY		0x7ff1
 #define	TODC_TYPE_MK48T37_FLAGS			0x7ff0
-#define	TODC_TYPE_MK48T37_NVRAM_ADDR_REG	0
-#define	TODC_TYPE_MK48T37_NVRAM_DATA_REG	0
 
-#define	TODC_TYPE_MK48T59_NVRAM_SIZE		0x1ff0
-#define	TODC_TYPE_MK48T59_SW_FLAGS		0
 #define	TODC_TYPE_MK48T59_YEAR			0x1fff
 #define	TODC_TYPE_MK48T59_MONTH			0x1ffe
 #define	TODC_TYPE_MK48T59_DOM			0x1ffd	/* Day of Month */
@@ -184,33 +156,25 @@ typedef struct {
 #define	TODC_TYPE_MK48T59_ALARM_SECONDS		0x1fff
 #define	TODC_TYPE_MK48T59_CENTURY		0x1fff
 #define	TODC_TYPE_MK48T59_FLAGS			0x1fff
-#define	TODC_TYPE_MK48T59_NVRAM_ADDR_REG	0
-#define	TODC_TYPE_MK48T59_NVRAM_DATA_REG	0
 
-#define	TODC_TYPE_DS1501_NVRAM_SIZE	0x100
-#define	TODC_TYPE_DS1501_SW_FLAGS	TODC_FLAG_2_LEVEL_NVRAM
-#define	TODC_TYPE_DS1501_YEAR		(TODC_TYPE_DS1501_NVRAM_SIZE + 0x06)
-#define	TODC_TYPE_DS1501_MONTH		(TODC_TYPE_DS1501_NVRAM_SIZE + 0x05)
-#define	TODC_TYPE_DS1501_DOM		(TODC_TYPE_DS1501_NVRAM_SIZE + 0x04)
-#define	TODC_TYPE_DS1501_DOW		(TODC_TYPE_DS1501_NVRAM_SIZE + 0x03)
-#define	TODC_TYPE_DS1501_HOURS		(TODC_TYPE_DS1501_NVRAM_SIZE + 0x02)
-#define	TODC_TYPE_DS1501_MINUTES	(TODC_TYPE_DS1501_NVRAM_SIZE + 0x01)
-#define	TODC_TYPE_DS1501_SECONDS	(TODC_TYPE_DS1501_NVRAM_SIZE + 0x00)
-#define	TODC_TYPE_DS1501_CNTL_B		(TODC_TYPE_DS1501_NVRAM_SIZE + 0x0f)
-#define	TODC_TYPE_DS1501_CNTL_A		(TODC_TYPE_DS1501_NVRAM_SIZE + 0x0f)
-#define	TODC_TYPE_DS1501_WATCHDOG	(TODC_TYPE_DS1501_NVRAM_SIZE + 0xff)
-#define	TODC_TYPE_DS1501_INTERRUPTS	(TODC_TYPE_DS1501_NVRAM_SIZE + 0xff)
-#define	TODC_TYPE_DS1501_ALARM_DATE	(TODC_TYPE_DS1501_NVRAM_SIZE + 0x0b)
-#define	TODC_TYPE_DS1501_ALARM_HOUR	(TODC_TYPE_DS1501_NVRAM_SIZE + 0x0a)
-#define	TODC_TYPE_DS1501_ALARM_MINUTES	(TODC_TYPE_DS1501_NVRAM_SIZE + 0x09)
-#define	TODC_TYPE_DS1501_ALARM_SECONDS	(TODC_TYPE_DS1501_NVRAM_SIZE + 0x08)
-#define	TODC_TYPE_DS1501_CENTURY	(TODC_TYPE_DS1501_NVRAM_SIZE + 0x07)
-#define	TODC_TYPE_DS1501_FLAGS		(TODC_TYPE_DS1501_NVRAM_SIZE + 0xff)
-#define	TODC_TYPE_DS1501_NVRAM_ADDR_REG	0x10
-#define	TODC_TYPE_DS1501_NVRAM_DATA_REG	0x13
+#define	TODC_TYPE_DS1501_YEAR			0x06
+#define	TODC_TYPE_DS1501_MONTH			0x05
+#define	TODC_TYPE_DS1501_DOM			0x04	/* Day of Month */
+#define	TODC_TYPE_DS1501_DOW			0x03	/* Day of Week */
+#define	TODC_TYPE_DS1501_HOURS			0x02
+#define	TODC_TYPE_DS1501_MINUTES		0x01
+#define	TODC_TYPE_DS1501_SECONDS		0x00
+#define	TODC_TYPE_DS1501_CNTL_B			0x0f
+#define	TODC_TYPE_DS1501_CNTL_A			0x0f
+#define	TODC_TYPE_DS1501_WATCHDOG		0xff
+#define	TODC_TYPE_DS1501_INTERRUPTS		0xff
+#define	TODC_TYPE_DS1501_ALARM_DATE		0x0b
+#define	TODC_TYPE_DS1501_ALARM_HOUR		0x0a
+#define	TODC_TYPE_DS1501_ALARM_MINUTES		0x09
+#define	TODC_TYPE_DS1501_ALARM_SECONDS		0x08
+#define	TODC_TYPE_DS1501_CENTURY		0x07
+#define	TODC_TYPE_DS1501_FLAGS			0xff
 
-#define	TODC_TYPE_DS1557_NVRAM_SIZE		0x7fff0
-#define	TODC_TYPE_DS1557_SW_FLAGS		0
 #define	TODC_TYPE_DS1557_YEAR			0x7ffff
 #define	TODC_TYPE_DS1557_MONTH			0x7fffe
 #define	TODC_TYPE_DS1557_DOM			0x7fffd	/* Day of Month */
@@ -228,11 +192,7 @@ typedef struct {
 #define	TODC_TYPE_DS1557_ALARM_SECONDS		0x7fff2
 #define	TODC_TYPE_DS1557_CENTURY		0x7fff8
 #define	TODC_TYPE_DS1557_FLAGS			0x7fff0
-#define	TODC_TYPE_DS1557_NVRAM_ADDR_REG		0
-#define	TODC_TYPE_DS1557_NVRAM_DATA_REG		0
 
-#define	TODC_TYPE_DS1643_NVRAM_SIZE		0x1ff8
-#define	TODC_TYPE_DS1643_SW_FLAGS		0
 #define	TODC_TYPE_DS1643_YEAR			0x1fff
 #define	TODC_TYPE_DS1643_MONTH			0x1ffe
 #define	TODC_TYPE_DS1643_DOM			0x1ffd	/* Day of Month */
@@ -250,11 +210,7 @@ typedef struct {
 #define	TODC_TYPE_DS1643_ALARM_SECONDS		0x1fff
 #define	TODC_TYPE_DS1643_CENTURY		0x1ff8
 #define	TODC_TYPE_DS1643_FLAGS			0x1fff
-#define	TODC_TYPE_DS1643_NVRAM_ADDR_REG		0
-#define	TODC_TYPE_DS1643_NVRAM_DATA_REG		0
 
-#define	TODC_TYPE_DS1693_NVRAM_SIZE		0 /* Not handled yet */
-#define	TODC_TYPE_DS1693_SW_FLAGS		0
 #define	TODC_TYPE_DS1693_YEAR			0x09
 #define	TODC_TYPE_DS1693_MONTH			0x08
 #define	TODC_TYPE_DS1693_DOM			0x07	/* Day of Month */
@@ -272,11 +228,7 @@ typedef struct {
 #define	TODC_TYPE_DS1693_ALARM_SECONDS		0x01
 #define	TODC_TYPE_DS1693_CENTURY		0x48
 #define	TODC_TYPE_DS1693_FLAGS			0xff
-#define	TODC_TYPE_DS1693_NVRAM_ADDR_REG		0
-#define	TODC_TYPE_DS1693_NVRAM_DATA_REG		0
 
-#define	TODC_TYPE_DS1743_NVRAM_SIZE		0x1ff8
-#define	TODC_TYPE_DS1743_SW_FLAGS		0
 #define	TODC_TYPE_DS1743_YEAR			0x1fff
 #define	TODC_TYPE_DS1743_MONTH			0x1ffe
 #define	TODC_TYPE_DS1743_DOM			0x1ffd	/* Day of Month */
@@ -294,11 +246,7 @@ typedef struct {
 #define	TODC_TYPE_DS1743_ALARM_SECONDS		0x1fff
 #define	TODC_TYPE_DS1743_CENTURY		0x1ff8
 #define	TODC_TYPE_DS1743_FLAGS			0x1fff
-#define	TODC_TYPE_DS1743_NVRAM_ADDR_REG		0
-#define	TODC_TYPE_DS1743_NVRAM_DATA_REG		0
 
-#define	TODC_TYPE_DS1746_NVRAM_SIZE		0x1fff8
-#define	TODC_TYPE_DS1746_SW_FLAGS		0
 #define	TODC_TYPE_DS1746_YEAR			0x1ffff
 #define	TODC_TYPE_DS1746_MONTH			0x1fffe
 #define	TODC_TYPE_DS1746_DOM			0x1fffd	/* Day of Month */
@@ -316,20 +264,16 @@ typedef struct {
 #define	TODC_TYPE_DS1746_ALARM_SECONDS		0x00000
 #define	TODC_TYPE_DS1746_CENTURY		0x00000
 #define	TODC_TYPE_DS1746_FLAGS			0x00000
-#define	TODC_TYPE_DS1746_NVRAM_ADDR_REG		0
-#define	TODC_TYPE_DS1746_NVRAM_DATA_REG		0
 
-#define	TODC_TYPE_DS1747_NVRAM_SIZE		0x7fff8
-#define	TODC_TYPE_DS1747_SW_FLAGS		0
-#define	TODC_TYPE_DS1747_YEAR			0x7ffff
-#define	TODC_TYPE_DS1747_MONTH			0x7fffe
-#define	TODC_TYPE_DS1747_DOM			0x7fffd	/* Day of Month */
-#define	TODC_TYPE_DS1747_DOW			0x7fffc	/* Day of Week */
-#define	TODC_TYPE_DS1747_HOURS			0x7fffb
-#define	TODC_TYPE_DS1747_MINUTES		0x7fffa
-#define	TODC_TYPE_DS1747_SECONDS		0x7fff9
-#define	TODC_TYPE_DS1747_CNTL_B			0x7fff9
-#define	TODC_TYPE_DS1747_CNTL_A			0x7fff8	/* control_a R/W regs */
+#define	TODC_TYPE_DS1747_YEAR			0x1ffff
+#define	TODC_TYPE_DS1747_MONTH			0x1fffe
+#define	TODC_TYPE_DS1747_DOM			0x1fffd	/* Day of Month */
+#define	TODC_TYPE_DS1747_DOW			0x1fffc	/* Day of Week */
+#define	TODC_TYPE_DS1747_HOURS			0x1fffb
+#define	TODC_TYPE_DS1747_MINUTES		0x1fffa
+#define	TODC_TYPE_DS1747_SECONDS		0x1fff9
+#define	TODC_TYPE_DS1747_CNTL_B			0x1fff9
+#define	TODC_TYPE_DS1747_CNTL_A			0x1fff8	/* control_a R/W regs */
 #define	TODC_TYPE_DS1747_WATCHDOG		0x00000
 #define	TODC_TYPE_DS1747_INTERRUPTS		0x00000
 #define	TODC_TYPE_DS1747_ALARM_DATE		0x00000
@@ -338,11 +282,7 @@ typedef struct {
 #define	TODC_TYPE_DS1747_ALARM_SECONDS		0x00000
 #define	TODC_TYPE_DS1747_CENTURY		0x00000
 #define	TODC_TYPE_DS1747_FLAGS			0x00000
-#define	TODC_TYPE_DS1747_NVRAM_ADDR_REG		0
-#define	TODC_TYPE_DS1747_NVRAM_DATA_REG		0
 
-#define	TODC_TYPE_MC146818_NVRAM_SIZE		0	/* XXXX */
-#define	TODC_TYPE_MC146818_SW_FLAGS		0
 #define	TODC_TYPE_MC146818_YEAR			0x09
 #define	TODC_TYPE_MC146818_MONTH		0x08
 #define	TODC_TYPE_MC146818_DOM			0x07	/* Day of Month */
@@ -360,11 +300,7 @@ typedef struct {
 #define	TODC_TYPE_MC146818_ALARM_SECONDS	0x01
 #define	TODC_TYPE_MC146818_CENTURY		0xff
 #define	TODC_TYPE_MC146818_FLAGS		0xff
-#define	TODC_TYPE_MC146818_NVRAM_ADDR_REG	0
-#define	TODC_TYPE_MC146818_NVRAM_DATA_REG	0
 
-#define	TODC_TYPE_PC97307_NVRAM_SIZE		0	/* No NVRAM? */
-#define	TODC_TYPE_PC97307_SW_FLAGS		0
 #define	TODC_TYPE_PC97307_YEAR			0x09
 #define	TODC_TYPE_PC97307_MONTH			0x08
 #define	TODC_TYPE_PC97307_DOM			0x07	/* Day of Month */
@@ -382,8 +318,6 @@ typedef struct {
 #define	TODC_TYPE_PC97307_ALARM_SECONDS		0x01
 #define	TODC_TYPE_PC97307_CENTURY		0xff
 #define	TODC_TYPE_PC97307_FLAGS			0xff
-#define	TODC_TYPE_PC97307_NVRAM_ADDR_REG	0
-#define	TODC_TYPE_PC97307_NVRAM_DATA_REG	0
 
 /*
  * Define macros to allocate and init the todc_info_t table that will
@@ -402,9 +336,6 @@ typedef struct {
 									\
 	todc_info->as0_bits = (bits);					\
 									\
-	todc_info->nvram_size     = clock_type ##_NVRAM_SIZE;		\
-	todc_info->sw_flags       = clock_type ##_SW_FLAGS;		\
-									\
 	todc_info->year           = clock_type ##_YEAR;			\
 	todc_info->month          = clock_type ##_MONTH;		\
 	todc_info->day_of_month   = clock_type ##_DOM;			\
@@ -422,31 +353,20 @@ typedef struct {
 	todc_info->alarm_seconds  = clock_type ##_ALARM_SECONDS;	\
 	todc_info->century        = clock_type ##_CENTURY;		\
 	todc_info->flags          = clock_type ##_FLAGS;		\
-									\
-	todc_info->nvram_addr_reg = clock_type ##_NVRAM_ADDR_REG;	\
-	todc_info->nvram_data_reg = clock_type ##_NVRAM_DATA_REG;	\
 }
-
-#ifndef BCD_TO_BIN
-#define BCD_TO_BIN(val) ((val)=((val)&15) + ((val)>>4)*10)
-#endif
-
-#ifndef BIN_TO_BCD
-#define BIN_TO_BCD(val) ((val)=(((val)/10)<<4) + (val)%10)
-#endif
 
 extern todc_info_t *todc_info;
 
-unsigned char todc_direct_read_val(int addr);
-void todc_direct_write_val(int addr, unsigned char val);
-unsigned char todc_m48txx_read_val(int addr);
-void todc_m48txx_write_val(int addr, unsigned char val);
-unsigned char todc_mc146818_read_val(int addr);
-void todc_mc146818_write_val(int addr, unsigned char val);
+u_char		todc_direct_read_val(int addr);
+void		todc_direct_write_val(int addr, unsigned char val);
+u_char		todc_m48txx_read_val(int addr);
+void		todc_m48txx_write_val(int addr, unsigned char val);
+u_char		todc_mc146818_read_val(int addr);
+void		todc_mc146818_write_val(int addr, unsigned char val);
 
-long todc_time_init(void);
-unsigned long todc_get_rtc_time(void);
-int todc_set_rtc_time(unsigned long nowtime);
-void todc_calibrate_decr(void);
+long		todc_time_init(void);
+unsigned long	todc_get_rtc_time(void);
+int		todc_set_rtc_time(unsigned long nowtime);
+void		todc_calibrate_decr(void);
 
-#endif				/* __PPC_KERNEL_TODC_H */
+#endif /* __PPC_KERNEL_TODC_H */

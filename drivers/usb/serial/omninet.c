@@ -37,15 +37,18 @@
 
 #include <linux/config.h>
 #include <linux/kernel.h>
+#include <linux/sched.h>
+#include <linux/signal.h>
 #include <linux/errno.h>
+#include <linux/poll.h>
 #include <linux/init.h>
 #include <linux/slab.h>
+#include <linux/fcntl.h>
 #include <linux/tty.h>
 #include <linux/tty_driver.h>
 #include <linux/tty_flip.h>
 #include <linux/module.h>
 #include <linux/spinlock.h>
-#include <asm/uaccess.h>
 #include <linux/usb.h>
 
 #ifdef CONFIG_USB_SERIAL_DEBUG
@@ -85,20 +88,22 @@ MODULE_DEVICE_TABLE (usb, id_table);
 
 
 static struct usb_serial_device_type zyxel_omninet_device = {
-	.owner =		THIS_MODULE,
-	.name =			"ZyXEL - omni.net lcd plus usb",
-	.id_table =		id_table,
-	.num_interrupt_in =	1,
-	.num_bulk_in =		1,
-	.num_bulk_out =		2,
-	.num_ports =		1,
-	.open =			omninet_open,
-	.close =		omninet_close,
-	.write =		omninet_write,
-	.write_room =		omninet_write_room,
-	.read_bulk_callback =	omninet_read_bulk_callback,
-	.write_bulk_callback =	omninet_write_bulk_callback,
-	.shutdown =		omninet_shutdown,
+	name:			"ZyXEL - omni.net lcd plus usb",
+	id_table:		id_table,
+	needs_interrupt_in:	MUST_HAVE,
+	needs_bulk_in:		MUST_HAVE,
+	needs_bulk_out:		MUST_HAVE,
+	num_interrupt_in:	1,
+	num_bulk_in:		1,
+	num_bulk_out:		2,
+	num_ports:		1,
+	open:			omninet_open,
+	close:			omninet_close,
+	write:			omninet_write,
+	write_room:		omninet_write_room,
+	read_bulk_callback:	omninet_read_bulk_callback,
+	write_bulk_callback:	omninet_write_bulk_callback,
+	shutdown:		omninet_shutdown,
 };
 
 
@@ -154,24 +159,39 @@ static int omninet_open (struct usb_serial_port *port, struct file *filp)
 	if (!serial)
 		return -ENODEV;
 
-	od = kmalloc( sizeof(struct omninet_data), GFP_KERNEL );
-	if( !od ) {
-		err("%s- kmalloc(%Zd) failed.", __FUNCTION__, sizeof(struct omninet_data));
-		return -ENOMEM;
+	down (&port->sem);
+
+	MOD_INC_USE_COUNT;
+	++port->open_count;
+
+	if (!port->active) {
+		port->active = 1;
+
+		od = kmalloc( sizeof(struct omninet_data), GFP_KERNEL );
+		if( !od ) {
+			err("%s- kmalloc(%Zd) failed.", __FUNCTION__, sizeof(struct omninet_data));
+			--port->open_count;
+			port->active = 0;
+			up (&port->sem);
+			MOD_DEC_USE_COUNT;
+			return -ENOMEM;
+		}
+
+		port->private = od;
+		wport = &serial->port[1];
+		wport->tty = port->tty;
+
+		/* Start reading from the device */
+		FILL_BULK_URB(port->read_urb, serial->dev, 
+			      usb_rcvbulkpipe(serial->dev, port->bulk_in_endpointAddress),
+			      port->read_urb->transfer_buffer, port->read_urb->transfer_buffer_length,
+			      omninet_read_bulk_callback, port);
+		result = usb_submit_urb(port->read_urb);
+		if (result)
+			err("%s - failed submitting read urb, error %d", __FUNCTION__, result);
 	}
 
-	port->private = od;
-	wport = &serial->port[1];
-	wport->tty = port->tty;
-
-	/* Start reading from the device */
-	FILL_BULK_URB(port->read_urb, serial->dev, 
-		      usb_rcvbulkpipe(serial->dev, port->bulk_in_endpointAddress),
-		      port->read_urb->transfer_buffer, port->read_urb->transfer_buffer_length,
-		      omninet_read_bulk_callback, port);
-	result = usb_submit_urb(port->read_urb);
-	if (result)
-		err("%s - failed submitting read urb, error %d", __FUNCTION__, result);
+	up (&port->sem);
 
 	return result;
 }
@@ -191,15 +211,26 @@ static void omninet_close (struct usb_serial_port *port, struct file * filp)
 	if (!serial)
 		return;
 
-	if (serial->dev) {
-		wport = &serial->port[1];
-		usb_unlink_urb (wport->write_urb);
-		usb_unlink_urb (port->read_urb);
+	down (&port->sem);
+
+	--port->open_count;
+
+	if (port->open_count <= 0) {
+		if (serial->dev) {
+			wport = &serial->port[1];
+			usb_unlink_urb (wport->write_urb);
+			usb_unlink_urb (port->read_urb);
+		}
+
+		port->active = 0;
+		port->open_count = 0;
+		od = (struct omninet_data *)port->private;
+		if (od)
+			kfree(od);
 	}
 
-	od = (struct omninet_data *)port->private;
-	if (od)
-		kfree(od);
+	up (&port->sem);
+	MOD_DEC_USE_COUNT;
 }
 
 
@@ -364,6 +395,10 @@ static void omninet_write_bulk_callback (struct urb *urb)
 static void omninet_shutdown (struct usb_serial *serial)
 {
 	dbg ("%s", __FUNCTION__);
+
+	while (serial->port[0].open_count > 0) {
+		omninet_close (&serial->port[0], NULL);
+	}
 }
 
 

@@ -60,7 +60,7 @@
  * clears the BUSY flag after control is returned to it.
  */
 
-#ifndef __ASSEMBLY__
+#ifdef _LANGUAGE_C
 
 typedef int launch_state_t;
 typedef void (*launch_proc_t)(u64 call_parm);
@@ -117,6 +117,6 @@ launch_state_t	launch_poll(int nasid, int cpu);
 
 #endif /* _STANDALONE */
 
-#endif /* !__ASSEMBLY__ */
+#endif /* _LANGUAGE_C */
 
 #endif /* _ASM_SN_LAUNCH_H */

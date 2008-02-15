@@ -27,7 +27,7 @@
 
 #define DbgDelay(secs) { int wait_time; printk( " DbgDelay %ds ", secs); \
                          for( wait_time=jiffies + (secs*HZ); \
-		         time_before(jiffies, wait_time) ;) ; }
+		         wait_time > jiffies ;) ; }
 
 #define CPQFCTS_DRIVER_VER(maj,min,submin) ((maj<<16)|(min<<8)|(submin))
 // don't forget to also change MODULE_DESCRIPTION in cpqfcTSinit.c
@@ -95,11 +95,14 @@
 
 #define DEV_NAME "cpqfcTS"
 
-struct SupportedPCIcards
+#define CPQ_DEVICE_ID     0xA0FC
+#define AGILENT_XL2_ID    0x1029
+
+typedef struct
 {
   __u16 vendor_id;
   __u16 device_id;
-};
+} SupportedPCIcards;
 			 
 // nn:nn denotes bit field
                             // TachyonHeader struct def.

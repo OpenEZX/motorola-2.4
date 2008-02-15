@@ -42,7 +42,8 @@
 	 ASSABET_BCR_LED_GREEN  | ASSABET_BCR_LED_RED   | \
 	 ASSABET_BCR_RS232EN    | ASSABET_BCR_LCD_12RGB | \
 	 ASSABET_BCR_CF_BUS_OFF | ASSABET_BCR_STEREO_LB | \
-	 ASSABET_BCR_IRDA_MD0   | ASSABET_BCR_CF_RST)
+	 ASSABET_BCR_IRDA_MD0   | ASSABET_BCR_CF_RST	| \
+	 ASSABET_BCR_CODEC_RST  )
 
 unsigned long SCR_value = ASSABET_SCR_INIT;
 EXPORT_SYMBOL(SCR_value);
@@ -61,16 +62,33 @@ void ASSABET_BCR_frob(unsigned int mask, unsigned int val)
 
 EXPORT_SYMBOL(ASSABET_BCR_frob);
 
+static void assabet_backlight_power(int on)
+{
+#ifndef ASSABET_PAL_VIDEO
+	if (on)
+		ASSABET_BCR_set(ASSABET_BCR_LIGHT_ON);
+	else
+#endif
+		ASSABET_BCR_clear(ASSABET_BCR_LIGHT_ON);
+}
+
+static void assabet_lcd_power(int on)
+{
+#ifndef ASSABET_PAL_VIDEO
+	if (on)
+		ASSABET_BCR_set(ASSABET_BCR_LCD_ON);
+	else
+#endif
+		ASSABET_BCR_clear(ASSABET_BCR_LCD_ON);
+}
 
 static int __init assabet_init(void)
 {
 	if (!machine_is_assabet())
 		return -EINVAL;
 
-	/*
-	 * Set the IRQ edges
-	 */
-	set_GPIO_IRQ_edge(GPIO_GPIO23, GPIO_RISING_EDGE);	/* UCB1300 */
+	sa1100fb_lcd_power = assabet_lcd_power;
+	sa1100fb_backlight_power = assabet_backlight_power;
 
 	if (machine_has_neponset()) {
 		/*
@@ -306,6 +324,11 @@ static void __init assabet_map_io(void)
 	 */
 	neponset_map_io();
 #endif
+
+	/*
+	 * Set the IRQ edges
+	 */
+	set_GPIO_IRQ_edge(GPIO_GPIO23, GPIO_RISING_EDGE);       /* UCB1300 */
 
 	if (machine_has_neponset()) {
 		/*

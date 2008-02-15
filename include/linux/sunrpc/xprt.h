@@ -13,13 +13,17 @@
 #include <linux/socket.h>
 #include <linux/in.h>
 #include <linux/sunrpc/sched.h>
-#include <linux/sunrpc/xdr.h>
+
+/*
+ * Maximum number of iov's we use.
+ */
+#define MAX_IOVEC	10
 
 /*
  * The transport code maintains an estimate on the maximum number of out-
  * standing RPC requests, using a smoothed version of the congestion
  * avoidance implemented in 44BSD. This is basically the Van Jacobson
- * congestion algorithm: If a retransmit occurs, the congestion window is
+ * slow start algorithm: If a retransmit occurs, the congestion window is
  * halved; otherwise, it is incremented by 1/cwnd when
  *
  *	-	a reply is received and
@@ -32,13 +36,15 @@
  * Note: on machines with low memory we should probably use a smaller
  * MAXREQS value: At 32 outstanding reqs with 8 megs of RAM, fragment
  * reassembly will frequently run out of memory.
+ * Come Linux 2.3, we'll handle fragments directly.
  */
-#define RPC_MAXCONG		(16)
-#define RPC_MAXREQS		RPC_MAXCONG
-#define RPC_CWNDSCALE		(256)
+#define RPC_MAXCONG		16
+#define RPC_MAXREQS		(RPC_MAXCONG + 1)
+#define RPC_CWNDSCALE		256
 #define RPC_MAXCWND		(RPC_MAXCONG * RPC_CWNDSCALE)
 #define RPC_INITCWND		RPC_CWNDSCALE
-#define RPCXPRT_CONGESTED(xprt) ((xprt)->cong >= (xprt)->cwnd)
+#define RPCXPRT_CONGESTED(xprt) \
+	((xprt)->cong >= (xprt)->cwnd)
 
 /* Default timeout values */
 #define RPC_MAX_UDP_TIMEOUT	(60*HZ)
@@ -64,6 +70,15 @@ struct rpc_timeout {
 };
 
 /*
+ * This is the RPC buffer
+ */
+struct rpc_iov {
+	struct iovec		io_vec[MAX_IOVEC];
+	unsigned int		io_nr;
+	unsigned int		io_len;
+};
+
+/*
  * This describes a complete RPC request
  */
 struct rpc_rqst {
@@ -72,8 +87,8 @@ struct rpc_rqst {
 	 */
 	struct rpc_xprt *	rq_xprt;		/* RPC client */
 	struct rpc_timeout	rq_timeout;		/* timeout parms */
-	struct xdr_buf		rq_snd_buf;		/* send buffer */
-	struct xdr_buf		rq_rcv_buf;		/* recv buffer */
+	struct rpc_iov		rq_snd_buf;		/* send buffer */
+	struct rpc_iov		rq_rcv_buf;		/* recv buffer */
 
 	/*
 	 * This is the private part
@@ -81,10 +96,7 @@ struct rpc_rqst {
 	struct rpc_task *	rq_task;	/* RPC task data */
 	__u32			rq_xid;		/* request XID */
 	struct rpc_rqst *	rq_next;	/* free list */
-	int			rq_cong;	/* has incremented xprt->cong */
-	int			rq_received;	/* receive completed */
-
-	struct list_head	rq_list;
+	volatile unsigned char	rq_received : 1;/* receive completed */
 
 	/*
 	 * For authentication (e.g. auth_des)
@@ -97,19 +109,16 @@ struct rpc_rqst {
 	
 	u32			rq_bytes_sent;	/* Bytes we have sent */
 
-	long			rq_xtime;	/* when transmitted */
-	int			rq_ntimeo;
-	int			rq_nresend;
+#ifdef RPC_PROFILE
+	unsigned long		rq_xtime;	/* when transmitted */
+#endif
 };
-#define rq_svec			rq_snd_buf.head
-#define rq_slen			rq_snd_buf.len
-#define rq_rvec			rq_rcv_buf.head
-#define rq_rlen			rq_rcv_buf.len
-
-#define XPRT_LAST_FRAG		(1 << 0)
-#define XPRT_COPY_RECM		(1 << 1)
-#define XPRT_COPY_XID		(1 << 2)
-#define XPRT_COPY_DATA		(1 << 3)
+#define rq_svec			rq_snd_buf.io_vec
+#define rq_snr			rq_snd_buf.io_nr
+#define rq_slen			rq_snd_buf.io_len
+#define rq_rvec			rq_rcv_buf.io_vec
+#define rq_rnr			rq_rcv_buf.io_nr
+#define rq_rlen			rq_rcv_buf.io_len
 
 struct rpc_xprt {
 	struct socket *		sock;		/* BSD socket layer */
@@ -121,12 +130,9 @@ struct rpc_xprt {
 
 	unsigned long		cong;		/* current congestion */
 	unsigned long		cwnd;		/* congestion window */
-
-	unsigned int		rcvsize,	/* socket receive buffer size */
-				sndsize;	/* socket send buffer size */
+	unsigned long		congtime;	/* hold cwnd until then */
 
 	struct rpc_wait_queue	sending;	/* requests waiting to send */
-	struct rpc_wait_queue	resend;		/* requests waiting to resend */
 	struct rpc_wait_queue	pending;	/* requests in flight */
 	struct rpc_wait_queue	backlog;	/* waiting for slot */
 	struct rpc_rqst *	free;		/* free slots */
@@ -134,17 +140,18 @@ struct rpc_xprt {
 	unsigned long		sockstate;	/* Socket state */
 	unsigned char		shutdown   : 1,	/* being shut down */
 				nocong	   : 1,	/* no congestion control */
-				stream     : 1;	/* TCP */
+				stream     : 1,	/* TCP */
+				tcp_more   : 1;	/* more record fragments */
 
 	/*
 	 * State of TCP reply receive stuff
 	 */
-	u32			tcp_recm,	/* Fragment header */
-				tcp_xid,	/* Current XID */
-				tcp_reclen,	/* fragment length */
-				tcp_offset;	/* fragment offset */
-	unsigned long		tcp_copied,	/* copied to request */
-				tcp_flags;
+	u32			tcp_recm;	/* Fragment header */
+	u32			tcp_xid;	/* Current XID */
+	unsigned int		tcp_reclen,	/* fragment length */
+				tcp_offset,	/* fragment offset */
+				tcp_copied;	/* copied to request */
+	struct list_head	rx_pending;	/* receive pending list */
 
 	/*
 	 * Send stuff
@@ -152,8 +159,6 @@ struct rpc_xprt {
 	spinlock_t		sock_lock;	/* lock socket info */
 	spinlock_t		xprt_lock;	/* lock xprt info */
 	struct rpc_task *	snd_task;	/* Task blocked in send */
-
-	struct list_head	recv;
 
 
 	void			(*old_data_ready)(struct sock *, int);
@@ -180,14 +185,27 @@ int			xprt_adjust_timeout(struct rpc_timeout *);
 void			xprt_release(struct rpc_task *);
 void			xprt_reconnect(struct rpc_task *);
 int			xprt_clear_backlog(struct rpc_xprt *);
-void			xprt_sock_setbufsize(struct rpc_xprt *);
+int			xprt_tcp_pending(void);
+void			__rpciod_tcp_dispatcher(void);
 
-#define XPRT_CONNECT	0
+#define XPRT_WSPACE	0
+#define XPRT_CONNECT	1
+
+#define xprt_wspace(xp)			(test_bit(XPRT_WSPACE, &(xp)->sockstate))
+#define xprt_test_and_set_wspace(xp)	(test_and_set_bit(XPRT_WSPACE, &(xp)->sockstate))
+#define xprt_clear_wspace(xp)		(clear_bit(XPRT_WSPACE, &(xp)->sockstate))
 
 #define xprt_connected(xp)		(!(xp)->stream || test_bit(XPRT_CONNECT, &(xp)->sockstate))
 #define xprt_set_connected(xp)		(set_bit(XPRT_CONNECT, &(xp)->sockstate))
 #define xprt_test_and_set_connected(xp)	(test_and_set_bit(XPRT_CONNECT, &(xp)->sockstate))
 #define xprt_clear_connected(xp)	(clear_bit(XPRT_CONNECT, &(xp)->sockstate))
+
+static inline
+void rpciod_tcp_dispatcher(void)
+{
+	if (xprt_tcp_pending())
+		__rpciod_tcp_dispatcher();
+}
 
 #endif /* __KERNEL__*/
 

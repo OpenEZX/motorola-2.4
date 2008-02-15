@@ -383,7 +383,6 @@ static char *device;		/* use eg. device=arc1 to change name */
 MODULE_PARM(io, "i");
 MODULE_PARM(irq, "i");
 MODULE_PARM(device, "s");
-MODULE_LICENSE("GPL");
 
 int init_module(void)
 {

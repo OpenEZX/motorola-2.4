@@ -323,6 +323,12 @@ asmlinkage long sys_reboot(int magic1, int magic2, unsigned int cmd, void * arg)
 		machine_restart(buffer);
 		break;
 
+	case LINUX_REBOOT_CMD_REFLASH:
+		notifier_call_chain(&reboot_notifier_list, SYS_RESTART, NULL);
+		printk(KERN_EMERG "Restarting system to reflash.\n");
+		machine_restart("f");
+		break;
+
 	default:
 		unlock_kernel();
 		return -EINVAL;
@@ -655,8 +661,8 @@ asmlinkage long sys_setresuid(uid_t ruid, uid_t euid, uid_t suid)
 			wmb();
 		}
 		current->euid = euid;
+		current->fsuid = euid;
 	}
-	current->fsuid = current->euid;
 	if (suid != (uid_t) -1)
 		current->suid = suid;
 
@@ -701,8 +707,8 @@ asmlinkage long sys_setresgid(gid_t rgid, gid_t egid, gid_t sgid)
 			wmb();
 		}
 		current->egid = egid;
+		current->fsgid = egid;
 	}
-	current->fsgid = current->egid;
 	if (rgid != (gid_t) -1)
 		current->gid = rgid;
 	if (sgid != (gid_t) -1)
@@ -1272,6 +1278,16 @@ asmlinkage long sys_prctl(int option, unsigned long arg2, unsigned long arg3,
 			}
 			current->keep_capabilities = arg2;
 			break;
+
+#ifdef SET_FP_EXC_MODE
+		case PR_SET_FP_EXC:
+			error = SET_FP_EXC_MODE(current, arg2);
+			break;
+		case PR_GET_FP_EXC:
+			error = GET_FP_EXC_MODE(current);
+			break;
+#endif
+
 		default:
 			error = -EINVAL;
 			break;

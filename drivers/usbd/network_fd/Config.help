@@ -1,0 +1,55 @@
+CONFIG_USBD_NETWROK
+  Enable the Belcarra network function driver as a GPL driver. This function is
+  used emulating a Linux network driver. It can be configured to be used
+  with various Linux host class drivers and custom Windows CDC ethernet drivers.
+
+CONFIG_USBD_NETWORK_VENDORID
+  Optionally specify the network USB Device Vendor ID. The top level
+  Vendor ID will be used if this is not specified.
+
+CONFIG_USBD_NETWORK_PRODUCTID
+  Optionally specify the network USB Device Product ID. The top level
+  Vendor ID will be used if this is not specified.
+
+
+CONFIG_USBD_NETWORK_OUT_ENDPOINT
+  Specify the preferred OUT (received data) endpoint number. This is a
+  number from 0-15 and must be allowed by the bus interface device.
+
+CONFIG_USBD_NETWORK_IN_ENDPOINT
+  Specify the preferred IN (transmit data) endpoint number. This is a
+  number from 0-15 and must be allowed by the bus interface device.
+
+CONFIG_USBD_NETWORK_INT_ENDPOINT
+  Specify the preferred INT (interrupt) endpoint number. This is a
+  number from 0-15 and must be allowed by the bus interface device.
+
+
+CONFIG_USBD_NETWORK_OUT_PKTSIZE
+  Specify the maximum packet size for the OUT endpoint. This allowable
+  values are normally 16, 32 and 64. 
+
+CONFIG_USBD_NETWORK_IN_PKTSIZE
+  Specify the maximum packet size for the IN endpoint. This allowable
+  values are normally 16, 32 and 64. 
+
+CONFIG_USBD_NETWORK_INT_PKTSIZE
+  Specify the maximum packet size for the INT endpoint. This allowable
+  values are normally 8 and 16. Some bus interface devices may not
+  support all values.
+
+CONFIG_USBD_NETWORK_RNDIS
+  Enable RNDIS networking. This allows the network function driver to
+  work with Windows RNDIS networking.
+
+CONFIG_USBD_NETWORK_REMOTE_MACADDR
+  Specify a default MAC address to provide the USB Host.
+
+CONFIG_USBD_NETWORK_REMOTE_OUI
+  Specify a OUI for generating a MAC address for the USB Host.
+
+CONFIG_USBD_NETWORK_LOCAL_OUI
+  Specify a OUI for generating a MAC address for the local interface.
+
+CONFIG_USBD_NETWORK_LOCAL_MACADDR
+  Specify a default MAC address to use on the local interface.

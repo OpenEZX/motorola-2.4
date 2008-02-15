@@ -57,26 +57,10 @@ int sysctl_max_noreply_time = 12;
  * Nonzero values (usec) are used as lower limit to the per-connection
  * mtt value which was announced by the other end during negotiation.
  * Might be helpful if the peer device provides too short mtt.
- * Default is 10us which means using the unmodified value given by the
- * peer except if it's 0 (0 is likely a bug in the other stack).
+ * Default is 10 which means using the unmodified value given by the peer
+ * except if it's 0 (0 is likely a bug in the other stack).
  */
 unsigned sysctl_min_tx_turn_time = 10;
-/*
- * Maximum data size to be used in transmission in payload of LAP frame.
- * There is a bit of confusion in the IrDA spec :
- * The LAP spec defines the payload of a LAP frame (I field) to be
- * 2048 bytes max (IrLAP 1.1, chapt 6.6.5, p40).
- * On the other hand, the PHY mention frames of 2048 bytes max (IrPHY
- * 1.2, chapt 5.3.2.1, p41). But, this number includes the LAP header
- * (2 bytes), and CRC (32 bits at 4 Mb/s). So, for the I field (LAP
- * payload), that's only 2042 bytes. Oups !
- * I've had trouble trouble transmitting 2048 bytes frames with USB
- * dongles and nsc-ircc at 4 Mb/s, so adjust to 2042... I don't know
- * if this bug applies only for 2048 bytes frames or all negociated
- * frame sizes, but all hardware seem to support "2048 bytes" frames.
- * You can use the sysctl to play with this value anyway.
- * Jean II */
-unsigned sysctl_max_tx_data_size = 2042;
 
 static int irlap_param_baud_rate(void *instance, irda_param_t *param, int get);
 static int irlap_param_link_disconnect(void *instance, irda_param_t *parm, 
@@ -310,7 +294,9 @@ void irda_init_max_qos_capabilies(struct qos_info *qos)
 	sysctl_max_noreply_time = index_value(i, link_disc_times);
 
 	/* LSB is first byte, MSB is second byte */
-	qos->baud_rate.bits    &= 0x03ff;
+    /*	qos->baud_rate.bits    &= 0x03ff;*/
+    /*not support 4M bps*/
+    qos->baud_rate.bits      &= 0x3f;
 
 	qos->window_size.bits     = 0x7f;
 	qos->min_turn_time.bits   = 0xff;
@@ -331,7 +317,7 @@ void irlap_adjust_qos_settings(struct qos_info *qos)
 	__u32 line_capacity;
 	int index;
 
-	IRDA_DEBUG(2, __FUNCTION__ "()\n");
+	IRDA_DEBUG(2, "%s()\n", __FUNCTION__);
 
 	/*
 	 * Make sure the mintt is sensible.
@@ -371,10 +357,10 @@ void irlap_adjust_qos_settings(struct qos_info *qos)
 	while ((qos->data_size.value > line_capacity) && (index > 0)) {
 		qos->data_size.value = data_sizes[index--];
 		IRDA_DEBUG(2, __FUNCTION__ 
-			   "(), reducing data size to %d\n",
+			   "(), redusing data size to %d\n",
 			   qos->data_size.value);
 	}
-#else /* Use method described in section 6.6.11 of IrLAP */
+#else /* Use method descibed in section 6.6.11 of IrLAP */
 	while (irlap_requested_line_capacity(qos) > line_capacity) {
 		ASSERT(index != 0, return;);
 
@@ -382,24 +368,18 @@ void irlap_adjust_qos_settings(struct qos_info *qos)
 		if (qos->window_size.value > 1) {
 			qos->window_size.value--;
 			IRDA_DEBUG(2, __FUNCTION__ 
-				   "(), reducing window size to %d\n",
+				   "(), redusing window size to %d\n",
 				   qos->window_size.value);
 		} else if (index > 1) {
 			qos->data_size.value = data_sizes[index--];
 			IRDA_DEBUG(2, __FUNCTION__ 
-				   "(), reducing data size to %d\n",
+				   "(), redusing data size to %d\n",
 				   qos->data_size.value);
 		} else {
-			WARNING(__FUNCTION__ "(), nothing more we can do!\n");
+			WARNING("%s(), nothing more we can do!\n", __FUNCTION__);
 		}
 	}
 #endif /* CONFIG_IRDA_DYNAMIC_WINDOW */
-	/*
-	 * Fix tx data size according to user limits - Jean II
-	 */
-	if (qos->data_size.value > sysctl_max_tx_data_size)
-		/* Allow non discrete adjustement to avoid loosing capacity */
-		qos->data_size.value = sysctl_max_tx_data_size;
 }
 
 /*
@@ -519,7 +499,7 @@ static int irlap_param_baud_rate(void *instance, irda_param_t *param, int get)
 
 	if (get) {
 		param->pv.i = self->qos_rx.baud_rate.bits;
-		IRDA_DEBUG(2, __FUNCTION__ "(), baud rate = 0x%02x\n", 
+		IRDA_DEBUG(2, "%s(), baud rate = 0x%02x\n", __FUNCTION__, 
 			   param->pv.i);		
 	} else {
 		/* 
@@ -692,7 +672,7 @@ __u32 irlap_max_line_capacity(__u32 speed, __u32 max_turn_time)
 	__u32 line_capacity;
 	int i,j;
 
-	IRDA_DEBUG(2, __FUNCTION__ "(), speed=%d, max_turn_time=%d\n",
+	IRDA_DEBUG(2, "%s(), speed=%d, max_turn_time=%d\n", __FUNCTION__,
 		   speed, max_turn_time);
 
 	i = value_index(speed, baud_rates, 10);
@@ -703,7 +683,7 @@ __u32 irlap_max_line_capacity(__u32 speed, __u32 max_turn_time)
 
 	line_capacity = max_line_capacities[i][j];
 
-	IRDA_DEBUG(2, __FUNCTION__ "(), line capacity=%d bytes\n", 
+	IRDA_DEBUG(2, "%s(), line capacity=%d bytes\n", __FUNCTION__, 
 		   line_capacity);
 	
 	return line_capacity;
@@ -717,7 +697,7 @@ __u32 irlap_requested_line_capacity(struct qos_info *qos)
 		irlap_min_turn_time_in_bytes(qos->baud_rate.value, 
 					     qos->min_turn_time.value);
 	
-	IRDA_DEBUG(2, __FUNCTION__ "(), requested line capacity=%d\n",
+	IRDA_DEBUG(2, "%s(), requested line capacity=%d\n", __FUNCTION__,
 		   line_capacity);
 	
 	return line_capacity;			       		  

@@ -43,7 +43,6 @@
 #endif
 
 #define SMB_TTL_DEFAULT 1000
-#define SMB_TIMEO_DEFAULT 30
 
 static void smb_delete_inode(struct inode *);
 static void smb_put_super(struct super_block *);
@@ -278,7 +277,6 @@ static struct option opts[] = {
 	{ "iocharset",	0, 'i' },
 	{ "codepage",	0, 'c' },
 	{ "ttl",	0, 't' },
-	{ "timeo",	0, 'o' },
 	{ NULL,		0, 0}
 };
 
@@ -332,9 +330,6 @@ parse_options(struct smb_mount_data_kernel *mnt, char *options)
 		case 't':
 			mnt->ttl = value;
 			break;
-		case 'o':
-			mnt->timeo = value;
-			break;
 		default:
 			printk ("smbfs: Unrecognized mount option %s\n",
 				optopt);
@@ -381,8 +376,6 @@ smb_show_options(struct seq_file *s, struct vfsmount *m)
 
 	if (mnt->ttl != SMB_TTL_DEFAULT)
 		seq_printf(s, ",ttl=%d", mnt->ttl);
-	if (mnt->timeo != SMB_TIMEO_DEFAULT)
-		seq_printf(s, ",timeo=%d", mnt->timeo);
 
 	return 0;
 }
@@ -474,7 +467,6 @@ smb_read_super(struct super_block *sb, void *raw_data, int silent)
 		SMB_NLS_MAXNAMELEN);
 
 	mnt->ttl = SMB_TTL_DEFAULT;
-	mnt->timeo = SMB_TIMEO_DEFAULT;
 	if (ver == SMB_MOUNT_OLDVERSION) {
 		mnt->version = oldmnt->version;
 

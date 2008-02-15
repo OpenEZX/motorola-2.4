@@ -1430,7 +1430,11 @@ struct net_device *i2o_lan_register_device(struct i2o_device *i2o_dev)
 	return dev;
 }
 
-static int __init i2o_lan_init(void)
+#ifdef MODULE
+#define i2o_lan_init	init_module
+#endif
+
+int __init i2o_lan_init(void)
 {
 	struct net_device *dev;
 	int i;
@@ -1511,7 +1515,9 @@ static int __init i2o_lan_init(void)
 	return 0;
 }
 
-static void i2o_lan_exit(void)
+#ifdef MODULE
+
+void cleanup_module(void)
 {
 	int i;
 
@@ -1570,5 +1576,4 @@ MODULE_PARM_DESC(rx_copybreak, "Copy breakpoint for copy only small frames (1-)"
 MODULE_PARM(tx_batch_mode, "0-2" "i");
 MODULE_PARM_DESC(tx_batch_mode, "0=Send immediatelly, 1=Send in batches, 2=Switch automatically");
 
-module_init(i2o_lan_init);
-module_exit(i2o_lan_exit);
+#endif

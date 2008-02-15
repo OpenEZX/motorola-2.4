@@ -6,6 +6,7 @@
  * Copyright (C) 2000 - 2001 by Kanoj Sarcar (kanoj@sgi.com)
  * Copyright (C) 2000 - 2001 by Silicon Graphics, Inc.
  */
+
 #ifndef __ASM_SMP_H
 #define __ASM_SMP_H
 
@@ -33,17 +34,14 @@ extern int __cpu_logical_map[NR_CPUS];
 
 #define NO_PROC_ID	(-1)
 
-#define SMP_RESCHEDULE_YOURSELF	0x1	/* XXX braindead */
-#define SMP_CALL_FUNCTION	0x2
-
 #if (NR_CPUS <= _MIPS_SZLONG)
 
 typedef unsigned long   cpumask_t;
 
 #define CPUMASK_CLRALL(p)	(p) = 0
-#define CPUMASK_SETB(p, bit)	(p) |= 1UL << (bit)
-#define CPUMASK_CLRB(p, bit)	(p) &= ~(1UL << (bit))
-#define CPUMASK_TSTB(p, bit)	((p) & (1UL << (bit)))
+#define CPUMASK_SETB(p, bit)	(p) |= 1 << (bit)
+#define CPUMASK_CLRB(p, bit)	(p) &= ~(1ULL << (bit))
+#define CPUMASK_TSTB(p, bit)	((p) & (1ULL << (bit)))
 
 #elif (NR_CPUS <= 128)
 
@@ -60,11 +58,11 @@ typedef struct {
 
 #define	CPUMASK_CLRALL(p)	(p)._bits[0] = 0, (p)._bits[1] = 0
 #define CPUMASK_SETB(p, bit)	(p)._bits[CPUMASK_INDEX(bit)] |= \
-					(1UL << CPUMASK_SHFT(bit))
+					(1ULL << CPUMASK_SHFT(bit))
 #define CPUMASK_CLRB(p, bit)	(p)._bits[CPUMASK_INDEX(bit)] &= \
-					~(1UL << CPUMASK_SHFT(bit))
+					~(1ULL << CPUMASK_SHFT(bit))
 #define CPUMASK_TSTB(p, bit)	((p)._bits[CPUMASK_INDEX(bit)] & \
-					(1UL << CPUMASK_SHFT(bit)))
+					(1ULL << CPUMASK_SHFT(bit)))
 
 #else
 #error cpumask macros only defined for 128p kernels

@@ -1,28 +1,73 @@
 /*******************************************************************************
 
+  This software program is available to you under a choice of one of two
+  licenses. You may choose to be licensed under either the GNU General Public
+  License 2.0, June 1991, available at http://www.fsf.org/copyleft/gpl.html,
+  or the Intel BSD + Patent License, the text of which follows:
   
-  Copyright(c) 1999 - 2002 Intel Corporation. All rights reserved.
+  Recipient has requested a license and Intel Corporation ("Intel") is willing
+  to grant a license for the software entitled Linux Base Driver for the
+  Intel(R) PRO/1000 Family of Adapters (e1000) (the "Software") being provided
+  by Intel Corporation. The following definitions apply to this license:
   
-  This program is free software; you can redistribute it and/or modify it 
-  under the terms of the GNU General Public License as published by the Free 
-  Software Foundation; either version 2 of the License, or (at your option) 
-  any later version.
+  "Licensed Patents" means patent claims licensable by Intel Corporation which
+  are necessarily infringed by the use of sale of the Software alone or when
+  combined with the operating system referred to below.
   
-  This program is distributed in the hope that it will be useful, but WITHOUT 
-  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or 
-  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for 
-  more details.
+  "Recipient" means the party to whom Intel delivers this Software.
   
-  You should have received a copy of the GNU General Public License along with
-  this program; if not, write to the Free Software Foundation, Inc., 59 
-  Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+  "Licensee" means Recipient and those third parties that receive a license to
+  any operating system available under the GNU General Public License 2.0 or
+  later.
   
-  The full GNU General Public License is included in this distribution in the
-  file called LICENSE.
+  Copyright (c) 1999 - 2002 Intel Corporation.
+  All rights reserved.
   
-  Contact Information:
-  Linux NICS <linux.nics@intel.com>
-  Intel Corporation, 5200 N.E. Elam Young Parkway, Hillsboro, OR 97124-6497
+  The license is provided to Recipient and Recipient's Licensees under the
+  following terms.
+  
+  Redistribution and use in source and binary forms of the Software, with or
+  without modification, are permitted provided that the following conditions
+  are met:
+  
+  Redistributions of source code of the Software may retain the above
+  copyright notice, this list of conditions and the following disclaimer.
+  
+  Redistributions in binary form of the Software may reproduce the above
+  copyright notice, this list of conditions and the following disclaimer in
+  the documentation and/or materials provided with the distribution.
+  
+  Neither the name of Intel Corporation nor the names of its contributors
+  shall be used to endorse or promote products derived from this Software
+  without specific prior written permission.
+  
+  Intel hereby grants Recipient and Licensees a non-exclusive, worldwide,
+  royalty-free patent license under Licensed Patents to make, use, sell, offer
+  to sell, import and otherwise transfer the Software, if any, in source code
+  and object code form. This license shall include changes to the Software
+  that are error corrections or other minor changes to the Software that do
+  not add functionality or features when the Software is incorporated in any
+  version of an operating system that has been distributed under the GNU
+  General Public License 2.0 or later. This patent license shall apply to the
+  combination of the Software and any operating system licensed under the GNU
+  General Public License 2.0 or later if, at the time Intel provides the
+  Software to Recipient, such addition of the Software to the then publicly
+  available versions of such operating systems available under the GNU General
+  Public License 2.0 or later (whether in gold, beta or alpha form) causes
+  such combination to be covered by the Licensed Patents. The patent license
+  shall not apply to any other combinations which include the Software. NO
+  hardware per se is licensed hereunder.
+  
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MECHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL INTEL OR IT CONTRIBUTORS BE LIABLE FOR ANY
+  DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+  (INCLUDING, BUT NOT LIMITED, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+  ANY LOSS OF USE; DATA, OR PROFITS; OR BUSINESS INTERUPTION) HOWEVER CAUSED
+  AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY OR
+  TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 *******************************************************************************/
 
@@ -147,24 +192,6 @@ E1000_PARAM(FlowControl, "Flow Control setting");
 
 E1000_PARAM(XsumRX, "Disable or enable Receive Checksum offload");
 
-/* Transmit Interrupt Delay in units of 1.024 microseconds
- *
- * Valid Range: 0-65535
- *
- * Default Value: 64
- */
-
-E1000_PARAM(TxIntDelay, "Transmit Interrupt Delay");
-
-/* Transmit Absolute Interrupt Delay in units of 1.024 microseconds
- *
- * Valid Range: 0-65535
- *
- * Default Value: 0
- */
-
-E1000_PARAM(TxAbsIntDelay, "Transmit Absolute Interrupt Delay");
-
 /* Receive Interrupt Delay in units of 1.024 microseconds
  *
  * Valid Range: 0-65535
@@ -173,15 +200,6 @@ E1000_PARAM(TxAbsIntDelay, "Transmit Absolute Interrupt Delay");
  */
 
 E1000_PARAM(RxIntDelay, "Receive Interrupt Delay");
-
-/* Receive Absolute Interrupt Delay in units of 1.024 microseconds
- *
- * Valid Range: 0-65535
- *
- * Default Value: 128
- */
-
-E1000_PARAM(RxAbsIntDelay, "Receive Absolute Interrupt Delay");
 
 #define AUTONEG_ADV_DEFAULT  0x2F
 #define AUTONEG_ADV_MASK     0x2F
@@ -198,20 +216,9 @@ E1000_PARAM(RxAbsIntDelay, "Receive Absolute Interrupt Delay");
 #define MAX_82544_RXD               4096
 
 #define DEFAULT_RDTR                   0
+#define DEFAULT_RADV                 128
 #define MAX_RXDELAY               0xFFFF
 #define MIN_RXDELAY                    0
-
-#define DEFAULT_RADV                 128
-#define MAX_RXABSDELAY            0xFFFF
-#define MIN_RXABSDELAY                 0
-
-#define DEFAULT_TIDV                  64
-#define MAX_TXDELAY               0xFFFF
-#define MIN_TXDELAY                    0
-
-#define DEFAULT_TADV                  64
-#define MAX_TXABSDELAY            0xFFFF
-#define MIN_TXABSDELAY                 0
 
 struct e1000_option {
 	enum { enable_option, range_option, list_option } type;
@@ -306,16 +313,15 @@ e1000_check_options(struct e1000_adapter *adapter)
 
 	{ /* Transmit Descriptor Count */
 		struct e1000_option opt = {
-			.type = range_option,
-			.name = "Transmit Descriptors",
-			.err  = "using default of " __MODULE_STRING(DEFAULT_TXD),
-			.def  = DEFAULT_TXD,
-			.arg  = { r: { min: MIN_TXD }}
+			type: range_option,
+			name: "Transmit Descriptors",
+			err:  "using default of " __MODULE_STRING(DEFAULT_TXD),
+			def:  DEFAULT_TXD,
+			arg: { r: { min: MIN_TXD }}
 		};
 		struct e1000_desc_ring *tx_ring = &adapter->tx_ring;
 		e1000_mac_type mac_type = adapter->hw.mac_type;
-		opt.arg.r.max = mac_type < e1000_82544 ? 
-			MAX_TXD : MAX_82544_TXD;
+		opt.arg.r.max = mac_type < e1000_82544 ? MAX_TXD : MAX_82544_TXD;
 
 		tx_ring->count = TxDescriptors[bd];
 		e1000_validate_option(&tx_ring->count, &opt);
@@ -323,11 +329,11 @@ e1000_check_options(struct e1000_adapter *adapter)
 	}
 	{ /* Receive Descriptor Count */
 		struct e1000_option opt = {
-			.type = range_option,
-			.name = "Receive Descriptors",
-			.err  = "using default of " __MODULE_STRING(DEFAULT_RXD),
-			.def  = DEFAULT_RXD,
-			.arg  = { r: { min: MIN_RXD }}
+			type: range_option,
+			name: "Receive Descriptors",
+			err:  "using default of " __MODULE_STRING(DEFAULT_RXD),
+			def:  DEFAULT_RXD,
+			arg: { r: { min: MIN_RXD }}
 		};
 		struct e1000_desc_ring *rx_ring = &adapter->rx_ring;
 		e1000_mac_type mac_type = adapter->hw.mac_type;
@@ -339,10 +345,10 @@ e1000_check_options(struct e1000_adapter *adapter)
 	}
 	{ /* Checksum Offload Enable/Disable */
 		struct e1000_option opt = {
-			.type = enable_option,
-			.name = "Checksum Offload",
-			.err  = "defaulting to Enabled",
-			.def  = OPTION_ENABLED
+			type: enable_option,
+			name: "Checksum Offload",
+			err:  "defaulting to Enabled",
+			def:  OPTION_ENABLED
 		};
 		
 		int rx_csum = XsumRX[bd];
@@ -359,68 +365,31 @@ e1000_check_options(struct e1000_adapter *adapter)
 			 { e1000_fc_default, "Flow Control Hardware Default" }};
 
 		struct e1000_option opt = {
-			.type = list_option,
-			.name = "Flow Control",
-			.err  = "reading default settings from EEPROM",
-			.def  = e1000_fc_default,
-			.arg  = { l: { nr: ARRAY_SIZE(fc_list), p: fc_list }}
+			type: list_option,
+			name: "Flow Control",
+			err:  "reading default settings from EEPROM",
+			def:  e1000_fc_default,
+			arg: { l: { nr: ARRAY_SIZE(fc_list), p: fc_list }}
 		};
 
 		int fc = FlowControl[bd];
 		e1000_validate_option(&fc, &opt);
 		adapter->hw.fc = adapter->hw.original_fc = fc;
 	}
-	{ /* Transmit Interrupt Delay */
-		char *tidv = "using default of " __MODULE_STRING(DEFAULT_TIDV);
-		struct e1000_option opt = {
-			.type = range_option,
-			.name = "Transmit Interrupt Delay",
-			.arg  = { r: { min: MIN_TXDELAY, max: MAX_TXDELAY }}
-		};
-		opt.def = DEFAULT_TIDV;
-		opt.err = tidv;
-
-		adapter->tx_int_delay = TxIntDelay[bd];
-		e1000_validate_option(&adapter->tx_int_delay, &opt);
-	}
-	{ /* Transmit Absolute Interrupt Delay */
-		char *tadv = "using default of " __MODULE_STRING(DEFAULT_TADV);
-		struct e1000_option opt = {
-			.type = range_option,
-			.name = "Transmit Absolute Interrupt Delay",
-			.arg  = { r: { min: MIN_TXABSDELAY, max: MAX_TXABSDELAY }}
-		};
-		opt.def = DEFAULT_TADV;
-		opt.err = tadv;
-
-		adapter->tx_abs_int_delay = TxAbsIntDelay[bd];
-		e1000_validate_option(&adapter->tx_abs_int_delay, &opt);
-	}
 	{ /* Receive Interrupt Delay */
 		char *rdtr = "using default of " __MODULE_STRING(DEFAULT_RDTR);
+		char *radv = "using default of " __MODULE_STRING(DEFAULT_RADV);
 		struct e1000_option opt = {
-			.type = range_option,
-			.name = "Receive Interrupt Delay",
-			.arg  = { r: { min: MIN_RXDELAY, max: MAX_RXDELAY }}
+			type: range_option,
+			name: "Receive Interrupt Delay",
+			arg: { r: { min: MIN_RXDELAY, max: MAX_RXDELAY }}
 		};
-		opt.def = DEFAULT_RDTR;
-		opt.err = rdtr;
+		e1000_mac_type mac_type = adapter->hw.mac_type;
+		opt.def = mac_type < e1000_82540 ? DEFAULT_RDTR : DEFAULT_RADV;
+		opt.err = mac_type < e1000_82540 ? rdtr : radv;
 
 		adapter->rx_int_delay = RxIntDelay[bd];
 		e1000_validate_option(&adapter->rx_int_delay, &opt);
-	}
-	{ /* Receive Absolute Interrupt Delay */
-		char *radv = "using default of " __MODULE_STRING(DEFAULT_RADV);
-		struct e1000_option opt = {
-			.type = range_option,
-			.name = "Receive Absolute Interrupt Delay",
-			.arg  = { r: { min: MIN_RXABSDELAY, max: MAX_RXABSDELAY }}
-		};
-		opt.def = DEFAULT_RADV;
-		opt.err = radv;
-
-		adapter->rx_abs_int_delay = RxAbsIntDelay[bd];
-		e1000_validate_option(&adapter->rx_abs_int_delay, &opt);
 	}
 	
 	switch(adapter->hw.media_type) {
@@ -482,11 +451,11 @@ e1000_check_copper_options(struct e1000_adapter *adapter)
 		                                      {  SPEED_100, "" },
 		                                      { SPEED_1000, "" }};
 		struct e1000_option opt = {
-			.type = list_option,
-			.name = "Speed",
-			.err  = "parameter ignored",
-			.def  = 0,
-			.arg  = { l: { nr: ARRAY_SIZE(speed_list), p: speed_list }}
+			type: list_option,
+			name: "Speed",
+			err:  "parameter ignored",
+			def:  0,
+			arg: { l: { nr: ARRAY_SIZE(speed_list), p: speed_list }}
 		};
 
 		speed = Speed[bd];
@@ -497,11 +466,11 @@ e1000_check_copper_options(struct e1000_adapter *adapter)
 		                                     { HALF_DUPLEX, "" },
 		                                     { FULL_DUPLEX, "" }};
 		struct e1000_option opt = {
-			.type = list_option,
-			.name = "Duplex",
-			.err  = "parameter ignored",
-			.def  = 0,
-			.arg  = { l: { nr: ARRAY_SIZE(dplx_list), p: dplx_list }}
+			type: list_option,
+			name: "Duplex",
+			err:  "parameter ignored",
+			def:  0,
+			arg: { l: { nr: ARRAY_SIZE(dplx_list), p: dplx_list }}
 		};
 
 		dplx = Duplex[bd];
@@ -549,11 +518,11 @@ e1000_check_copper_options(struct e1000_adapter *adapter)
 			 { 0x2f, AA "1000/FD, 100/FD, 100/HD, 10/FD, 10/HD" }};
 
 		struct e1000_option opt = {
-			.type = list_option,
-			.name = "AutoNeg",
-			.err  = "parameter ignored",
-			.def  = AUTONEG_ADV_DEFAULT,
-			.arg  = { l: { nr: ARRAY_SIZE(an_list), p: an_list }}
+			type: list_option,
+			name: "AutoNeg",
+			err:  "parameter ignored",
+			def:  AUTONEG_ADV_DEFAULT,
+			arg: { l: { nr: ARRAY_SIZE(an_list), p: an_list }}
 		};
 
 		int an = AutoNeg[bd];

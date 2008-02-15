@@ -22,6 +22,8 @@
 
 #include <asm/uaccess.h>
 
+#define MAX_BUF_PER_PAGE (PAGE_CACHE_SIZE / 512)
+
 static unsigned long max_block(kdev_t dev)
 {
 	unsigned int retval = ~0U;
@@ -98,26 +100,6 @@ int set_blocksize(kdev_t dev, int size)
 	kill_bdev(bdev);
 	bdput(bdev);
 	return 0;
-}
-
-int sb_set_blocksize(struct super_block *sb, int size)
-{
-	int bits;
-	if (set_blocksize(sb->s_dev, size) < 0)
-		return 0;
-	sb->s_blocksize = size;
-	for (bits = 9, size >>= 9; size >>= 1; bits++)
-		;
-	sb->s_blocksize_bits = bits;
-	return sb->s_blocksize;
-}
-
-int sb_min_blocksize(struct super_block *sb, int size)
-{
-	int minsize = get_hardsect_size(sb->s_dev);
-	if (size < minsize)
-		size = minsize;
-	return sb_set_blocksize(sb, size);
 }
 
 static int blkdev_get_block(struct inode * inode, long iblock, struct buffer_head * bh, int create)
@@ -532,6 +514,9 @@ int check_disk_change(kdev_t dev)
 		return 0;
 	if (!bdops->check_media_change(dev))
 		return 0;
+
+	printk(KERN_DEBUG "VFS: Disk change detected on device %s\n",
+		bdevname(dev));
 
 	if (invalidate_device(dev, 0))
 		printk("VFS: busy inodes on changed media.\n");

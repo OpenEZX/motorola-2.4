@@ -604,13 +604,7 @@ static int setup (wan_device_t* wandev, wandev_conf_t* conf)
 
   	/* Reserve I/O region and schedule background task */
         if(card->hw.type != SDLA_S514 && !card->wandev.piggyback)
-		if (!request_region(card->hw.port, card->hw.io_range, 
-				wandev->name)) {
-			printk(KERN_WARNING "port 0x%04x busy\n", card->hw.port);
-			release_hw(card);
-			wandev->state = WAN_UNCONFIGURED;
-			return -EBUSY;
-	  }
+                request_region(card->hw.port, card->hw.io_range, wandev->name);
 
 	/* Only use the polling routine for the X25 protocol */
 	

@@ -158,9 +158,4 @@ extern inline void up(struct semaphore * sem)
 	}
 }
 
-static inline int sem_getcount(struct semaphore *sem)
-{
-	return sem->count;
-}
-
 #endif

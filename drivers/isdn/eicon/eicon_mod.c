@@ -665,11 +665,8 @@ if_readstatus(u_char * buf, int len, int user, int id, int channel)
 			else
 				cnt = skb->len;
 
-			if (user) {
-				spin_unlock_irqrestore(&eicon_lock, flags);
+			if (user)
 				copy_to_user(p, skb->data, cnt);
-				spin_lock_irqsave(&eicon_lock, flags);
-			}
 			else
 				memcpy(p, skb->data, cnt);
 

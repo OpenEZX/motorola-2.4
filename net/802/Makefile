@@ -57,5 +57,4 @@ endif
 include $(TOPDIR)/Rules.make
 
 cl2llc.c: cl2llc.pre
-	@rm -f $@
 	sed -f ./pseudo/opcd2num.sed cl2llc.pre >cl2llc.c

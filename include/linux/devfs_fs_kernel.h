@@ -3,7 +3,7 @@
 
 #include <linux/fs.h>
 #include <linux/config.h>
-#include <linux/spinlock.h>
+#include <linux/locks.h>
 #include <linux/kdev_t.h>
 #include <linux/types.h>
 
@@ -46,6 +46,14 @@
 
 typedef struct devfs_entry * devfs_handle_t;
 
+
+#ifdef CONFIG_BLK_DEV_INITRD
+#  define ROOT_DEVICE_NAME ((real_root_dev ==ROOT_DEV) ? root_device_name:NULL)
+#else
+#  define ROOT_DEVICE_NAME root_device_name
+#endif
+
+
 #ifdef CONFIG_DEVFS_FS
 
 struct unique_numspace
@@ -54,7 +62,7 @@ struct unique_numspace
     unsigned char sem_initialised;
     unsigned int num_free;          /*  Num free in bits       */
     unsigned int length;            /*  Array length in bytes  */
-    unsigned long *bits;
+    __u32 *bits;
     struct semaphore semaphore;
 };
 
@@ -116,6 +124,7 @@ extern void devfs_dealloc_unique_number (struct unique_numspace *space,
 					 int number);
 
 extern void mount_devfs_fs (void);
+extern void devfs_make_root (const char *name);
 
 #else  /*  CONFIG_DEVFS_FS  */
 
@@ -308,6 +317,10 @@ static inline void devfs_dealloc_unique_number (struct unique_numspace *space,
 }
 
 static inline void mount_devfs_fs (void)
+{
+    return;
+}
+static inline void devfs_make_root (const char *name)
 {
     return;
 }

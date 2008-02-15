@@ -14,8 +14,9 @@
  *  it to save wrong values...  Be aware!
  */
 #include <linux/config.h>
+#include <asm/kgdb.h>
 #include "entry-header.S"
-
+#include <asm/arch/irqs.h>
 
 #ifdef IOC_BASE
 /* IOC / IOMD based hardware */
@@ -479,6 +480,31 @@ ENTRY(soft_irq_mask)
 		.macro	irq_prio_table
 		.endm
 
+#elif defined(CONFIG_ARCH_MX1ADS)
+
+		.macro	disable_fiq
+		.endm
+#define AITC_NIVECSR   0x40
+		.macro	get_irqnr_and_base, irqnr, irqstat, base, tmp
+		ldr	\irqstat, =IO_ADDRESS(MX1ADS_AITC_BASE)
+		@ Load offset & priority of the highest priority
+		@ interrupt pending.
+		ldr	\irqnr, [\irqstat, #AITC_NIVECSR]
+		@ Shift off the priority leaving the offset or
+		@ "interrupt number"
+		mov	\irqnr, \irqnr, lsr #16
+ 		ldr	\irqstat, =1	@ dummy compare
+		ldr	\base, =0xFFFF		// invalid interrupt
+		cmp	\irqnr, \base
+		bne	1001f
+		ldr	\irqstat, =0
+1001:
+		tst	\irqstat, #1	@ to make the condition code = TRUE
+		.endm
+
+		.macro	irq_prio_table
+		.endm
+
 #elif defined(CONFIG_ARCH_CLPS711X)
 
 #include <asm/hardware/clps7111.h>
@@ -571,6 +597,203 @@ ENTRY(anakin_irq_mask)
 ENTRY(anakin_active_irqs)
 		.space	4
 		.text
+		.endm
+
+#elif CONFIG_ARCH_PXA
+
+		.macro	disable_fiq
+		.endm
+
+		.macro	get_irqnr_and_base, irqnr, irqstat, base, tmp
+		mov	\base, #io_p2v(0x40000000)      @ IIR Ctl = 0x40d00000
+		add	\base, \base, #0x00d00000
+		ldr	\irqstat, [\base, #0]           @ ICIP
+		ldr	\irqnr, [\base, #4]             @ ICMR
+		ands	\irqstat, \irqstat, \irqnr
+		beq	1001f
+		rsb	\irqnr, \irqstat, #0
+		and	\irqstat, \irqstat, \irqnr
+		clz	\irqnr, \irqstat
+		rsb	\irqnr, \irqnr, #(31 - PXA_IRQ_SKIP)
+1001:
+		.endm
+
+		.macro	irq_prio_table
+		.endm
+#elif defined(CONFIG_ARCH_IOP310) || defined(CONFIG_ARCH_ADIFCC)
+
+		.macro	disable_fiq
+		.endm
+
+        	.macro  get_irqnr_and_base, irqnr, irqstat, base, tmp
+        	mrc p13, 0, \irqstat, c4, c0, 0 @ get INTSRC
+        	mrc p13, 0, \base, c0, c0, 0    @ get INTCTL
+	
+        	tst \irqstat, #(1<<29)      @ if INTSRC_BI
+        	tstne   \base, #(1<<3)          @ and INTCTL_BM
+        	movne   \irqnr, #IRQ_XS80200_BCU
+        	bne 1001f
+	
+        	tst \irqstat, #(1<<28)      @ if INTSRC_PI
+        	tstne   \base, #(1<<2)          @ and INTCTL_PM
+        	movne   \irqnr, #IRQ_XS80200_PMU
+        	bne 1001f
+	
+        	tst \irqstat, #(1<<31)      @ if INTSRC_FI
+        	tstne   \base, #(1<<0)          @ and INTCTL_FM
+        	movne   \irqnr, #IRQ_XS80200_EXTFIQ
+        	bne 1001f
+	
+        	tst \irqstat, #(1<<30)      @ if INTSRC_II
+        	tstne   \base, #(1<<1)          @ and INTCTL_IM
+        	movne   \irqnr, #IRQ_XS80200_EXTIRQ
+
+1001:
+  		.endm
+  
+  		.macro	irq_prio_table
+ 		.endm
+
+#elif defined(CONFIG_ARCH_IOP321)
+		.macro  disable_fiq
+		.endm
+
+		/*
+		 * Note: only deal with normal interrupts, not FIQ
+		 */
+		.macro  get_irqnr_and_base, irqnr, irqstat, base, tmp
+		mov     \irqnr, #0
+		mrc     p6, 0, \irqstat, c8, c0, 0      @ Read IINTSRC
+		cmp     \irqstat, #0
+		beq     1001f
+		clz     \irqnr, \irqstat 
+		mov     \base, #31
+		subs    \irqnr,\base,\irqnr
+		add     \irqnr,\irqnr,#IRQ_IOP321_DMA0_EOT
+1001:
+		.endm 
+
+		.macro  irq_prio_table
+		.endm
+
+#elif defined(CONFIG_ARCH_IXP1200) 
+
+#include <asm/hardware.h>	
+
+		.macro	disable_fiq    
+		.endm
+
+		.equ	irq_mask_pci_err_high, IRQ_MASK_PCI_ERR & 0xff000000
+		.equ	irq_mask_pci_err_low,  IRQ_MASK_PCI_ERR & 0x00ffffff
+		.equ    pci_csr_base_high,     PCI_CSR_BASE & 0xff000000
+		.equ    pci_csr_base_low,      PCI_CSR_BASE & 0x00ffffff
+	
+		.macro	get_irqnr_and_base, irqnr, irqstat, base, tmp
+
+		mov	r4, #ARMCSR_BASE	
+		add     r4, r4, #CSR_ARM_IRQ
+		ldr	\irqstat, [r4]		@ get interrupts
+		tst	\irqstat, #IXP1200_IRQS @ check for interrupts 
+		beq     1001f
+
+		tst	\irqstat, #IRQ_MASK_UENG
+		movne	\irqnr, #IXP1200_IRQ_UENG
+		bne	1001f
+
+		tst	\irqstat, #IRQ_MASK_CINT
+		movne	\irqnr, #IXP1200_IRQ_CINT
+		bne	1001f
+
+		tst	\irqstat, #IRQ_MASK_SRAM
+		movne	\irqnr, #IXP1200_IRQ_SRAM
+		bne	1001f
+	
+		tst	\irqstat, #IRQ_MASK_SDRAM
+		movne	\irqnr, #IXP1200_IRQ_SDRAM
+		bne	1001f
+	
+		tst	\irqstat, #IRQ_MASK_UART
+		movne	\irqnr, #IXP1200_IRQ_UART
+		bne	1001f
+
+		tst	\irqstat, #IRQ_MASK_RTC
+		movne	\irqnr, #IXP1200_IRQ_RTC
+		bne	1001f
+
+		@ Check for an ints from PCI register
+
+		tst	\irqstat, #IRQ_MASK_PCI_INTS
+		beq	1001f
+
+		mov     r4, #pci_csr_base_high
+		orr     r4, r4, #pci_csr_base_low
+		add     r4, r4, #CSR_IRQ_STATUS
+		ldr	\irqstat, [r4]		@ get pci interrupts
+	
+		tst	\irqstat, #IRQ_MASK_DMA1
+		movne	\irqnr, #IXP1200_IRQ_DMA1
+		bne	1001f
+			
+		tst	\irqstat, #IRQ_MASK_DMA2
+		movne	\irqnr, #IXP1200_IRQ_DMA2
+		bne	1001f
+
+		tst	\irqstat, #IRQ_MASK_DMA1NB
+		movne	\irqnr, #IXP1200_IRQ_DMA1NB
+		bne	1001f
+
+		tst	\irqstat, #IRQ_MASK_DMA2NB
+		movne	\irqnr, #IXP1200_IRQ_DMA2NB
+		bne	1001f
+
+		tst	\irqstat, #IRQ_MASK_PCI
+		movne	\irqnr, #IXP1200_IRQ_PCI
+		bne	1001f
+
+		tst	\irqstat, #IRQ_MASK_I2O
+		movne	\irqnr, #IXP1200_IRQ_I2O
+		bne	1001f
+
+		tst	\irqstat, #IRQ_MASK_DOORBELL
+		movne	\irqnr, #IXP1200_IRQ_DOORBELL
+
+		tst	\irqstat, #IRQ_MASK_TIMER1
+		movne	\irqnr, #IXP1200_IRQ_TIMER1
+		bne	1001f
+
+		tst	\irqstat, #IRQ_MASK_TIMER2
+		movne	\irqnr, #IXP1200_IRQ_TIMER2
+		bne	1001f
+
+		tst	\irqstat, #IRQ_MASK_TIMER3
+		movne	\irqnr, #IXP1200_IRQ_TIMER3
+		bne	1001f
+
+		tst	\irqstat, #IRQ_MASK_TIMER4
+		movne	\irqnr, #IXP1200_IRQ_TIMER4
+		bne	1001f
+
+		tst	\irqstat, #IRQ_MASK_SWI
+		movne	\irqnr, #IXP1200_IRQ_SWI
+		bne	1001f
+
+		tst	\irqstat, #IRQ_MASK_BIST
+		movne	\irqnr, #IXP1200_IRQ_BIST
+		bne	1001f
+
+		tst	\irqstat, #IRQ_MASK_PWRM
+		movne	\irqnr, #IXP1200_IRQ_PWRM
+		bne	1001f
+		
+		tst	\irqstat, #irq_mask_pci_err_high
+		tsteq	\irqstat, #irq_mask_pci_err_low
+		movne	\irqnr, #IXP1200_IRQ_PCI_ERR
+		bne	1001f
+	
+1001:
+		.endm
+
+		.macro	irq_prio_table
 		.endm
 
 #else
@@ -697,6 +920,12 @@ __irq_svc:	sub	sp, sp, #S_FRAME_SIZE
 		add	r4, sp, #S_SP
 		mov	r6, lr
 		stmia	r4, {r5, r6, r7, r8, r9}	@ save sp_SVC, lr_SVC, pc, cpsr, old_ro
+#ifdef CONFIG_PREEMPT
+		get_current_task r9
+		ldr	r8, [r9, #TSK_PREEMPT]
+		add	r8, r8, #1
+		str	r8, [r9, #TSK_PREEMPT]
+#endif
 1:		get_irqnr_and_base r0, r6, r5, lr
 		movne	r1, sp
 		@
@@ -704,6 +933,25 @@ __irq_svc:	sub	sp, sp, #S_FRAME_SIZE
 		@
 		adrsvc	ne, lr, 1b
 		bne	do_IRQ
+#ifdef CONFIG_PREEMPT
+2:		ldr	r8, [r9, #TSK_PREEMPT]
+		subs	r8, r8, #1
+		bne	3f
+		ldr	r7, [r9, #TSK_NEED_RESCHED]
+		teq	r7, #0
+		beq	3f
+		ldr	r6, .LCirqstat
+		ldr	r0, [r6, #IRQSTAT_BH_COUNT]
+		teq	r0, #0
+		bne	3f
+		mov	r0, #MODE_SVC
+		msr	cpsr_c, r0		@ enable interrupts
+		bl	SYMBOL_NAME(preempt_schedule)
+		mov	r0, #I_BIT | MODE_SVC
+		msr	cpsr_c, r0              @ disable interrupts
+		b	2b
+3:		str	r8, [r9, #TSK_PREEMPT]
+#endif
 		ldr	r0, [sp, #S_PSR]		@ irqs are already disabled
 		msr	spsr, r0
 		ldmia	sp, {r0 - pc}^			@ load r0 - pc, cpsr
@@ -718,9 +966,40 @@ __und_svc:	sub	sp, sp, #S_FRAME_SIZE
 		add	r4, sp, #S_SP
 		stmia	r4, {r5 - r9}			@ save sp_SVC, lr_SVC, pc, cpsr, old_ro
 
+		
+#ifdef	CONFIG_KGDB
+		/*
+		 * This is somewhat of a hack, but it is the only way
+		 * that seems doable.  __und_svc assumes that by the
+		 * time it is called, the FPE has been initalized. 
+		 * Since we may want to breakpoint very early on 
+		 * (just following trap_init), that's not the case.
+		 * If we bl to call_fpe before the FPE is initialized,
+		 * bad things happen.
+		 *
+		 * So we check  for the KGDB traps and if we encounter 
+		 * them, just jump over the FPE call.
+		 */
+		adr	r10, kgdb_brk_instr
+		ldr	r10, [r10]
+		ldr	r9, [sp, #S_PC]		@ Load PC
+		sub	r9, r9, #4
+		mask_pc	r9, r9
+		ldr	r9, [r9]		@ get instruction
+		teq	r10, r9			@ Is it GDB breakpoint?
+		beq	2f
+		adr	r10, kgdb_trap_instr	@ Compiled in breakpoint?
+		ldr	r10, [r10]
+		teq	r10, r9
+		beq	2f
+#endif
+
 		adrsvc	al, r9, 1f			@ r9  = normal FP return
 		bl	call_fpe			@ lr  = undefined instr return
 
+#ifdef	CONFIG_KGDB
+2:
+#endif
 		mov	r0, r5				@ unsigned long pc
 		mov	r1, sp				@ struct pt_regs *regs
 		bl	SYMBOL_NAME(do_undefinstr)
@@ -730,6 +1009,12 @@ __und_svc:	sub	sp, sp, #S_FRAME_SIZE
 		ldr	lr, [sp, #S_PSR]		@ Get SVC cpsr
 		msr	spsr, lr
 		ldmia	sp, {r0 - pc}^			@ Restore SVC registers
+
+#ifdef	CONFIG_KGDB
+kgdb_brk_instr:		.word	KGDB_BREAKINST
+kgdb_trap_instr:	.word	KGDB_COMPILED_BREAK
+#endif
+
 
 		.align	5
 __pabt_svc:	sub	sp, sp, #S_FRAME_SIZE
@@ -761,6 +1046,9 @@ __pabt_svc:	sub	sp, sp, #S_FRAME_SIZE
 .LCprocfns:	.word	SYMBOL_NAME(processor)
 #endif
 .LCfp:		.word	SYMBOL_NAME(fp_enter)
+#ifdef CONFIG_PREEMPT
+.LCirqstat:	.word	SYMBOL_NAME(irq_stat)
+#endif
 
 		irq_prio_table
 
@@ -801,6 +1089,12 @@ __irq_usr:	sub	sp, sp, #S_FRAME_SIZE
 		stmdb	r8, {sp, lr}^
 		alignment_trap r4, r7, __temp_irq
 		zero_fp
+		get_current_task tsk
+#ifdef CONFIG_PREEMPT
+		ldr	r0, [tsk, #TSK_PREEMPT]
+		add	r0, r0, #1
+		str	r0, [tsk, #TSK_PREEMPT]
+#endif
 1:		get_irqnr_and_base r0, r6, r5, lr
 		movne	r1, sp
 		adrsvc	ne, lr, 1b
@@ -808,8 +1102,12 @@ __irq_usr:	sub	sp, sp, #S_FRAME_SIZE
 		@ routine called with r0 = irq number, r1 = struct pt_regs *
 		@
 		bne	do_IRQ
+#ifdef CONFIG_PREEMPT
+		ldr	r0, [tsk, #TSK_PREEMPT]
+		sub	r0, r0, #1
+		str	r0, [tsk, #TSK_PREEMPT]
+#endif
 		mov	why, #0
-		get_current_task tsk
 		b	ret_to_user
 
 		.align	5
@@ -876,9 +1174,17 @@ ENTRY(__switch_to)
 		stmfd	sp!, {r4 - sl, fp, lr}		@ Store most regs on stack
 		mrs	ip, cpsr
 		str	ip, [sp, #-4]!			@ Save cpsr_SVC
+#ifdef CONFIG_CPU_XSCALE
+		mra	r4, r5, acc0
+		stmfd	sp!, {r4, r5}
+#endif
 		str	sp, [r0, #TSS_SAVE]		@ Save sp_SVC
 		ldr	sp, [r1, #TSS_SAVE]		@ Get saved sp_SVC
 		ldr	r2, [r1, #TSS_DOMAIN]
+#ifdef CONFIG_CPU_XSCALE
+		ldmfd	sp!, {r4, r5}
+		mar	acc0, r4, r5
+#endif
 		ldr	ip, [sp], #4
 		mcr	p15, 0, r2, c3, c0		@ Set domain register
 		msr	spsr, ip			@ Save tasks CPSR into SPSR for this return
@@ -1120,6 +1426,9 @@ ENTRY(__trap_init)
 1:		ldr	r3, [r0], #4
 		str	r3, [r2], #4
 		cmp	r0, r1
+#ifdef CONFIG_XSCALE_BDI2000		
+		bkpt	#1
+#endif
 		blt	1b
 		LOADREGS(fd, sp!, {r4 - r6, pc})
 
@@ -1145,3 +1454,14 @@ SYMBOL_NAME(cr_alignment):
 		.space	4
 SYMBOL_NAME(cr_no_alignment):
 		.space	4
+
+
+
+
+
+
+
+
+
+
+

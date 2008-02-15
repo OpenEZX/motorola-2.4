@@ -221,9 +221,10 @@ struct ac97_codec {
 	int id;
 	int dev_mixer; 
 	int type;
-
 	struct ac97_ops *codec_ops;
-
+#ifdef CONFIG_PM
+	struct pm_dev       *pmdev;
+#endif
 	/* controller specific lower leverl ac97 accessing routines */
 	u16  (*codec_read)  (struct ac97_codec *codec, u8 reg);
 	void (*codec_write) (struct ac97_codec *codec, u8 reg, u16 val);

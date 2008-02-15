@@ -245,6 +245,7 @@ static void __init pci_fixup_cy82c693(struct pci_dev *dev)
 	}
 }
 
+
 struct pci_fixup pcibios_fixups[] = {
 	{
 		PCI_FIXUP_HEADER,
@@ -354,7 +355,25 @@ pbus_assign_bus_resources(struct pci_bus *bus, struct pci_sys_data *root)
 	struct pci_dev *dev = bus->self;
 	int i;
 
-	if (!dev) {
+	if (dev) {
+		for (i = 0; i < 3; i++) {
+			if(root->resource[i]) {
+				bus->resource[i] = &dev->resource[PCI_BRIDGE_RESOURCES+i];
+				bus->resource[i]->end  = root->resource[i]->end;
+				bus->resource[i]->name = bus->name;
+			}
+		}
+		bus->resource[0]->flags |= pci_bridge_check_io(dev);
+		bus->resource[1]->flags |= IORESOURCE_MEM;
+
+		if (root->resource[2])
+			bus->resource[2]->flags = root->resource[2]->flags;
+		else {
+			/* no prefetchable memory region - disable it */
+			bus->resource[2]->start = 1024*1024;
+			bus->resource[2]->end   = bus->resource[2]->start - 1;
+		}
+	} else {
 		/*
 		 * Assign root bus resources.
 		 */
@@ -456,6 +475,10 @@ extern struct hw_pci personal_server_pci;
 extern struct hw_pci ftv_pci;
 extern struct hw_pci shark_pci;
 extern struct hw_pci integrator_pci;
+extern struct hw_pci iq80310_pci;
+extern struct hw_pci iq80321_pci;
+extern struct hw_pci ixp1200_pci;
+extern struct hw_pci brh_pci;
 
 void __init pcibios_init(void)
 {
@@ -505,6 +528,30 @@ void __init pcibios_init(void)
 			break;
 		}
 #endif
+#ifdef CONFIG_ARCH_IQ80310
+		if (machine_is_iq80310()) {
+			hw = &iq80310_pci;
+			break;
+		}
+#endif
+#ifdef CONFIG_ARCH_IQ80321
+		if (machine_is_iq80321()) {
+			hw = &iq80321_pci;
+			break;
+		}
+#endif
+#ifdef CONFIG_ARCH_IXP1200
+		if(machine_is_ixp1200()) {
+			hw = &ixp1200_pci;
+			break;
+		}
+#endif
+#ifdef CONFIG_ARCH_BRH
+		if (machine_is_brh()) {
+			hw = &brh_pci;
+			break;
+		}
+#endif
 	} while (0);
 
 	if (hw == NULL)
@@ -541,7 +588,11 @@ void __init pcibios_init(void)
 	/*
 	 * Assign any unassigned resources.
 	 */
+#if !defined(CONFIG_ARCH_IOP3XX) && !defined(CONFIG_ARCH_IXP1200) \
+	&& !defined(CONFIG_ARCH_ADIFCC)
 	pci_assign_unassigned_resources();
+#endif
+
 	pci_fixup_irqs(root->hw->swizzle, root->hw->map_irq);
 }
 
@@ -569,8 +620,7 @@ char * __init pcibios_setup(char *str)
  * but we want to try to avoid allocating at 0x2900-0x2bff
  * which might be mirrored at 0x0100-0x03ff..
  */
-void pcibios_align_resource(void *data, struct resource *res,
-			    unsigned long size, unsigned long align)
+void pcibios_align_resource(void *data, struct resource *res, unsigned long size)
 {
 	if (res->flags & IORESOURCE_IO) {
 		unsigned long start = res->start;

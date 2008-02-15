@@ -1,38 +1,17 @@
 #
-# Library configuration
+# Configuration of the library
 #
-mainmenu_option next_comment
-comment 'Library routines'
+# This doesn't have any choices for the user to make, but is included
+# last in all the architecture config files because some decisions
+# need to be made here about how to include library elements.
+#
 
-#
-# Do we need the compression support?
-#
-if [ "$CONFIG_CRAMFS" = "y" -o \
-     "$CONFIG_PPP_DEFLATE" = "y" -o \
-     "$CONFIG_JFFS2_FS" = "y" -o \
-     "$CONFIG_ZISOFS_FS" = "y" ]; then
-   define_tristate CONFIG_ZLIB_INFLATE y
+if [ "$CONFIG_JFFS2_FS" = "y" -o \
+	"$CONFIG_PPP_DEFLATE" = "y" ]; then
+   define_tristate CONFIG_ZLIB y
 else
-  if [ "$CONFIG_CRAMFS" = "m" -o \
-       "$CONFIG_PPP_DEFLATE" = "m" -o \
-       "$CONFIG_JFFS2_FS" = "m" -o \
-       "$CONFIG_ZISOFS_FS" = "m" ]; then
-     define_tristate CONFIG_ZLIB_INFLATE m
-  else
-     tristate 'zlib decompression support' CONFIG_ZLIB_INFLATE
-  fi
+   if [ "$CONFIG_JFFS2_FS" = "m" -o \
+   	"$CONFIG_PPP_DEFLATE" = "m" ]; then
+      define_tristate CONFIG_ZLIB m
+   fi
 fi
-
-if [ "$CONFIG_PPP_DEFLATE" = "y" -o \
-     "$CONFIG_JFFS2_FS" = "y" ]; then
-   define_tristate CONFIG_ZLIB_DEFLATE y
-else
-  if [ "$CONFIG_PPP_DEFLATE" = "m" -o \
-       "$CONFIG_JFFS2_FS" = "m" ]; then
-     define_tristate CONFIG_ZLIB_DEFLATE m
-  else
-     tristate 'zlib compression support' CONFIG_ZLIB_DEFLATE
-  fi
-fi
-
-endmenu

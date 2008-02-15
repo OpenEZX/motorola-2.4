@@ -212,6 +212,9 @@ write_out_data_locked:
 				__journal_remove_journal_head(bh);
 				refile_buffer(bh);
 				__brelse(bh);
+				debug_lock_break(2);
+				if (conditional_schedule_needed())
+					break;
 			}
 		}
 		if (bufs == ARRAY_SIZE(wbuf)) {
@@ -235,8 +238,7 @@ write_out_data_locked:
 		journal_brelse_array(wbuf, bufs);
 		lock_journal(journal);
 		spin_lock(&journal_datalist_lock);
-		if (bufs)
-			goto write_out_data_locked;
+		goto write_out_data_locked;
 	}
 
 	/*
@@ -272,6 +274,14 @@ sync_datalist_empty:
 	 */
 	while ((jh = commit_transaction->t_async_datalist)) {
 		struct buffer_head *bh = jh2bh(jh);
+		if (conditional_schedule_needed()) {
+			debug_lock_break(551);
+			spin_unlock(&journal_datalist_lock);
+			unlock_journal(journal);
+			lock_journal(journal);
+			spin_lock(&journal_datalist_lock);
+			continue;
+		}
 		if (buffer_locked(bh)) {
 			spin_unlock(&journal_datalist_lock);
 			unlock_journal(journal);
@@ -475,7 +485,7 @@ start_journal_io:
            transaction's t_log_list queue, and metadata buffers are on
            the t_iobuf_list queue.
 
-	   Wait for the buffers in reverse order.  That way we are
+	   Wait for the transactions in reverse order.  That way we are
 	   less likely to be woken up until all IOs have completed, and
 	   so we incur less scheduling load.
 	*/
@@ -566,10 +576,8 @@ start_journal_io:
 
 	jbd_debug(3, "JBD: commit phase 6\n");
 
-	if (is_journal_aborted(journal)) {
-		unlock_journal(journal);
+	if (is_journal_aborted(journal))
 		goto skip_commit;
-	}
 
 	/* Done it all: now write the commit record.  We should have
 	 * cleaned up our previous buffers by now, so if we are in abort
@@ -579,10 +587,9 @@ start_journal_io:
 	descriptor = journal_get_descriptor_buffer(journal);
 	if (!descriptor) {
 		__journal_abort_hard(journal);
-		unlock_journal(journal);
 		goto skip_commit;
 	}
-
+	
 	/* AKPM: buglet - add `i' to tmp! */
 	for (i = 0; i < jh2bh(descriptor)->b_size; i += 512) {
 		journal_header_t *tmp =
@@ -603,32 +610,14 @@ start_journal_io:
 		put_bh(bh);		/* One for getblk() */
 		journal_unlock_journal_head(descriptor);
 	}
+	lock_journal(journal);
 
 	/* End of a transaction!  Finally, we can do checkpoint
            processing: any buffers committed as a result of this
            transaction can be removed from any checkpoint list it was on
            before. */
 
-skip_commit: /* The journal should be unlocked by now. */
-
-	/* Call any callbacks that had been registered for handles in this
-	 * transaction.  It is up to the callback to free any allocated
-	 * memory.
-	 */
-	if (!list_empty(&commit_transaction->t_jcb)) {
-		struct list_head *p, *n;
-		int error = is_journal_aborted(journal);
-
-		list_for_each_safe(p, n, &commit_transaction->t_jcb) {
-			struct journal_callback *jcb;
-
-			jcb = list_entry(p, struct journal_callback, jcb_list);
-			list_del(p);
-			jcb->jcb_func(jcb, error);
-		}
-	}
-
-	lock_journal(journal);
+skip_commit:
 
 	jbd_debug(3, "JBD: commit phase 7\n");
 
@@ -684,20 +673,6 @@ skip_commit: /* The journal should be unlocked by now. */
 		 * there's no point in keeping a checkpoint record for
 		 * it. */
 		bh = jh2bh(jh);
-
-		/* A buffer which has been freed while still being
-		 * journaled by a previous transaction may end up still
-		 * being dirty here, but we want to avoid writing back
-		 * that buffer in the future now that the last use has
-		 * been committed.  That's not only a performance gain,
-		 * it also stops aliasing problems if the buffer is left
-		 * behind for writeback and gets reallocated for another
-		 * use in a different page. */
-		if (__buffer_state(bh, Freed)) {
-			clear_bit(BH_Freed, &bh->b_state);
-			clear_bit(BH_JBDDirty, &bh->b_state);
-		}
-			
 		if (buffer_jdirty(bh)) {
 			JBUFFER_TRACE(jh, "add to new checkpointing trans");
 			__journal_insert_checkpoint(jh, commit_transaction);

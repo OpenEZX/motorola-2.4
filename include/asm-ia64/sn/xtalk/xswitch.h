@@ -4,7 +4,8 @@
  * License.  See the file "COPYING" in the main directory of this archive
  * for more details.
  *
- * Copyright (C) 1992-1997,2000-2002 Silicon Graphics, Inc.  All Rights Reserved.
+ * Copyright (C) 1992 - 1997, 2000 Silicon Graphics, Inc.
+ * Copyright (C) 2000 by Colin Ngam
  */
 #ifndef _ASM_SN_XTALK_XSWITCH_H
 #define _ASM_SN_XTALK_XSWITCH_H
@@ -15,10 +16,7 @@
  * xtalk bus providers.
  */
 
-#ifndef __ASSEMBLY__
-
-#include <linux/devfs_fs_kernel.h>
-#include <asm/sn/xtalk/xtalk.h>
+#if LANGUAGE_C
 
 typedef struct xswitch_info_s *xswitch_info_t;
 
@@ -56,6 +54,6 @@ extern devfs_handle_t     xswitch_info_master_assignment_get(xswitch_info_t xswi
 extern int		xswitch_id_get(devfs_handle_t vhdl);
 extern void		xswitch_id_set(devfs_handle_t vhdl,int xbow_num);
 
-#endif				/* __ASSEMBLY__ */
+#endif				/* LANGUAGE_C */
 
 #endif				/* _ASM_SN_XTALK_XSWITCH_H */

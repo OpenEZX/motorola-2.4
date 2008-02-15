@@ -6,7 +6,6 @@
  * Copyright (C) 1995, 1996, 1997, 1998, 1999 by Ralf Baechle
  * Copyright (C) 1999 Silicon Graphics, Inc.
  * Copyright (C) 2001 Thiemo Seufer.
- * Copyright (C) 2002  Maciej W. Rozycki
  */
 #ifndef _ASM_CHECKSUM_H
 #define _ASM_CHECKSUM_H
@@ -87,7 +86,7 @@ static inline unsigned short int csum_fold(unsigned int sum)
 
  	return sum;
 }
-
+ 
 /*
  *	This is a version of ip_compute_csum() optimized for IP headers,
  *	which always checksum on 4 octet boundaries.
@@ -143,10 +142,6 @@ static inline unsigned short ip_fast_csum(unsigned char *iph,
 /*
  * computes the checksum of the TCP/UDP pseudo-header
  * returns a 16-bit checksum, already complemented
- *
- * Cast unsigned short expressions to unsigned long explicitly
- * to avoid surprises resulting from implicit promotions to
- * signed int.  --macro
  */
 static inline unsigned long csum_tcpudp_nofold(unsigned long saddr,
 					       unsigned long daddr,
@@ -163,12 +158,12 @@ static inline unsigned long csum_tcpudp_nofold(unsigned long saddr,
 	"daddu\t%0, $1\n\t"
 	"dsrl32\t%0, %0, 0\n\t"
 	".set\tat"
-	: "=&r" (sum)
+	: "=r" (sum)
 	: "0" (daddr), "r"(saddr),
 #ifdef __MIPSEL__
-	  "r" (((unsigned long)ntohs(len)<<16)+proto*256),
+	  "r" ((ntohs(len)<<16)+proto*256),
 #else
-	  "r" (((unsigned long)(proto)<<16)+len),
+	  "r" (((proto)<<16)+len),
 #endif
 	  "r" (sum));
 
@@ -202,7 +197,7 @@ static __inline__ unsigned short int csum_ipv6_magic(struct in6_addr *saddr,
 						     struct in6_addr *daddr,
 						     __u32 len,
 						     unsigned short proto,
-						     unsigned int sum)
+						     unsigned int sum) 
 {
 	__asm__(
 	".set\tnoreorder\t\t\t# csum_ipv6_magic\n\t"
@@ -256,7 +251,7 @@ static __inline__ unsigned short int csum_ipv6_magic(struct in6_addr *saddr,
 	"addu\t%0, $1\t\t\t# Add final carry\n\t"
 	".set\tnoat\n\t"
 	".set\tnoreorder"
-	: "=&r" (sum), "=&r" (proto)
+	: "=r" (sum), "=r" (proto)
 	: "r" (saddr), "r" (daddr),
 	  "0" (htonl(len)), "1" (htonl(proto)), "r" (sum));
 

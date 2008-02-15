@@ -15,7 +15,7 @@
  *              ftp://prep.ai.mit.edu/pub/gnu/GPL
  *      Each contributing author retains all rights to their own work.
  *
- *  (C) 1998-2001 Ben Fennema
+ *  (C) 1998-2000 Ben Fennema
  *
  * HISTORY
  *
@@ -32,7 +32,7 @@
 #include <linux/udf_fs.h>
 #include <linux/slab.h>
 
-inline uint32_t udf_get_pblock(struct super_block *sb, uint32_t block, uint16_t partition, uint32_t offset)
+inline Uint32 udf_get_pblock(struct super_block *sb, Uint32 block, Uint16 partition, Uint32 offset)
 {
 	if (partition >= UDF_SB_NUMPARTS(sb))
 	{
@@ -46,14 +46,14 @@ inline uint32_t udf_get_pblock(struct super_block *sb, uint32_t block, uint16_t 
 		return UDF_SB_PARTROOT(sb, partition) + block + offset;
 }
 
-uint32_t udf_get_pblock_virt15(struct super_block *sb, uint32_t block, uint16_t partition, uint32_t offset)
+Uint32 udf_get_pblock_virt15(struct super_block *sb, Uint32 block, Uint16 partition, Uint32 offset)
 {
 	struct buffer_head *bh = NULL;
-	uint32_t newblock;
-	uint32_t index;
-	uint32_t loc;
+	Uint32 newblock;
+	Uint32 index;
+	Uint32 loc;
 
-	index = (sb->s_blocksize - UDF_SB_TYPEVIRT(sb,partition).s_start_offset) / sizeof(uint32_t);
+	index = (sb->s_blocksize - UDF_SB_TYPEVIRT(sb,partition).s_start_offset) / sizeof(Uint32);
 
 	if (block > UDF_SB_TYPEVIRT(sb,partition).s_num_entries)
 	{
@@ -65,13 +65,13 @@ uint32_t udf_get_pblock_virt15(struct super_block *sb, uint32_t block, uint16_t 
 	if (block >= index)
 	{
 		block -= index;
-		newblock = 1 + (block / (sb->s_blocksize / sizeof(uint32_t)));
-		index = block % (sb->s_blocksize / sizeof(uint32_t));
+		newblock = 1 + (block / (sb->s_blocksize / sizeof(Uint32)));
+		index = block % (sb->s_blocksize / sizeof(Uint32));
 	}
 	else
 	{
 		newblock = 0;
-		index = UDF_SB_TYPEVIRT(sb,partition).s_start_offset / sizeof(uint32_t) + block;
+		index = UDF_SB_TYPEVIRT(sb,partition).s_start_offset / sizeof(Uint32) + block;
 	}
 
 	loc = udf_block_map(UDF_SB_VAT(sb), newblock);
@@ -83,7 +83,7 @@ uint32_t udf_get_pblock_virt15(struct super_block *sb, uint32_t block, uint16_t 
 		return 0xFFFFFFFF;
 	}
 
-	loc = le32_to_cpu(((uint32_t *)bh->b_data)[index]);
+	loc = le32_to_cpu(((Uint32 *)bh->b_data)[index]);
 
 	udf_release_data(bh);
 
@@ -96,22 +96,22 @@ uint32_t udf_get_pblock_virt15(struct super_block *sb, uint32_t block, uint16_t 
 	return udf_get_pblock(sb, loc, UDF_I_LOCATION(UDF_SB_VAT(sb)).partitionReferenceNum, offset);
 }
 
-inline uint32_t udf_get_pblock_virt20(struct super_block *sb, uint32_t block, uint16_t partition, uint32_t offset)
+inline Uint32 udf_get_pblock_virt20(struct super_block *sb, Uint32 block, Uint16 partition, Uint32 offset)
 {
 	return udf_get_pblock_virt15(sb, block, partition, offset);
 }
 
-uint32_t udf_get_pblock_spar15(struct super_block *sb, uint32_t block, uint16_t partition, uint32_t offset)
+Uint32 udf_get_pblock_spar15(struct super_block *sb, Uint32 block, Uint16 partition, Uint32 offset)
 {
 	int i;
-	struct sparingTable *st = NULL;
-	uint32_t packet = (block + offset) & ~(UDF_SB_TYPESPAR(sb,partition).s_packet_len - 1);
+	struct SparingTable *st = NULL;
+	Uint32 packet = (block + offset) & ~(UDF_SB_TYPESPAR(sb,partition).s_packet_len - 1);
 
 	for (i=0; i<4; i++)
 	{
 		if (UDF_SB_TYPESPAR(sb,partition).s_spar_map[i] != NULL)
 		{
-			st = (struct sparingTable *)UDF_SB_TYPESPAR(sb,partition).s_spar_map[i]->b_data;
+			st = (struct SparingTable *)UDF_SB_TYPESPAR(sb,partition).s_spar_map[i]->b_data;
 			break;
 		}
 	}
@@ -137,9 +137,9 @@ uint32_t udf_get_pblock_spar15(struct super_block *sb, uint32_t block, uint16_t 
 int udf_relocate_blocks(struct super_block *sb, long old_block, long *new_block)
 {
 	struct udf_sparing_data *sdata;
-	struct sparingTable *st = NULL;
-	struct sparingEntry mapEntry;
-	uint32_t packet;
+	struct SparingTable *st = NULL;
+	SparingEntry mapEntry;
+	Uint32 packet;
 	int i, j, k, l;
 
 	for (i=0; i<UDF_SB_NUMPARTS(sb); i++)
@@ -154,7 +154,7 @@ int udf_relocate_blocks(struct super_block *sb, long old_block, long *new_block)
 			{
 				if (UDF_SB_TYPESPAR(sb,i).s_spar_map[j] != NULL)
 				{
-					st = (struct sparingTable *)sdata->s_spar_map[j]->b_data;
+					st = (struct SparingTable *)sdata->s_spar_map[j]->b_data;
 					break;
 				}
 			}
@@ -170,9 +170,9 @@ int udf_relocate_blocks(struct super_block *sb, long old_block, long *new_block)
 					{
 						if (sdata->s_spar_map[j])
 						{
-							st = (struct sparingTable *)sdata->s_spar_map[j]->b_data;
+							st = (struct SparingTable *)sdata->s_spar_map[j]->b_data;
 							st->mapEntry[k].origLocation = cpu_to_le32(packet);
-							udf_update_tag((char *)st, sizeof(struct sparingTable) + st->reallocationTableLen * sizeof(struct sparingEntry));
+							udf_update_tag((char *)st, sizeof(struct SparingTable) + st->reallocationTableLen * sizeof(SparingEntry));
 							mark_buffer_dirty(sdata->s_spar_map[j]);
 						}
 					}
@@ -197,12 +197,12 @@ int udf_relocate_blocks(struct super_block *sb, long old_block, long *new_block)
 					{
 						if (sdata->s_spar_map[j])
 						{
-							st = (struct sparingTable *)sdata->s_spar_map[j]->b_data;
+							st = (struct SparingTable *)sdata->s_spar_map[j]->b_data;
 							mapEntry = st->mapEntry[l];
 							mapEntry.origLocation = cpu_to_le32(packet);
-							memmove(&st->mapEntry[k+1], &st->mapEntry[k], (l-k)*sizeof(struct sparingEntry));
+							memmove(&st->mapEntry[k+1], &st->mapEntry[k], (l-k)*sizeof(SparingEntry));
 							st->mapEntry[k] = mapEntry;
-							udf_update_tag((char *)st, sizeof(struct sparingTable) + st->reallocationTableLen * sizeof(struct sparingEntry));
+							udf_update_tag((char *)st, sizeof(struct SparingTable) + st->reallocationTableLen * sizeof(SparingEntry));
 							mark_buffer_dirty(sdata->s_spar_map[j]);
 						}
 					}

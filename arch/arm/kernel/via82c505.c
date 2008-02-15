@@ -157,15 +157,8 @@ void __init via82c505_init(void *sysdata)
 	struct pci_bus *bus;
 
 	printk(KERN_DEBUG "PCI: VIA 82c505\n");
-	if (!request_region(0xA8,2,"via config")) {
-		printk(KERN_WARNING"VIA 82c505: Unable to request region 0xA8\n");
-		return;
-	}
-	if (!request_region(0xCF8,8,"pci config")) {
-		printk(KERN_WARNING"VIA 82c505: Unable to request region 0xCF8\n");
-		release_region(0xA8, 2);
-		return;
-	}
+	request_region(0xA8,2,"via config");
+	request_region(0xCF8,8,"pci config");
 
 	/* Enable compatible Mode */
 	outb(0x96,0xA8);

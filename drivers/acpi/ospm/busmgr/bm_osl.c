@@ -108,7 +108,7 @@ bm_osl_generate_event (
 	u32			event_data)
 {
 	BM_OSL_EVENT		*event = NULL;
-	unsigned long		flags = 0;
+	u32			flags = 0;
 
 	/* drop event on the floor if no one's listening */
 	if (!event_is_open)

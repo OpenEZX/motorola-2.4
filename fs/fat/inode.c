@@ -434,13 +434,12 @@ struct dentry *fat_fh_to_dentry(struct super_block *sb, __u32 *fh,
 	struct dentry *result;
 
 	if (fhtype != 3)
-		return ERR_PTR(-ESTALE);
+		return NULL;
 	if (len < 5)
-		return ERR_PTR(-ESTALE);
-	/* We cannot find the parent,
-	   It better just *be* there */
+		return NULL;
 	if (parent)
-		return ERR_PTR(-ESTALE);
+		return NULL; /* We cannot find the parent,
+				It better just *be* there */
 
 	inode = iget(sb, fh[0]);
 	if (!inode || is_bad_inode(inode) ||
@@ -502,7 +501,6 @@ struct dentry *fat_fh_to_dentry(struct super_block *sb, __u32 *fh,
 		iput(inode);
 		return ERR_PTR(-ENOMEM);
 	}
-	result->d_op = sb->s_root->d_op;
 	result->d_flags |= DCACHE_NFSD_DISCONNECTED;
 	return result;
 

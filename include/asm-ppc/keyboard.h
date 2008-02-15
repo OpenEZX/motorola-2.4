@@ -1,5 +1,5 @@
 /*
- * BK Id: %F% %I% %G% %U% %#%
+ * BK Id: SCCS/s.keyboard.h 1.18 11/28/01 13:29:57 paulus
  */
 /*
  *  linux/include/asm-ppc/keyboard.h
@@ -13,8 +13,8 @@
  * like the intel pc for prep systems, different for power macs.
  */
 
-#ifndef __ASMPPC_KEYBOARD_H
-#define __ASMPPC_KEYBOARD_H
+#ifndef __ASM_KEYBOARD_H__
+#define __ASM_KEYBOARD_H__
 
 #ifdef __KERNEL__
 
@@ -104,6 +104,7 @@ extern unsigned long SYSRQ_KEY;
 /*
  * Machine specific bits for the PS/2 driver
  */
+
 #ifndef AUX_IRQ	
 #define AUX_IRQ 12
 #endif
@@ -114,4 +115,4 @@ extern unsigned long SYSRQ_KEY;
 #define aux_free_irq(dev_id) free_irq(AUX_IRQ, dev_id)
 
 #endif /* __KERNEL__ */
-#endif /* __ASMPPC_KEYBOARD_H */
+#endif /* __ASM_KEYBOARD_H__ */

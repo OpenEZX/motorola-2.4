@@ -46,8 +46,6 @@
 #include <asm/dec/ioasic_ints.h>
 #include <asm/dec/machtype.h>
 
-#include <asm/system.h>
-
 /*
  * Once upon a time the pmaz code used to be working but
  * it hasn't been maintained for quite some time.
@@ -103,8 +101,6 @@ volatile unsigned long *ioasic_ssr;
 volatile unsigned long *scsi_sdr0;
 volatile unsigned long *scsi_sdr1;
 
-static void scsi_dma_merr_int(int, void *, struct pt_regs *);
-static void scsi_dma_err_int(int, void *, struct pt_regs *);
 static void scsi_dma_int(int, void *, struct pt_regs *);
 
 static Scsi_Host_Template driver_template = SCSI_DEC_ESP;
@@ -183,7 +179,7 @@ int dec_esp_detect(Scsi_Host_Template * tpnt)
 		/* get virtual dma address for command buffer */
 		esp->esp_command_dvma = (__u32) KSEG1ADDR((volatile unsigned char *) cmd_buffer);
 	
-		esp->irq = dec_interrupt[DEC_IRQ_ASC];
+		esp->irq = SCSI_INT;
 
 		esp->scsi_id = 7;
 		
@@ -193,20 +189,11 @@ int dec_esp_detect(Scsi_Host_Template * tpnt)
 		esp_initialize(esp);
 
 		if (request_irq(esp->irq, esp_intr, SA_INTERRUPT, 
-				"ncr53c94", NULL))
+				"NCR 53C94 SCSI", NULL))
 			goto err_dealloc;
-		if (request_irq(dec_interrupt[DEC_IRQ_ASC_MERR],
-				scsi_dma_merr_int, SA_INTERRUPT, 
-				"ncr53c94 error", NULL))
+		if (request_irq(SCSI_DMA_INT, scsi_dma_int, SA_INTERRUPT, 
+				"JUNKIO SCSI DMA", NULL))
 			goto err_free_irq;
-		if (request_irq(dec_interrupt[DEC_IRQ_ASC_ERR],
-				scsi_dma_err_int, SA_INTERRUPT, 
-				"ncr53c94 overrun", NULL))
-			goto err_free_irq_merr;
-		if (request_irq(dec_interrupt[DEC_IRQ_ASC_DMA],
-				scsi_dma_int, SA_INTERRUPT, 
-				"ncr53c94 dma", NULL))
-			goto err_free_irq_err;
  			
 	}
 
@@ -284,35 +271,41 @@ int dec_esp_detect(Scsi_Host_Template * tpnt)
 	}
 	return 0;
 
-err_free_irq_err:
-	free_irq(dec_interrupt[DEC_IRQ_ASC_ERR], scsi_dma_err_int);
-err_free_irq_merr:
-	free_irq(dec_interrupt[DEC_IRQ_ASC_MERR], scsi_dma_merr_int);
-err_free_irq:
+ err_free_irq:
 	free_irq(esp->irq, esp_intr);
-err_dealloc:
+ err_dealloc:
 	esp_deallocate(esp);
 	return 0;
 }
 
 /************************************************************* DMA Functions */
-static void scsi_dma_merr_int(int irq, void *dev_id, struct pt_regs *regs)
-{
-	printk("Got unexpected SCSI DMA Interrupt! < ");
-	printk("SCSI_DMA_MEMRDERR ");
-	printk(">\n");
-}
-
-static void scsi_dma_err_int(int irq, void *dev_id, struct pt_regs *regs)
-{
-	/* empty */
-}
-
 static void scsi_dma_int(int irq, void *dev_id, struct pt_regs *regs)
 {
-	/* next page */
-	*scsi_next_ptr = ((*scsi_dma_ptr + PAGE_SIZE) & PAGE_MASK) << 3;
-	fast_iob();
+	extern volatile unsigned int *isr;
+	unsigned int dummy;
+
+	if (*isr & SCSI_PTR_LOADED) {
+		/* next page */
+		*scsi_next_ptr = ((*scsi_dma_ptr + PAGE_SIZE) & PAGE_MASK) << 3;
+		*isr &= ~SCSI_PTR_LOADED;
+	} else {
+		if (*isr & SCSI_PAGOVRRUN)
+			*isr &= ~SCSI_PAGOVRRUN;
+		if (*isr & SCSI_DMA_MEMRDERR) {
+			printk("Got unexpected SCSI DMA Interrupt! < ");
+			printk("SCSI_DMA_MEMRDERR ");
+		printk(">\n");
+			*isr &= ~SCSI_DMA_MEMRDERR;
+		}
+	}
+
+	/*
+	 * This routine will only work on IOASIC machines
+	 * so we can avoid an indirect function call here
+	 * and flush the writeback buffer the fast way
+	 */
+	dummy = *isr;
+	dummy = *isr;
 }
 
 static int dma_bytes_sent(struct NCR_ESP *esp, int fifo_count)
@@ -364,6 +357,9 @@ static void dma_dump_state(struct NCR_ESP *esp)
 
 static void dma_init_read(struct NCR_ESP *esp, __u32 vaddress, int length)
 {
+	extern volatile unsigned int *isr;
+	unsigned int dummy;
+
 	if (vaddress & 3)
 		panic("dec_efs.c: unable to handle partial word transfers, yet...");
 
@@ -376,11 +372,19 @@ static void dma_init_read(struct NCR_ESP *esp, __u32 vaddress, int length)
 	/* prepare for next page */
 	*scsi_next_ptr = ((vaddress + PAGE_SIZE) & PAGE_MASK) << 3;
 	*ioasic_ssr |= (SCSI_DMA_DIR | SCSI_DMA_EN);
-	fast_iob();
+
+	/*
+	 * see above
+	 */
+	dummy = *isr;
+	dummy = *isr;
 }
 
 static void dma_init_write(struct NCR_ESP *esp, __u32 vaddress, int length)
 {
+	extern volatile unsigned int *isr;
+	unsigned int dummy;
+
 	if (vaddress & 3)
 		panic("dec_efs.c: unable to handle partial word transfers, yet...");
 
@@ -393,17 +397,22 @@ static void dma_init_write(struct NCR_ESP *esp, __u32 vaddress, int length)
 	/* prepare for next page */
 	*scsi_next_ptr = ((vaddress + PAGE_SIZE) & PAGE_MASK) << 3;
 	*ioasic_ssr |= SCSI_DMA_EN;
-	fast_iob();
+
+	/*
+	 * see above
+	 */
+	dummy = *isr;
+	dummy = *isr;
 }
 
 static void dma_ints_off(struct NCR_ESP *esp)
 {
-	disable_irq(dec_interrupt[DEC_IRQ_ASC_DMA]);
+	disable_irq(SCSI_DMA_INT);
 }
 
 static void dma_ints_on(struct NCR_ESP *esp)
 {
-	enable_irq(dec_interrupt[DEC_IRQ_ASC_DMA]);
+	enable_irq(SCSI_DMA_INT);
 }
 
 static int dma_irq_p(struct NCR_ESP *esp)
@@ -450,12 +459,12 @@ static void dma_mmu_get_scsi_sgl(struct NCR_ESP *esp, Scsi_Cmnd * sp)
 		sg[sz].dvma_addr = PHYSADDR(sg[sz].addr);
 	sz--;
     }
-	sp->SCp.ptr = (char *) ((unsigned long) sp->SCp.buffer->dma_address);
+	sp->SCp.ptr = (char *) ((unsigned long) sp->SCp.buffer->dvma_address);
 }
 
 static void dma_advance_sg(Scsi_Cmnd * sp)
 {
-	sp->SCp.ptr = (char *) ((unsigned long) sp->SCp.buffer->dma_address);
+	sp->SCp.ptr = (char *) ((unsigned long) sp->SCp.buffer->dvma_address);
 }
 
 static void pmaz_dma_drain(struct NCR_ESP *esp)
@@ -474,8 +483,6 @@ static void pmaz_dma_init_read(struct NCR_ESP *esp, __u32 vaddress, int length)
 
 	*dmareg = TC_ESP_DMA_ADDR(esp->slot + DEC_SCSI_SRAM + ESP_TGT_DMA_SIZE);
 
-	iob();
-
 	esp_virt_buffer = vaddress;
 	scsi_current_length = length;
 }
@@ -490,7 +497,6 @@ static void pmaz_dma_init_write(struct NCR_ESP *esp, __u32 vaddress, int length)
 	*dmareg = TC_ESP_DMAR_WRITE | 
 		TC_ESP_DMA_ADDR(esp->slot + DEC_SCSI_SRAM + ESP_TGT_DMA_SIZE);
 
-	iob();
 }
 
 static void pmaz_dma_ints_off(struct NCR_ESP *esp)

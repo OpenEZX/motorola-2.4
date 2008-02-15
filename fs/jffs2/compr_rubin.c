@@ -1,7 +1,7 @@
 /*
  * JFFS2 -- Journalling Flash File System, Version 2.
  *
- * Copyright (C) 2001 Red Hat, Inc.
+ * Copyright (C) 2001, 2002 Red Hat, Inc.
  *
  * Created by Arjan van de Ven <arjanv@redhat.com>
  *
@@ -31,7 +31,7 @@
  * provisions above, a recipient may use your version of this file
  * under either the RHEPL or the GPL.
  *
- * $Id: compr_rubin.c,v 1.13 2001/09/23 10:06:05 rmk Exp $
+ * $Id: compr_rubin.c,v 1.15 2002/01/09 13:25:57 dwmw2 Exp $
  *
  */
 
@@ -213,7 +213,7 @@ static int in_byte(struct rubin_state *rs)
 
 
 int rubin_do_compress(int bit_divider, int *bits, unsigned char *data_in, 
-		      unsigned char *cpage_out, __u32 *sourcelen, __u32 *dstlen)
+		      unsigned char *cpage_out, uint32_t *sourcelen, uint32_t *dstlen)
 	{
 	int outpos = 0;
 	int pos=0;
@@ -247,19 +247,19 @@ int rubin_do_compress(int bit_divider, int *bits, unsigned char *data_in,
 #if 0
 /* _compress returns the compressed size, -1 if bigger */
 int rubinmips_compress(unsigned char *data_in, unsigned char *cpage_out, 
-		   __u32 *sourcelen, __u32 *dstlen)
+		   uint32_t *sourcelen, uint32_t *dstlen)
 {
 	return rubin_do_compress(BIT_DIVIDER_MIPS, bits_mips, data_in, cpage_out, sourcelen, dstlen);
 }
 #endif
 int dynrubin_compress(unsigned char *data_in, unsigned char *cpage_out, 
-		   __u32 *sourcelen, __u32 *dstlen)
+		   uint32_t *sourcelen, uint32_t *dstlen)
 {
 	int bits[8];
 	unsigned char histo[256];
 	int i;
 	int ret;
-	__u32 mysrclen, mydstlen;
+	uint32_t mysrclen, mydstlen;
 
 	mysrclen = *sourcelen;
 	mydstlen = *dstlen - 8;
@@ -316,7 +316,7 @@ int dynrubin_compress(unsigned char *data_in, unsigned char *cpage_out,
 }
 
 void rubin_do_decompress(int bit_divider, int *bits, unsigned char *cdata_in, 
-			 unsigned char *page_out, __u32 srclen, __u32 destlen)
+			 unsigned char *page_out, uint32_t srclen, uint32_t destlen)
 {
 	int outpos = 0;
 	struct rubin_state rs;
@@ -331,13 +331,13 @@ void rubin_do_decompress(int bit_divider, int *bits, unsigned char *cdata_in,
 
 
 void rubinmips_decompress(unsigned char *data_in, unsigned char *cpage_out, 
-		   __u32 sourcelen, __u32 dstlen)
+		   uint32_t sourcelen, uint32_t dstlen)
 {
 	rubin_do_decompress(BIT_DIVIDER_MIPS, bits_mips, data_in, cpage_out, sourcelen, dstlen);
 }
 
 void dynrubin_decompress(unsigned char *data_in, unsigned char *cpage_out, 
-		   __u32 sourcelen, __u32 dstlen)
+		   uint32_t sourcelen, uint32_t dstlen)
 {
 	int bits[8];
 	int c;

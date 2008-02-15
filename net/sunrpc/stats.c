@@ -15,13 +15,11 @@
 #define __NO_VERSION__
 #include <linux/module.h>
 
-#include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/sched.h>
 #include <linux/proc_fs.h>
 #include <linux/sunrpc/clnt.h>
 #include <linux/sunrpc/svcsock.h>
-#include <linux/init.h>
 
 #define RPCDBG_FACILITY	RPCDBG_MISC
 
@@ -183,9 +181,10 @@ rpc_proc_exit(void)
 	}
 }
 
+#ifdef MODULE
 
-static int __init
-init_sunrpc(void)
+int
+init_module(void)
 {
 #ifdef RPC_DEBUG
 	rpc_register_sysctl();
@@ -194,14 +193,13 @@ init_sunrpc(void)
 	return 0;
 }
 
-static void __exit
-cleanup_sunrpc(void)
+void
+cleanup_module(void)
 {
 #ifdef RPC_DEBUG
 	rpc_unregister_sysctl();
 #endif
 	rpc_proc_exit();
 }
+#endif
 MODULE_LICENSE("GPL");
-module_init(init_sunrpc);
-module_exit(cleanup_sunrpc);

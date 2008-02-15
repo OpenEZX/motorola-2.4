@@ -26,6 +26,9 @@
 #include <asm/io.h>
 #include <asm/pgalloc.h>
 
+#ifdef CONFIG_SENSORS
+extern void sensors_init_all(void);
+#endif
 #ifdef CONFIG_I2C
 extern int i2c_init_all(void);
 #endif
@@ -40,6 +43,9 @@ extern void mda_console_init(void);
 #endif
 #if defined(CONFIG_S390_TAPE) && defined(CONFIG_S390_TAPE_CHAR)
 extern void tapechar_init(void);
+#endif
+#ifdef CONFIG_VMEBUS
+extern void vmebus_init(void);
 #endif
      
 static ssize_t do_write_mem(struct file * file, void *p, unsigned long realp,
@@ -101,7 +107,7 @@ static ssize_t read_mem(struct file * file, char * buf,
 		}
 	}
 #endif
-	if (copy_to_user(buf, __va(p), count))
+	if (copy_to_user(buf, (char *)__va(p), count))
 		return -EFAULT;
 	read += count;
 	*ppos += read;
@@ -119,7 +125,7 @@ static ssize_t write_mem(struct file * file, const char * buf,
 		return 0;
 	if (count > end_mem - p)
 		count = end_mem - p;
-	return do_write_mem(file, __va(p), p, buf, count, ppos);
+	return do_write_mem(file, (char *)__va(p), p, buf, count, ppos);
 }
 
 #ifndef pgprot_noncached
@@ -198,10 +204,10 @@ static int mmap_mem(struct file * file, struct vm_area_struct * vma)
 	vma->vm_flags |= VM_RESERVED;
 
 	/*
-	 * Don't dump addresses that are not real memory to a core file.
+	 * Dump addresses that are real memory to a core file.
 	 */
-	if (offset >= __pa(high_memory) || (file->f_flags & O_SYNC))
-		vma->vm_flags |= VM_IO;
+	if (offset < __pa(high_memory) && !(file->f_flags & O_SYNC))
+		vma->vm_flags &= ~VM_IO;
 
 	if (remap_page_range(vma->vm_start, offset, vma->vm_end-vma->vm_start,
 			     vma->vm_page_prot))
@@ -323,7 +329,7 @@ static ssize_t write_kmem(struct file * file, const char * buf,
  	return virtr + wrote;
 }
 
-#if defined(CONFIG_ISA) || !defined(__mc68000__)
+#if !defined(__mc68000__)
 static ssize_t read_port(struct file * file, char * buf,
 			 size_t count, loff_t *ppos)
 {
@@ -400,7 +406,7 @@ static inline size_t read_zero_pagealigned(char * buf, size_t size)
 		if (count > size)
 			count = size;
 
-		zap_page_range(mm, addr, count);
+		zap_page_range(mm, addr, count, ZPR_NORMAL);
         	zeromap_page_range(addr, count, PAGE_COPY);
 
 		size -= count;
@@ -473,6 +479,7 @@ static int mmap_zero(struct file * file, struct vm_area_struct * vma)
 		return shmem_zero_setup(vma);
 	if (zeromap_page_range(vma->vm_start, vma->vm_end - vma->vm_start, vma->vm_page_prot))
 		return -EAGAIN;
+	vma->vm_flags &= ~VM_IO;
 	return 0;
 }
 
@@ -550,7 +557,7 @@ static struct file_operations null_fops = {
 	write:		write_null,
 };
 
-#if defined(CONFIG_ISA) || !defined(__mc68000__)
+#if !defined(__mc68000__)
 static struct file_operations port_fops = {
 	llseek:		memory_lseek,
 	read:		read_port,
@@ -584,7 +591,7 @@ static int memory_open(struct inode * inode, struct file * filp)
 		case 3:
 			filp->f_op = &null_fops;
 			break;
-#if defined(CONFIG_ISA) || !defined(__mc68000__)
+#if !defined(__mc68000__)
 		case 4:
 			filp->f_op = &port_fops;
 			break;
@@ -621,9 +628,7 @@ void __init memory_devfs_register (void)
 	{1, "mem",     S_IRUSR | S_IWUSR | S_IRGRP, &mem_fops},
 	{2, "kmem",    S_IRUSR | S_IWUSR | S_IRGRP, &kmem_fops},
 	{3, "null",    S_IRUGO | S_IWUGO,           &null_fops},
-#if defined(CONFIG_ISA) || !defined(__mc68000__)
 	{4, "port",    S_IRUSR | S_IWUSR | S_IRGRP, &port_fops},
-#endif
 	{5, "zero",    S_IRUGO | S_IWUGO,           &zero_fops},
 	{7, "full",    S_IRUGO | S_IWUGO,           &full_fops},
 	{8, "random",  S_IRUGO | S_IWUSR,           &random_fops},
@@ -674,6 +679,13 @@ int __init chr_dev_init(void)
 #if defined(CONFIG_S390_TAPE) && defined(CONFIG_S390_TAPE_CHAR)
 	tapechar_init();
 #endif
+#ifdef CONFIG_VMEBUS
+	vmebus_init();
+#endif
+#ifdef CONFIG_SENSORS
+	sensors_init_all();
+#endif
+
 	return 0;
 }
 

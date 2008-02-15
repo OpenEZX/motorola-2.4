@@ -1,0 +1,61 @@
+#
+# Network Function
+#
+# Copyright (C) 2002-2003 Belcarra
+#
+
+mainmenu_option next_comment
+comment "Network Function"
+
+dep_tristate '  Network Function Driver' CONFIG_USBD_NETWORK $CONFIG_USBD
+
+if [ "$CONFIG_USBD_NETWORK" = "y" -o "$CONFIG_USBD_NETWORK" = "m" ]; then
+
+   hex     ' Override idVendor (hex value)' CONFIG_USBD_NETWORK_VENDORID "0000"
+   hex     ' Override idProduct (hex value)' CONFIG_USBD_NETWORK_PRODUCTID "0000"
+   hex     ' Override bcdDevice (binary-coded decimal)' CONFIG_USBD_NETWORK_BCDDEVICE "0000"
+   string '    Override iManufacturer (string)' CONFIG_USBD_NETWORK_MANUFACTURER "Belcarra"
+   string '    Override iProduct (string)' CONFIG_USBD_NETWORK_PRODUCT_NAME "Belcarra Network Device"
+
+
+   comment ''
+   bool " USBLAN - MDLM-BLAN Networking mode"  CONFIG_USBD_NETWORK_BLAN
+   if [ "$CONFIG_USBD_NETWORK_BLAN" = "y" ]; then
+      string '    Override iConfiguration (string)' CONFIG_USBD_NETWORK_BLAN_DESC "BLAN Net Cfg"
+      string '    Override iInterface (string)' CONFIG_USBD_NETWORK_BLAN_INTF "Comm/Data Intf"
+   fi
+
+   bool " Bridge/Router MDLM-SAFE Networking mode" CONFIG_USBD_NETWORK_SAFE
+   if [ "$CONFIG_USBD_NETWORK_SAFE" = "y" ]; then
+      string '    Override Data Interface iConfiguration (string)' CONFIG_USBD_NETWORK_SAFE_DESC "SAFE Net Cfg"
+      string '    Override Data Interface iInterface (string)' CONFIG_USBD_NETWORK_SAFE_INTF "Data Intf"
+   fi
+
+   bool " Bridge/Router CDC Networking mode" CONFIG_USBD_NETWORK_CDC
+   if [ "$CONFIG_USBD_NETWORK_CDC" = "y" ]; then
+      string '    Override iConfiguration (string)' CONFIG_USBD_NETWORK_CDC_DESC "SAFE Net Cfg"
+      string '    Override Data Interface iInterface (string)' CONFIG_USBD_NETWORK_CDC_COMM_INTF "Comm Intf"
+      string '    Override Data (diabled) iInterface (string)' CONFIG_USBD_NETWORK_CDC_NODATA_INTF "Data (Disabled) Intf"
+      string '    Override Comm Interface iInterface (string)' CONFIG_USBD_NETWORK_CDC_DATA_INTF "Dat Intf"
+   fi
+
+   if [ "$CONFIG_USBD_NETWORK_SAFE" = "y" -a "$CONFIG_USBD_NETWORK_CDC" = "y" ]; then
+      comment 'Warning: CDC and MDLM-SAFE not allowed'
+   fi
+   
+   bool " Failsafe BASIC Networking mode" CONFIG_USBD_NETWORK_BASIC
+   if [ "$CONFIG_USBD_NETWORK_BASIC" = "y" ]; then
+      string '    Override Data Interface iConfiguration (string)' CONFIG_USBD_NETWORK_BASIC_DESC "BASIC Net Cfg"
+      string '    Override Data Interface iInterface (string)' CONFIG_USBD_NETWORK_BASIC_INTF "Data Intf"
+   fi
+
+
+   #comment ''
+   #string  '   Default Remote MAC Address (e.g. 020002000001)' CONFIG_USBD_NETWORK_REMOTE_MACADDR "" 
+   #string  '   Default Local MAC Address (e.g. 020001000001)' CONFIG_USBD_NETWORK_LOCAL_MACADDR   "" 
+
+   bool    '   EP0 Test' CONFIG_USBD_NETWORK_EP0TEST
+
+fi
+
+endmenu

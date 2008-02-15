@@ -223,8 +223,7 @@
     cmd_per_lun:    	MAX_CMD_PER_LUN,	/* SCSI Commands per LUN	*/\
     present:	  	0,		       	/* Present			*/\
     unchecked_isa_dma:	0,		       	/* Default Unchecked ISA DMA	*/\
-    use_clustering:   	ENABLE_CLUSTERING, 	/* Enable Clustering		*/\
-	highmem_io:		1, /* enable HIGHMEM I/O */ \
+    use_clustering:   	ENABLE_CLUSTERING  	/* Enable Clustering		*/\
   }
 #endif
 
@@ -709,7 +708,7 @@ typedef struct _mega_host_config {
 	u8 numldrv;
 	u32 flag;
 
-#if BITS_PER_LONG==64
+#ifdef __LP64__
 	u64 base;
 #else
 	u32 base;

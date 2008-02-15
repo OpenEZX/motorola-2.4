@@ -280,11 +280,10 @@ int smapi_set_DSP_cfg(void)
 				if ((usSI & 0xFF) == mwave_uart_irq) {
 #ifndef MWAVE_FUTZ_WITH_OTHER_DEVICES
 					PRINTK_ERROR(KERN_ERR_MWAVE
-						"smapi::smapi_set_DSP_cfg: Serial port A irq %x conflicts with mwave_uart_irq %x\n", usSI & 0xFF, mwave_uart_irq);
 #else
 					PRINTK_3(TRACE_SMAPI,
-						"smapi::smapi_set_DSP_cfg: Serial port A irq %x conflicts with mwave_uart_irq %x\n", usSI & 0xFF, mwave_uart_irq);
 #endif
+						"smapi::smapi_set_DSP_cfg: Serial port A irq %x conflicts with mwave_uart_irq %x\n", usSI, mwave_uart_irq);
 #ifdef MWAVE_FUTZ_WITH_OTHER_DEVICES
 					PRINTK_1(TRACE_SMAPI,
 						"smapi::smapi_set_DSP_cfg Disabling conflicting serial port\n");
@@ -301,14 +300,13 @@ int smapi_set_DSP_cfg(void)
 					if ((usSI >> 8) == uartio_index) {
 #ifndef MWAVE_FUTZ_WITH_OTHER_DEVICES
 						PRINTK_ERROR(KERN_ERR_MWAVE
-							"smapi::smapi_set_DSP_cfg: Serial port A base I/O address %x conflicts with mwave uart I/O %x\n", ausUartBases[usSI >> 8], ausUartBases[uartio_index]);
 #else
 						PRINTK_3(TRACE_SMAPI,
-							"smapi::smapi_set_DSP_cfg: Serial port A base I/O address %x conflicts with mwave uart I/O %x\n", ausUartBases[usSI >> 8], ausUartBases[uartio_index]);
 #endif
+							"smapi::smapi_set_DSP_cfg: Serial port A base I/O address index %x conflicts with uartio_index %x\n", usSI >> 8, uartio_index);
 #ifdef MWAVE_FUTZ_WITH_OTHER_DEVICES
 						PRINTK_1(TRACE_SMAPI,
-							"smapi::smapi_set_DSP_cfg Disabling conflicting serial port A\n");
+							"smapi::smapi_set_DSP_cfg Disabling conflicting serial port\n");
 						bRC = smapi_request (0x1403, 0x0100, 0, usSI,
 							&usAX, &usBX, &usCX, &usDX, &usDI, &usSI);
 						if (bRC) goto exit_smapi_request_error;
@@ -333,14 +331,13 @@ int smapi_set_DSP_cfg(void)
 				if ((usSI & 0xFF) == mwave_uart_irq) {
 #ifndef MWAVE_FUTZ_WITH_OTHER_DEVICES
 					PRINTK_ERROR(KERN_ERR_MWAVE
-						"smapi::smapi_set_DSP_cfg: Serial port B irq %x conflicts with mwave_uart_irq %x\n", usSI & 0xFF, mwave_uart_irq);
 #else
 					PRINTK_3(TRACE_SMAPI,
-						"smapi::smapi_set_DSP_cfg: Serial port B irq %x conflicts with mwave_uart_irq %x\n", usSI & 0xFF, mwave_uart_irq);
 #endif
+						"smapi::smapi_set_DSP_cfg: Serial port B irq %x conflicts with mwave_uart_irq %x\n", usSI, mwave_uart_irq);
 #ifdef MWAVE_FUTZ_WITH_OTHER_DEVICES
 					PRINTK_1(TRACE_SMAPI,
-						"smapi::smapi_set_DSP_cfg Disabling conflicting serial port B\n");
+						"smapi::smapi_set_DSP_cfg Disabling conflicting serial port\n");
 					bRC = smapi_request(0x1405, 0x0100, 0, usSI,
 						&usAX, &usBX, &usCX, &usDX, &usDI, &usSI);
 					if (bRC) goto exit_smapi_request_error;
@@ -354,14 +351,13 @@ int smapi_set_DSP_cfg(void)
 					if ((usSI >> 8) == uartio_index) {
 #ifndef MWAVE_FUTZ_WITH_OTHER_DEVICES
 						PRINTK_ERROR(KERN_ERR_MWAVE
-							"smapi::smapi_set_DSP_cfg: Serial port B base I/O address %x conflicts with mwave uart I/O %x\n", ausUartBases[usSI >> 8], ausUartBases[uartio_index]);
 #else
 						PRINTK_3(TRACE_SMAPI,
-							"smapi::smapi_set_DSP_cfg: Serial port B base I/O address %x conflicts with mwave uart I/O %x\n", ausUartBases[usSI >> 8], ausUartBases[uartio_index]);
 #endif
+							"smapi::smapi_set_DSP_cfg: Serial port B base I/O address index %x conflicts with uartio_index %x\n", usSI >> 8, uartio_index);
 #ifdef MWAVE_FUTZ_WITH_OTHER_DEVICES
 						PRINTK_1 (TRACE_SMAPI,
-						    "smapi::smapi_set_DSP_cfg Disabling conflicting serial port B\n");
+						    "smapi::smapi_set_DSP_cfg Disabling conflicting serial port\n");
 						bRC = smapi_request (0x1405, 0x0100, 0, usSI,
 							&usAX, &usBX, &usCX, &usDX, &usDI, &usSI);
 						if (bRC) goto exit_smapi_request_error;
@@ -384,15 +380,39 @@ int smapi_set_DSP_cfg(void)
 			&usAX, &usBX, &usCX, &usDX, &usDI, &usSI);
 		if (bRC) goto exit_smapi_request_error;
 		/* bRC == 0 */
-		if ((usCX & 0xff) != 0xff) { /* IR port not disabled */
-			if ((usCX & 0xff) == mwave_uart_irq) {
+		if ((usCX & 0xff) == mwave_uart_irq) {	/* serial port is enabled */
+#ifndef MWAVE_FUTZ_WITH_OTHER_DEVICES
+			PRINTK_ERROR(KERN_ERR_MWAVE
+#else
+			PRINTK_3(TRACE_SMAPI,
+#endif
+				"smapi::smapi_set_DSP_cfg: IR port irq %x conflicts with mwave_uart_irq %x\n", usSI, mwave_uart_irq);
+#ifdef MWAVE_FUTZ_WITH_OTHER_DEVICES
+			PRINTK_1(TRACE_SMAPI,
+				"smapi::smapi_set_DSP_cfg Disabling conflicting IR port\n");
+			bRC = smapi_request(0x1701, 0x0100, 0, 0,
+				&usAX, &usBX, &usCX, &usDX, &usDI, &usSI);
+			if (bRC) goto exit_smapi_request_error;
+			bRC = smapi_request(0x1700, 0, 0, 0,
+				&usAX, &usBX, &usCX, &usDX, &usDI, &usSI);
+			if (bRC) goto exit_smapi_request_error;
+			bRC = smapi_request(0x1705, 0x01ff, 0, usSI,
+				&usAX, &usBX, &usCX, &usDX, &usDI, &usSI);
+			if (bRC) goto exit_smapi_request_error;
+			bRC = smapi_request(0x1704, 0x0000, 0, 0,
+				&usAX, &usBX, &usCX, &usDX, &usDI, &usSI);
+			if (bRC) goto exit_smapi_request_error;
+#else
+			goto exit_conflict;
+#endif
+		} else {
+			if ((usSI & 0xff) == uartio_index) {
 #ifndef MWAVE_FUTZ_WITH_OTHER_DEVICES
 				PRINTK_ERROR(KERN_ERR_MWAVE
-					"smapi::smapi_set_DSP_cfg: IR port irq %x conflicts with mwave_uart_irq %x\n", usCX & 0xff, mwave_uart_irq);
 #else
 				PRINTK_3(TRACE_SMAPI,
-					"smapi::smapi_set_DSP_cfg: IR port irq %x conflicts with mwave_uart_irq %x\n", usCX & 0xff, mwave_uart_irq);
 #endif
+					"smapi::smapi_set_DSP_cfg: IR port base I/O address index %x conflicts with uartio_index %x\n", usSI & 0xff, uartio_index);
 #ifdef MWAVE_FUTZ_WITH_OTHER_DEVICES
 				PRINTK_1(TRACE_SMAPI,
 					"smapi::smapi_set_DSP_cfg Disabling conflicting IR port\n");
@@ -411,34 +431,6 @@ int smapi_set_DSP_cfg(void)
 #else
 				goto exit_conflict;
 #endif
-			} else {
-				if ((usSI & 0xff) == uartio_index) {
-#ifndef MWAVE_FUTZ_WITH_OTHER_DEVICES
-					PRINTK_ERROR(KERN_ERR_MWAVE
-						"smapi::smapi_set_DSP_cfg: IR port base I/O address %x conflicts with mwave uart I/O %x\n", ausUartBases[usSI & 0xff], ausUartBases[uartio_index]);
-#else
-					PRINTK_3(TRACE_SMAPI,
-						"smapi::smapi_set_DSP_cfg: IR port base I/O address %x conflicts with mwave uart I/O %x\n", ausUartBases[usSI & 0xff], ausUartBases[uartio_index]);
-#endif
-#ifdef MWAVE_FUTZ_WITH_OTHER_DEVICES
-					PRINTK_1(TRACE_SMAPI,
-						"smapi::smapi_set_DSP_cfg Disabling conflicting IR port\n");
-					bRC = smapi_request(0x1701, 0x0100, 0, 0,
-						&usAX, &usBX, &usCX, &usDX, &usDI, &usSI);
-					if (bRC) goto exit_smapi_request_error;
-					bRC = smapi_request(0x1700, 0, 0, 0,
-						&usAX, &usBX, &usCX, &usDX, &usDI, &usSI);
-					if (bRC) goto exit_smapi_request_error;
-					bRC = smapi_request(0x1705, 0x01ff, 0, usSI,
-						&usAX, &usBX, &usCX, &usDX, &usDI, &usSI);
-					if (bRC) goto exit_smapi_request_error;
-					bRC = smapi_request(0x1704, 0x0000, 0, 0,
-						&usAX, &usBX, &usCX, &usDX, &usDI, &usSI);
-					if (bRC) goto exit_smapi_request_error;
-#else
-					goto exit_conflict;
-#endif
-				}
 			}
 		}
 	}

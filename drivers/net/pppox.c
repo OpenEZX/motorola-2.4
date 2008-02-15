@@ -5,9 +5,9 @@
  * PPPoE --- PPP over Ethernet (RFC 2516)
  *
  *
- * Version:	0.5.2
+ * Version:	0.5.1
  *
- * Author:	Michal Ostrowski <mostrows@speakeasy.net>
+ * Author:	Michal Ostrowski <mostrows@styx.uwaterloo.ca>
  *
  * 051000 :	Initialization cleanup
  *
@@ -67,9 +67,9 @@ void pppox_unbind_sock(struct sock *sk)
 {
 	/* Clear connection to ppp device, if attached. */
 
-	if (sk->state & (PPPOX_BOUND|PPPOX_ZOMBIE)) {
+	if (sk->state & PPPOX_BOUND) {
 		ppp_unregister_channel(&sk->protinfo.pppox->chan);
-		sk->state = PPPOX_DEAD;
+		sk->state &= ~PPPOX_BOUND;
 	}
 }
 

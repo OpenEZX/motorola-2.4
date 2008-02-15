@@ -152,8 +152,7 @@ static int find_resource(struct resource *root, struct resource *new,
 			 unsigned long size,
 			 unsigned long min, unsigned long max,
 			 unsigned long align,
-			 void (*alignf)(void *, struct resource *,
-					unsigned long, unsigned long),
+			 void (*alignf)(void *, struct resource *, unsigned long),
 			 void *alignf_data)
 {
 	struct resource *this = root->child;
@@ -170,7 +169,7 @@ static int find_resource(struct resource *root, struct resource *new,
 			new->end = max;
 		new->start = (new->start + align - 1) & ~(align - 1);
 		if (alignf)
-			alignf(alignf_data, new, size, align);
+			alignf(alignf_data, new, size);
 		if (new->start < new->end && new->end - new->start + 1 >= size) {
 			new->end = new->start + size - 1;
 			return 0;
@@ -190,8 +189,7 @@ int allocate_resource(struct resource *root, struct resource *new,
 		      unsigned long size,
 		      unsigned long min, unsigned long max,
 		      unsigned long align,
-		      void (*alignf)(void *, struct resource *,
-				     unsigned long, unsigned long),
+		      void (*alignf)(void *, struct resource *, unsigned long),
 		      void *alignf_data)
 {
 	int err;

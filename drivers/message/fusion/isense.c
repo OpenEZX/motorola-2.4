@@ -5,13 +5,12 @@
  *      Error Report logging output.  This module implements SCSI-3
  *      Opcode lookup and a sorted table of SCSI-3 ASC/ASCQ strings.
  *
- *  Copyright (c) 1991-2002 Steven J. Ralston
+ *  Copyright (c) 1991-2001 Steven J. Ralston
  *  Written By: Steven J. Ralston
  *  (yes I wrote some of the orig. code back in 1991!)
- *  (mailto:sjralston1@netscape.net)
- *  (mailto:Pam.Delaney@lsil.com)
+ *  (mailto:Steve.Ralston@lsil.com)
  *
- *  $Id: isense.c,v 1.33 2002/02/27 18:44:19 sralston Exp $
+ *  $Id: isense.c,v 1.28.14.1 2001/08/24 20:07:04 sralston Exp $
  */
 /*=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=*/
 /*
@@ -50,15 +49,11 @@
 */
 /*=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=*/
 
-#include <linux/version.h>
-#include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/init.h>
-#include <asm/io.h>
-#if defined (__sparc__)
-#include <linux/timer.h>
-#endif
+#include <linux/version.h>
 
 /* Hmmm, avoid undefined spinlock_t on lk-2.2.14-5.0 */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,3,0)
@@ -66,7 +61,7 @@
 #endif
 
 #define MODULEAUTHOR "Steven J. Ralston"
-#define COPYRIGHT "Copyright (c) 2001-2002 " MODULEAUTHOR
+#define COPYRIGHT "Copyright (c) 2001 " MODULEAUTHOR
 #include "mptbase.h"
 
 #include "isense.h"
@@ -92,6 +87,7 @@
 EXPORT_NO_SYMBOLS;
 MODULE_AUTHOR(MODULEAUTHOR);
 MODULE_DESCRIPTION(my_NAME);
+MODULE_LICENSE("GPL");
 
 /*=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=*/
 int __init isense_init(void)

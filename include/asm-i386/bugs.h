@@ -24,7 +24,18 @@
 #include <asm/processor.h>
 #include <asm/i387.h>
 #include <asm/msr.h>
-
+#ifdef CONFIG_KGDB
+#include <asm/kgdb.h>
+/*
+ * Provied the command line "kgdb" initial break
+ */
+int __init kgdb_initial_break(char * str)
+{
+        breakpoint();
+        return 1;
+}
+__setup("kgdb",kgdb_initial_break);
+#endif
 static int __init no_halt(char *s)
 {
 	boot_cpu_data.hlt_works_ok = 0;
@@ -204,10 +215,7 @@ static void __init check_config(void)
 
 static void __init check_bugs(void)
 {
-	extern void __init boot_init_fpu(void);
-
 	identify_cpu(&boot_cpu_data);
-	boot_init_fpu();
 #ifndef CONFIG_SMP
 	printk("CPU: ");
 	print_cpu_info(&boot_cpu_data);

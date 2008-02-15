@@ -1,0 +1,253 @@
+BI TODO                                                                                 Stuart Lynne
+Belcarra                                                                Wed Dec 11 17:05:45 PST 2002 
+
+
+Compatibility Matrix
+********************
+
+Device  | INTERRUPT     | SetInterf   | CONTROL WRITE   | ISO           | CRC            
+        | Endpoint      | (CDC)       | (RNDIS)         |               | Recommended
+--------+---------------+-------------+-----------------+---------------+---------------+
+au1x00  | yes           | yes?        | yes             | yes           |               |
+        |               |             |                 | sof interrupt |               |
+--------+---------------+-------------+-----------------+---------------+---------------+
+l7205   | yes           | no          | no              | no            | Yes           |
+        |               |             |                 |               |               |
+--------+---------------+-------------+-----------------+---------------+---------------+
+lh7a400 | yes           | yes?        | yes             | no            |               |
+        |               |             |                 |               |               |
+--------+---------------+-------------+-----------------+---------------+---------------+
+pxa     | yes           | no          | yes             | yes           |               |
+        |               |             |                 | SOF Match     |               |
+--------+---------------+-------------+-----------------+---------------+---------------+
+sa1100  | no            | yes         | no              | no            | Yes           |
+        |               |             |                 |               |               |
+--------+---------------+-------------+-----------------+---------------+---------------+
+sl11    | yes           | yes?        | yes(?)          | yes           |               |
+        |               |             |                 | SOF Match     |               |
+--------+---------------+-------------+-----------------+---------------+---------------+
+smdk2500| yes           | yes?        | yes             | yes           |               |
+        |               |             |                 | Frame Reg.    |               |
+--------+---------------+-------------+-----------------+---------------+---------------+
+superh  | yes           | no          | yes             | no            |               |
+        |               |             |                 |               |               |
+--------+---------------+-------------+-----------------+---------------+---------------+
+--------+---------------+-------------+-----------------+---------------+---------------+
+AD6849  | yes           | unknown     | unknown         | yes           |               |
+        |               |             |                 | SOF Interrupt |               |
+--------+---------------+-------------+-----------------+---------------+---------------+
+blackfin| yes           | unknown     | unknown         | yes           |               |
+        |               |             |                 | SOF Match     |               |
+--------+---------------+-------------+-----------------+---------------+---------------+
+
+Test Result Matrix
+******************
+
+Device  |Linux  |WinXP  |WinXP  |UUT    |EP0    |Linux  |WinXP  |WinXP  |       |
+        |usbdnet|RNDIS  |MCCI   |String |       |Network|RNDIS  |MCCI   |       |
+        |Enum   |Enum   |Enum   |ZLP    |       |Stress |Stress |Stress |       |
+--------+-------+-------+-------+-------+-------+-------+-------+-------+-------+
+au1x00  | ok(2) |       |       |       |       |       |       |       |       |
+        |       |       |       |       |       |       |       |       |       |
+--------+-------+-------+-------+-------+-------+-------+-------+-------+-------+
+l7205   | (5)   | N/A   |       |       |       |       | N/A   |       |       |
+        |       |       |       |       |       |       |       |       |       |
+--------+-------+-------+-------+-------+-------+-------+-------+-------+-------+
+lh7a400 | ok    | no(3) | yes   |       | yes   | ~650  | ~650  | ~475  |       |
+        |       |       |       |       |       |       |       |       |       |
+--------+-------+-------+-------+-------+-------+-------+-------+-------+-------+
+pxa     | ok(1) |       |       |       |       |       |       |       |       |
+        |       |       |       |       |       |       |       |       |       |
+--------+-------+-------+-------+-------+-------+-------+-------+-------+-------+
+sa1100  |       | N/A   |       |       |       |       | N/A   |       |       |
+        |       |       |       |       |       |       |       |       |       |
+--------+-------+-------+-------+-------+-------+-------+-------+-------+-------+
+sl11    | (4)   |       |       |       |       |       |       |       |       |
+        |       |       |       |       |       |       |       |       |       |
+--------+-------+-------+-------+-------+-------+-------+-------+-------+-------+
+smdk2500| ok    |       |       |       |       |       |       |       |       |
+        |       |       |       |       |       |       |       |       |       |
+--------+-------+-------+-------+-------+-------+-------+-------+-------+-------+
+superh  | ok    |       |       |       |       |       |       |       |       |
+        |       |       |       |       |       |       |       |       |       |
+--------+-------+-------+-------+-------+-------+-------+-------+-------+-------+
+
+
+
+
+Compatibility
+*************
+
+1. INTERRUPT Endpoint
+
+        - does the device support an INTERRUPT endpoint as well as a BULK-IN
+          endpoint
+
+        - this is required by the RNDIS driver for use as the notification
+          elememnt, it should be optional for CDC compliant drivers (but
+          some may require it.)
+
+        - the notable device that fails this is the StrongARM SA-1100
+
+
+2. Set Interface (non zero Alternate)
+
+        - does the device support a set interface with a non zero alternate
+          interface value
+
+        - this is required by a CDC compliant network device which uses the
+          default (alternate zero) for the no-data interface and a second
+          interface setting (some non-zero alternate value) for the data
+          enabled setting
+
+        - devices that are not compliant with this test can be used with
+          RNDIS and MDLM modes in the network function driver.
+
+
+3. CONTROL WRITE
+
+        - does the device support an CONTROL WRITE sequence on endpoint
+          zero, i.e. a CONTROL WRITE setup packet followed by a number of
+          packets containing data 
+
+        - this is required and heavily used by the RNDIS driver
+
+
+4. ISO
+
+        - does the device support ISO endpoints
+
+        - does the device have
+                - frame number register
+                - frame SOF interrupt
+                - frame SOF match interrupt
+
+        - required for ISO classes, e.g. audio
+
+
+5. CRC Recommended
+
+        - does this device have problems that make it difficult to guarantee
+          data integrity at the logical class to/from function layer
+
+        - for example on the StrongARM SA-1100 the driver cannot reliably
+          fill or empty the data FIFO's because register reads can be
+          ignored
+
+        - for example on the Linkup 7205 there are memory contention
+          problems, FIFO reads or writes may silently fail if there is bus
+          activity
+
+
+
+Tests
+*****
+
+1. Linux usbdnet Enumeration
+        - verify that SAFE, MDLM and CDC enumerate correctly
+        - this will test basic enumeration and in the case of CDC that set
+          interface is working correctly
+
+
+2. WinXP RNDIS Enumeration
+        - verify that the device enumerates against Windows RNDIS
+        - this will test CONTROL WRITES capability
+        - this will test that the bus inteface driver can correctly stall an
+          incorrect get descriptor test (device qualifier)
+
+
+3. WinXP MCCI Enumeration
+        - verify that the device enumerates against MCCI MDLM driver
+        
+
+4. UUT
+        - verify that the device passes the UUT tests
+        - this tests various and sundry things that usb org thinks are
+          necessary for compliance testing
+        - this also does a enumeration stress test, 150 repeated minimal
+          enumerations
+
+
+5. EP0 Test
+        - verify that the device can correctly enumerate with the ep0test
+          flags set (to the device ep0 packetsize)
+        - this verifies that the bus interface driver correctly terminates a
+          descriptor with a ZLP when it needs to
+
+
+6. Linux usbdnet Network Stress Testing
+        - verify that the device can survive heavy download and upload using
+        TCP/IP transfers (urlget, wget, or ftp) to a Linux usbdnet host
+
+
+7. WinXP RNDIS Network Stress Testing
+        - verify that the device can survive heavy download and upload using
+        TCP/IP transfers (urlget, wget, or ftp) to a Windows RNDIS  host
+
+
+8. WinXP MCCI Network Stress Testing
+        - verify that the device can survive heavy download and upload using
+        TCP/IP transfers (urlget, wget, or ftp) to a Windows MCCI host
+
+
+
+
+Notes
+*****
+
+1. PXA
+
+Very occasionally we are still seeing stalls and errors during enumeration.
+
+
+2. AU1100
+
+More testing needs to be done at alternate speeds. Still seeing
+occasional unexplained problems (esp. on alternate hardware, not verified,
+pending boards from Brad Parker.)
+
+
+2. SuperH
+
+There is an outstanding problem with certain packet lengths on the superh.
+This can most simply be seen by attempting to enumerate against windows
+rndis. The initial dhcp requests from windows are not received properly.
+
+Another test is a ping -s 300 from the windows host. Typically the FIRST
+ping is lost due to this problem, subsequent pings succeed.
+
+There is no (apparant) reason for this. It may be a hardware problem, we
+need to see if we have the most recent SH7727. There is an Errata
+documenting a receive FIFO on SIOF that is fixed by SH7727B.
+
+There is a second unresolved problem with the superh. It typically only
+enumerates successfully if connected before the bus interface module is
+loaded.
+
+3. Sharpsec LH7a400
+
+Forcing an ep0 stall after a get descriptor DEVICE QUALIFIER leaves the
+driver unable to continue. This can be demonstrated with WinXP RNDIS
+enumeration. Fixed..
+
+
+4. Scanlogic SL11
+
+When last tested this driver was fairly robust and simple to work with.
+Unfortunately our test board no longer works so we have been unable to
+continue testing. It is expected that some work will be required to bring
+the device up to current best practices (CONTROL WRITES, INTERRUPT, ISO,
+RNDIS testing, etc.) but it is also expected that all of these will work
+properly once the bus interface driver has them implemented.
+
+
+5. Linkup L7205
+
+This device has several problems. It has a maximum BULK packetsize of 32 and
+does not work properly unless all BULK packets are padded to at least 28
+bytes in length. It also has problems with filling and emptying FIFO's when
+there is bus activity, there are hacks to check the FIFO contents after
+filling to alleviate this problem.
+
+
+

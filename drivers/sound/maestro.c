@@ -2512,6 +2512,7 @@ static int ess_mmap(struct file *file, struct vm_area_struct *vma)
 	ret = -EAGAIN;
 	if (remap_page_range(vma->vm_start, virt_to_phys(db->rawbuf), size, vma->vm_page_prot))
 		goto out;
+	vma->vm_flags &= ~VM_IO;
 	db->mapped = 1;
 	ret = 0;
 out:
@@ -2756,7 +2757,7 @@ static int ess_ioctl(struct inode *inode, struct file *file, unsigned int cmd, u
 		if (s->dma_adc.mapped)
 			s->dma_adc.count &= s->dma_adc.fragsize-1;
 		spin_unlock_irqrestore(&s->lock, flags);
-                return copy_to_user((void *)arg, &cinfo, sizeof(cinfo)) ? -EFAULT : 0;
+                return copy_to_user((void *)arg, &cinfo, sizeof(cinfo));
 
         case SNDCTL_DSP_GETOPTR:
 		if (!(file->f_mode & FMODE_WRITE))
@@ -2771,7 +2772,7 @@ static int ess_ioctl(struct inode *inode, struct file *file, unsigned int cmd, u
 		if (s->dma_dac.mapped)
 			s->dma_dac.count &= s->dma_dac.fragsize-1;
 		spin_unlock_irqrestore(&s->lock, flags);
-                return copy_to_user((void *)arg, &cinfo, sizeof(cinfo)) ? -EFAULT : 0;
+                return copy_to_user((void *)arg, &cinfo, sizeof(cinfo));
 
         case SNDCTL_DSP_GETBLKSIZE:
 		if (file->f_mode & FMODE_WRITE) {
@@ -3569,19 +3570,9 @@ maestro_probe(struct pci_dev *pcidev,const struct pci_device_id *pdid)
 static void maestro_remove(struct pci_dev *pcidev) {
 	struct ess_card *card = pci_get_drvdata(pcidev);
 	int i;
-	u32 n;
 	
 	/* XXX maybe should force stop bob, but should be all 
 		stopped by _release by now */
-
-	/* Turn off hardware volume control interrupt.
-	   This has to come before we leave the IRQ below,
-	   or a crash results if a button is pressed ! */
-
-	n = inw(card->iobase+0x18);
-	n&=~(1<<6);
-	outw(n, card->iobase+0x18);
-
 	free_irq(card->irq, card);
 	unregister_sound_mixer(card->dev_mixer);
 	for(i=0;i<NR_DSPS;i++)

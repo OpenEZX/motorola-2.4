@@ -75,20 +75,26 @@ static inline pgd_t *get_pgd_fast(void)
 {
 	unsigned long *ret;
 
+	preempt_disable();
 	if ((ret = pgd_quicklist) != NULL) {
 		pgd_quicklist = (unsigned long *)(*ret);
 		ret[0] = 0;
 		pgtable_cache_size--;
-	} else
+		preempt_enable();
+	} else {
+		preempt_enable();
 		ret = (unsigned long *)get_pgd_slow();
+	}
 	return (pgd_t *)ret;
 }
 
 static inline void free_pgd_fast(pgd_t *pgd)
 {
+	preempt_disable();
 	*(unsigned long *)pgd = (unsigned long) pgd_quicklist;
 	pgd_quicklist = (unsigned long *) pgd;
 	pgtable_cache_size++;
+	preempt_enable();
 }
 
 static inline void free_pgd_slow(pgd_t *pgd)
@@ -119,19 +125,23 @@ static inline pte_t *pte_alloc_one_fast(struct mm_struct *mm,
 {
 	unsigned long *ret;
 
+	preempt_disable();
 	if ((ret = (unsigned long *)pte_quicklist) != NULL) {
 		pte_quicklist = (unsigned long *)(*ret);
 		ret[0] = ret[1];
 		pgtable_cache_size--;
 	}
+	preempt_enable();
 	return (pte_t *)ret;
 }
 
 static inline void pte_free_fast(pte_t *pte)
 {
+	preempt_disable();
 	*(unsigned long *)pte = (unsigned long) pte_quicklist;
 	pte_quicklist = (unsigned long *) pte;
 	pgtable_cache_size++;
+	preempt_enable();
 }
 
 static __inline__ void pte_free_slow(pte_t *pte)
@@ -139,7 +149,7 @@ static __inline__ void pte_free_slow(pte_t *pte)
 	free_page((unsigned long)pte);
 }
 
-#define pte_free(pte)		pte_free_fast(pte)
+#define pte_free(pte)		pte_free_slow(pte)
 #define pgd_free(pgd)		free_pgd_slow(pgd)
 #define pgd_alloc(mm)		get_pgd_fast()
 
@@ -227,12 +237,13 @@ struct tlb_state
 };
 extern struct tlb_state cpu_tlbstate[NR_CPUS];
 
-#endif /* CONFIG_SMP */
+
+#endif
 
 static inline void flush_tlb_pgtables(struct mm_struct *mm,
 				      unsigned long start, unsigned long end)
 {
-	flush_tlb_mm(mm);
+	/* i386 does not keep any page table caches in TLB */
 }
 
 #endif /* _I386_PGALLOC_H */

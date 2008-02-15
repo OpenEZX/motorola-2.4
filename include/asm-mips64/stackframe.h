@@ -1,4 +1,5 @@
-/*
+/* $Id: stackframe.h,v 1.3 1999/12/04 03:59:12 ralf Exp $
+ *
  * This file is subject to the terms and conditions of the GNU General Public
  * License.  See the file "COPYING" in the main directory of this archive
  * for more details.
@@ -17,7 +18,7 @@
 #include <asm/processor.h>
 #include <asm/addrspace.h>
 
-#ifndef __ASSEMBLY__
+#ifdef _LANGUAGE_C
 
 #define __str2(x) #x
 #define __str(x) __str2(x)
@@ -36,9 +37,9 @@
 		: /* No outputs */                       \
 		: "r" (frame))
 
-#endif /* !__ASSEMBLY__ */
+#endif /* _LANGUAGE_C */
 
-#ifdef __ASSEMBLY__
+#ifdef _LANGUAGE_ASSEMBLY
 
 		.macro	SAVE_AT
 		.set	push
@@ -75,50 +76,6 @@
 		sd	$30, PT_R30(sp)
 		.endm
 
-#ifdef CONFIG_SMP
-		.macro	get_saved_sp	/* R10000 variation */
-#ifdef CONFIG_CPU_SB1
-		dmfc0	k1, CP0_WATCHLO
-#else
-		mfc0	k0, CP0_WATCHLO
-		mfc0	k1, CP0_WATCHHI
-		dsll32	k0, k0, 0	/* Get rid of sign extension */
-		dsrl32	k0, k0, 0	/* Get rid of sign extension */
-		dsll32	k1, k1, 0
-		or	k1, k1, k0
-		li	k0, K0BASE
-		or	k1, k1, k0
-#endif
-		.endm
-
-		.macro	set_saved_sp	stackp temp
-#ifdef CONFIG_CPU_SB1
-		dmtc0	\stackp, CP0_WATCHLO
-#else
-		mtc0	\stackp, CP0_WATCHLO
-		dsrl32	\temp, \stackp, 0
-		mtc0	\temp, CP0_WATCHHI
-#endif
-		.endm
-
-		.macro	declare_saved_sp
-		# empty, stackpointer stored in a register
-		.endm
-#else
-		.macro	get_saved_sp	/* Uniprocessor variation */
-		lui	k1, %hi(kernelsp)
-		ld	k1, %lo(kernelsp)(k1)
-		.endm
-
-		.macro	set_saved_sp	stackp temp
-		sd	\stackp, kernelsp
-		.endm
-
-		.macro	declare_saved_sp
-		.comm	kernelsp, 8, 8			# current stackpointer
-		.endm
-#endif
-
 		.macro	SAVE_SOME
 		.set	push
 		.set	reorder
@@ -129,7 +86,20 @@
 		 move	k1, sp
 		.set	reorder
 		/* Called from user mode, new stack. */
-		get_saved_sp
+#ifndef CONFIG_SMP
+		lui	k1, %hi(kernelsp)
+		ld	k1, %lo(kernelsp)(k1)
+#else
+		mfc0	k0, CP0_WATCHLO
+		mfc0	k1, CP0_WATCHHI
+		dsll32	k0, k0, 0	/* Get rid of sign extension */
+		dsrl32	k0, k0, 0	/* Get rid of sign extension */
+		dsll32	k1, k1, 0
+		or	k1, k1, k0
+		li	k0, K0BASE
+		or	k1, k1, k0
+		daddiu	k1, k1, KERNEL_STACK_SIZE-32
+#endif
 8:		move	k0, sp
 		dsubu	sp, k1, PT_SIZE
 		sd	k0, PT_R29(sp)
@@ -272,6 +242,6 @@
 		mtc0	t0, CP0_STATUS
 		.endm
 
-#endif /* __ASSEMBLY__ */
+#endif /* _LANGUAGE_ASSEMBLY */
 
 #endif /* _ASM_STACKFRAME_H */

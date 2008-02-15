@@ -25,6 +25,8 @@
 #include <asm/uaccess.h>
 #include "util.h"
 
+#include <linux/trace.h>
+
 /* sysctl: */
 int msg_ctlmax = MSGMAX;
 int msg_ctlmnb = MSGMNB;
@@ -326,6 +328,7 @@ asmlinkage long sys_msgget (key_t key, int msgflg)
 		msg_unlock(id);
 	}
 	up(&msg_ids.sem);
+	TRACE_IPC(TRACE_EV_IPC_MSG_CREATE, ret, msgflg);
 	return ret;
 }
 
@@ -597,7 +600,7 @@ static int testmsg(struct msg_msg* msg,long type,int mode)
 	return 0;
 }
 
-static int inline pipelined_send(struct msg_queue* msq, struct msg_msg* msg)
+int inline pipelined_send(struct msg_queue* msq, struct msg_msg* msg)
 {
 	struct list_head* tmp;
 
@@ -706,7 +709,7 @@ out_free:
 	return err;
 }
 
-static int inline convert_mode(long* msgtyp, int msgflg)
+int inline convert_mode(long* msgtyp, int msgflg)
 {
 	/* 
 	 *  find message of correct type.

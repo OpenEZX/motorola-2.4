@@ -1,9 +1,6 @@
 /*
  *  linux/mm/vmscan.c
  *
- *  The pageout daemon, decides which pages to evict (swap out) and
- *  does the actual work of freeing them.
- *
  *  Copyright (C) 1991, 1992, 1993, 1994  Linus Torvalds
  *
  *  Swap reorganised 29.12.95, Stephen Tweedie.
@@ -23,6 +20,7 @@
 #include <linux/init.h>
 #include <linux/highmem.h>
 #include <linux/file.h>
+#include <linux/compiler.h>
 
 #include <asm/pgalloc.h>
 
@@ -60,7 +58,7 @@ static inline int try_to_swap_out(struct mm_struct * mm, struct vm_area_struct* 
 		return 0;
 
 	/* Don't bother replenishing zones not under pressure.. */
-	if (!memclass(page_zone(page), classzone))
+	if (!memclass(page->zone, classzone))
 		return 0;
 
 	if (TryLockPage(page))
@@ -160,6 +158,8 @@ static inline int swap_out_pmd(struct mm_struct * mm, struct vm_area_struct * vm
 	pte_t * pte;
 	unsigned long pmd_end;
 
+	DEFINE_LOCK_COUNT();
+
 	if (pmd_none(*dir))
 		return count;
 	if (pmd_bad(*dir)) {
@@ -184,6 +184,14 @@ static inline int swap_out_pmd(struct mm_struct * mm, struct vm_area_struct * vm
 					address += PAGE_SIZE;
 					break;
 				}
+				/* we reach this with a lock depth of 1 or 2 */
+#if 0
+				if (TEST_LOCK_COUNT(4)) {
+					if (conditional_schedule_needed())
+						return count;
+					RESET_LOCK_COUNT();
+				}
+#endif
 			}
 		}
 		address += PAGE_SIZE;
@@ -217,6 +225,9 @@ static inline int swap_out_pgd(struct mm_struct * mm, struct vm_area_struct * vm
 		count = swap_out_pmd(mm, vma, pmd, address, end, count, classzone);
 		if (!count)
 			break;
+		/* lock depth can be 1 or 2 */
+		if (conditional_schedule_needed())
+			return count;
 		address = (address + PMD_SIZE) & PMD_MASK;
 		pmd++;
 	} while (address && (address < end));
@@ -236,11 +247,15 @@ static inline int swap_out_vma(struct mm_struct * mm, struct vm_area_struct * vm
 	pgdir = pgd_offset(mm, address);
 
 	end = vma->vm_end;
-	BUG_ON(address >= end);
+	if (address >= end)
+		BUG();
 	do {
 		count = swap_out_pgd(mm, vma, pgdir, address, end, count, classzone);
 		if (!count)
 			break;
+		/* lock depth can be 1 or 2 */
+		if (conditional_schedule_needed())
+			return count;
 		address = (address + PGDIR_SIZE) & PGDIR_MASK;
 		pgdir++;
 	} while (address && (address < end));
@@ -263,6 +278,10 @@ static inline int swap_out_mm(struct mm_struct * mm, int count, int * mmcounter,
 	 * and ptes.
 	 */
 	spin_lock(&mm->page_table_lock);
+
+#if 0
+continue_scan:
+#endif
 	address = mm->swap_address;
 	if (address == TASK_SIZE || swap_mm != mm) {
 		/* We raced: don't count this mm but try again */
@@ -279,6 +298,13 @@ static inline int swap_out_mm(struct mm_struct * mm, int count, int * mmcounter,
 			vma = vma->vm_next;
 			if (!vma)
 				break;
+			/* we reach this with a lock depth of 1 and 2 */
+#if 0
+			if (conditional_schedule_needed()) {
+				break_spin_lock(&mm->page_table_lock);
+				goto continue_scan;
+			}
+#endif
 			if (!count)
 				goto out_unlock;
 			address = vma->vm_start;
@@ -300,6 +326,7 @@ static int swap_out(unsigned int priority, unsigned int gfp_mask, zone_t * class
 
 	counter = mmlist_nr;
 	do {
+		/* lock depth can be 0 or 1 */
 		if (unlikely(current->need_resched)) {
 			__set_current_state(TASK_RUNNING);
 			schedule();
@@ -345,6 +372,7 @@ static int shrink_cache(int nr_pages, zone_t * classzone, unsigned int gfp_mask,
 	while (--max_scan >= 0 && (entry = inactive_list.prev) != &inactive_list) {
 		struct page * page;
 
+		/* lock depth is 1 or 2 */
 		if (unlikely(current->need_resched)) {
 			spin_unlock(&pagemap_lru_lock);
 			__set_current_state(TASK_RUNNING);
@@ -355,8 +383,10 @@ static int shrink_cache(int nr_pages, zone_t * classzone, unsigned int gfp_mask,
 
 		page = list_entry(entry, struct page, lru);
 
-		BUG_ON(!PageLRU(page));
-		BUG_ON(PageActive(page));
+		if (unlikely(!PageLRU(page)))
+			BUG();
+		if (unlikely(PageActive(page)))
+			BUG();
 
 		list_del(entry);
 		list_add(entry, &inactive_list);
@@ -368,7 +398,7 @@ static int shrink_cache(int nr_pages, zone_t * classzone, unsigned int gfp_mask,
 		if (unlikely(!page_count(page)))
 			continue;
 
-		if (!memclass(page_zone(page), classzone))
+		if (!memclass(page->zone, classzone))
 			continue;
 
 		/* Racy check to avoid trylocking when not worthwhile */
@@ -390,7 +420,7 @@ static int shrink_cache(int nr_pages, zone_t * classzone, unsigned int gfp_mask,
 			continue;
 		}
 
-		if (PageDirty(page) && is_page_cache_freeable(page) && page->mapping) {
+		if ((PageDirty(page) || DelallocPage(page)) && is_page_cache_freeable(page) && page->mapping) {
 			/*
 			 * It is not critical here to write it only if
 			 * the page is unmapped beause any direct writer
@@ -584,7 +614,7 @@ static int shrink_caches(zone_t * classzone, int priority, unsigned int gfp_mask
 	return nr_pages;
 }
 
-int try_to_free_pages_zone(zone_t *classzone, unsigned int gfp_mask)
+int try_to_free_pages(zone_t *classzone, unsigned int gfp_mask, unsigned int order)
 {
 	int priority = DEF_PRIORITY;
 	int nr_pages = SWAP_CLUSTER_MAX;
@@ -602,25 +632,6 @@ int try_to_free_pages_zone(zone_t *classzone, unsigned int gfp_mask)
 	 */
 	out_of_memory();
 	return 0;
-}
-
-int try_to_free_pages(unsigned int gfp_mask)
-{
-	pg_data_t *pgdat;
-	zonelist_t *zonelist;
-	unsigned long pf_free_pages;
-	int error = 0;
-
-	pf_free_pages = current->flags & PF_FREE_PAGES;
-	current->flags &= ~PF_FREE_PAGES;
-
-	for_each_pgdat(pgdat) {
-		zonelist = pgdat->node_zonelists + (gfp_mask & GFP_ZONEMASK);
-		error |= try_to_free_pages_zone(zonelist->zones[0], gfp_mask);
-	}
-
-	current->flags |= pf_free_pages;
-	return error;
 }
 
 DECLARE_WAIT_QUEUE_HEAD(kswapd_wait);
@@ -645,11 +656,14 @@ static int kswapd_balance_pgdat(pg_data_t * pgdat)
 
 	for (i = pgdat->nr_zones-1; i >= 0; i--) {
 		zone = pgdat->node_zones + i;
+		debug_lock_break(0);
+#ifndef CONFIG_PREEMPT
 		if (unlikely(current->need_resched))
 			schedule();
+#endif
 		if (!zone->need_balance)
 			continue;
-		if (!try_to_free_pages_zone(zone, GFP_KSWAPD)) {
+		if (!try_to_free_pages(zone, GFP_KSWAPD, 0)) {
 			zone->need_balance = 0;
 			__set_current_state(TASK_INTERRUPTIBLE);
 			schedule_timeout(HZ);
@@ -671,9 +685,10 @@ static void kswapd_balance(void)
 
 	do {
 		need_more_balance = 0;
-
-		for_each_pgdat(pgdat)
+		pgdat = pgdat_list;
+		do
 			need_more_balance |= kswapd_balance_pgdat(pgdat);
+		while ((pgdat = pgdat->node_next));
 	} while (need_more_balance);
 }
 
@@ -696,10 +711,12 @@ static int kswapd_can_sleep(void)
 {
 	pg_data_t * pgdat;
 
-	for_each_pgdat(pgdat) {
-		if (!kswapd_can_sleep_pgdat(pgdat))
-			return 0;
-	}
+	pgdat = pgdat_list;
+	do {
+		if (kswapd_can_sleep_pgdat(pgdat))
+			continue;
+		return 0;
+	} while ((pgdat = pgdat->node_next));
 
 	return 1;
 }
@@ -767,6 +784,9 @@ int kswapd(void *unused)
 static int __init kswapd_init(void)
 {
 	printk("Starting kswapd\n");
+#ifndef CONFIG_EMBEDDED_OOM_KILLER
+	printk("Disabling the Out Of Memory Killer\n");
+#endif
 	swap_setup();
 	kernel_thread(kswapd, NULL, CLONE_FS | CLONE_FILES | CLONE_SIGNAL);
 	return 0;

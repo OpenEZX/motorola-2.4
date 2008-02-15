@@ -33,10 +33,15 @@ struct e8390_pkt_hdr {
   unsigned short count; /* header + packet length in bytes */
 };
 
+
 #ifdef notdef
 extern int ei_debug;
 #else
+#ifdef  CONFIG_REDWOOD_4
+#define ei_debug 0
+#else
 #define ei_debug 1
+#endif
 #endif
 
 #ifndef HAVE_AUTOIRQ
@@ -112,24 +117,15 @@ struct ei_device {
 
 /*
  *	Only generate indirect loads given a machine that needs them.
- *      - removed AMIGA_PCMCIA from this list, handled as ISA io now
  */
  
-#if defined(CONFIG_MAC) ||  \
+#if defined(CONFIG_MAC) || defined(CONFIG_AMIGA_PCMCIA) || \
     defined(CONFIG_ARIADNE2) || defined(CONFIG_ARIADNE2_MODULE) || \
     defined(CONFIG_HYDRA) || defined(CONFIG_HYDRA_MODULE) || \
     defined(CONFIG_ARM_ETHERH) || defined(CONFIG_ARM_ETHERH_MODULE)
 #define EI_SHIFT(x)	(ei_local->reg_offset[x])
-#undef inb
-#undef inb_p
-#undef outb
-#undef outb_p
-
-#define inb(port)   in_8(port)
-#define outb(val,port)  out_8(port,val)
-#define inb_p(port)   in_8(port)
-#define outb_p(val,port)  out_8(port,val)
-
+#elif	CONFIG_STB03xxx
+#define EI_SHIFT(x)	(2 * (x))
 #else
 #define EI_SHIFT(x)	(x)
 #endif

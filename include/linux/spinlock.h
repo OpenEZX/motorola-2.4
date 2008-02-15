@@ -2,6 +2,7 @@
 #define __LINUX_SPINLOCK_H
 
 #include <linux/config.h>
+#include <linux/compiler.h>
 
 /*
  * These are the generic versions of the spinlocks and read-write
@@ -35,23 +36,6 @@
 						if (!__r) local_bh_enable();   \
 						__r; })
 
-/* Must define these before including other files, inline functions need them */
-
-#include <linux/stringify.h>
-
-#define LOCK_SECTION_NAME			\
-	".text.lock." __stringify(KBUILD_BASENAME)
-
-#define LOCK_SECTION_START(extra)		\
-	".subsection 1\n\t"			\
-	extra					\
-	".ifndef " LOCK_SECTION_NAME "\n\t"	\
-	LOCK_SECTION_NAME ":\n\t"		\
-	".endif\n\t"
-
-#define LOCK_SECTION_END			\
-	".previous\n\t"
-
 #ifdef CONFIG_SMP
 #include <asm/spinlock.h>
 
@@ -62,16 +46,17 @@
 
 #if (DEBUG_SPINLOCKS < 1)
 
+#ifndef CONFIG_PREEMPT
 #define atomic_dec_and_lock(atomic,lock) atomic_dec_and_test(atomic)
 #define ATOMIC_DEC_AND_LOCK
+#endif
 
 /*
  * Your basic spinlocks, allowing only a single CPU anywhere
  *
- * Some older gcc versions had a nasty bug with empty initializers.
- * (XXX: could someone please confirm whether egcs 1.1 still has this bug?)
+ * Most gcc versions have a nasty bug with empty initializers.
  */
-#if (__GNUC__ > 2 || __GNUC_MINOR__ > 95)
+#if (__GNUC__ > 2)
   typedef struct { } spinlock_t;
   #define SPIN_LOCK_UNLOCKED (spinlock_t) { }
 #else
@@ -80,11 +65,11 @@
 #endif
 
 #define spin_lock_init(lock)	do { } while(0)
-#define spin_lock(lock)		(void)(lock) /* Not "unused variable". */
+#define _raw_spin_lock(lock)	(void)(lock) /* Not "unused variable". */
 #define spin_is_locked(lock)	(0)
-#define spin_trylock(lock)	({1; })
+#define _raw_spin_trylock(lock)	({1; })
 #define spin_unlock_wait(lock)	do { } while(0)
-#define spin_unlock(lock)	do { } while(0)
+#define _raw_spin_unlock(lock)	do { } while(0)
 
 #elif (DEBUG_SPINLOCKS < 2)
 
@@ -132,10 +117,9 @@ typedef struct {
  * irq-safe write-lock, but readers can get non-irqsafe
  * read-locks.
  *
- * Some older gcc versions had a nasty bug with empty initializers.
- * (XXX: could someone please confirm whether egcs 1.1 still has this bug?)
+ * Most gcc versions have a nasty bug with empty initializers.
  */
-#if (__GNUC__ > 2 || __GNUC_MINOR__ > 91)
+#if (__GNUC__ > 2)
   typedef struct { } rwlock_t;
   #define RW_LOCK_UNLOCKED (rwlock_t) { }
 #else
@@ -144,12 +128,113 @@ typedef struct {
 #endif
 
 #define rwlock_init(lock)	do { } while(0)
-#define read_lock(lock)		(void)(lock) /* Not "unused variable". */
-#define read_unlock(lock)	do { } while(0)
-#define write_lock(lock)	(void)(lock) /* Not "unused variable". */
-#define write_unlock(lock)	do { } while(0)
+#define _raw_read_lock(lock)	(void)(lock) /* Not "unused variable". */
+#define _raw_read_unlock(lock)	do { } while(0)
+#define _raw_write_lock(lock)	(void)(lock) /* Not "unused variable". */
+#define _raw_write_unlock(lock)	do { } while(0)
 
 #endif /* !SMP */
+
+#ifdef CONFIG_PREEMPT
+
+#ifdef CONFIG_PREEMPT_TIMES
+extern void latency_start(const char *fname,unsigned lineno,int cause);
+extern void latency_check(const char *fname,unsigned lineno, int cause);
+extern void latency_end(const char *fname,unsigned lineno);
+#define preempt_lock_start(c) \
+do { \
+	if ((preempt_get_count() & ~PREEMPT_ACTIVE) == 1) \
+		latency_start(__BASE_FILE__, __LINE__, c); \
+} while (0)
+#define preempt_lock_force_start() \
+do { \
+	latency_end(__FILE__, __LINE__); \
+	latency_start(__FILE__, __LINE__, -99); \
+} while (0)
+#define preempt_lock_stop() \
+do { \
+	if ((preempt_get_count() & ~PREEMPT_ACTIVE) == 1) \
+		latency_end(__BASE_FILE__, __LINE__); \
+} while (0)
+#define preempt_lock_force_stop() \
+do { \
+	latency_end(__FILE__, __LINE__); \
+} while (0)
+#else
+#define preempt_lock_start(c)		do {} while (0)
+#define preempt_lock_force_start(c)	do {} while (0)
+#define preempt_lock_stop()		do {} while (0)
+#define preempt_lock_force_stop()	do {} while (0)
+#endif /* CONFIG_PREEMPT_TIMES */
+
+#define preempt_get_count() (current->preempt_count)
+#define preempt_is_disabled() (preempt_get_count() != 0)
+
+#define preempt_disable() \
+do { \
+	++current->preempt_count; \
+	barrier(); \
+	preempt_lock_start(1); \
+} while (0)
+
+#define preempt_enable_no_resched() \
+do { \
+	preempt_lock_stop(); \
+	--current->preempt_count; \
+	barrier(); \
+} while (0)
+
+#define preempt_enable() \
+do { \
+	preempt_lock_stop(); \
+	--current->preempt_count; \
+	barrier(); \
+	if (unlikely(current->preempt_count < current->need_resched)) \
+		preempt_schedule(); \
+} while (0)
+
+#define spin_lock(lock)	\
+do { \
+	preempt_disable(); \
+	_raw_spin_lock(lock); \
+} while(0)
+
+#define spin_trylock(lock)	({preempt_disable(); _raw_spin_trylock(lock) ? \
+				1 : ({preempt_enable(); 0;});})
+#define spin_unlock(lock) \
+do { \
+	_raw_spin_unlock(lock); \
+	preempt_enable(); \
+} while (0)
+
+#define read_lock(lock)		({preempt_disable(); _raw_read_lock(lock);})
+#define read_unlock(lock)	({_raw_read_unlock(lock); preempt_enable();})
+#define write_lock(lock)	({preempt_disable(); _raw_write_lock(lock);})
+#define write_unlock(lock)	({_raw_write_unlock(lock); preempt_enable();})
+#define write_trylock(lock)	({preempt_disable();_raw_write_trylock(lock) ? \
+				1 : ({preempt_enable(); 0;});})
+
+#else
+
+#define preempt_get_count()	(0)
+#define preempt_is_disabled()	(1)
+#define preempt_disable()	do { } while (0)
+#define preempt_enable_no_resched()	do {} while(0)
+#define preempt_enable()	do { } while (0)
+
+#define spin_lock(lock)		_raw_spin_lock(lock)
+#define spin_trylock(lock)	_raw_spin_trylock(lock)
+#define spin_unlock(lock)	_raw_spin_unlock(lock)
+
+#define read_lock(lock)		_raw_read_lock(lock)
+#define read_unlock(lock)	_raw_read_unlock(lock)
+#define write_lock(lock)	_raw_write_lock(lock)
+#define write_unlock(lock)	_raw_write_unlock(lock)
+#define write_trylock(lock)	_raw_write_trylock(lock)
+
+#define preempt_lock_start(c)	do {} while (0)
+#define preempt_lock_stop()	do {} while (0)
+#endif
 
 /* "lock on reference count zero" */
 #ifndef ATOMIC_DEC_AND_LOCK
@@ -157,20 +242,4 @@ typedef struct {
 extern int atomic_dec_and_lock(atomic_t *atomic, spinlock_t *lock);
 #endif
 
-#ifdef CONFIG_SMP
-#include <linux/cache.h>
-
-typedef union {
-    spinlock_t lock;
-    char fill_up[(SMP_CACHE_BYTES)];
-} spinlock_cacheline_t __attribute__ ((aligned(SMP_CACHE_BYTES)));
-
-#else	/* SMP */
-
-typedef struct {
-    spinlock_t lock;
-} spinlock_cacheline_t;
-
-
-#endif
 #endif /* __LINUX_SPINLOCK_H */

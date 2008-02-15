@@ -20,9 +20,14 @@
  *  You should have received a copy of the GNU General Public License along
  *  with this program; if not, write to the Free Software Foundation, Inc.,
  *  59 Temple Place - Suite 330, Boston MA 02111-1307, USA.
+ *
+ * ########################################################################
+ *
+ * 
  */
 #include <linux/module.h>
 #include <linux/init.h>
+#include <linux/config.h>
 #include <linux/delay.h>
 #include <linux/ioport.h>
 #include <linux/kernel.h>
@@ -309,9 +314,9 @@ pb1x00_pcmcia_configure_socket(const struct pcmcia_configure *configure)
 	}
 
 	if (configure->sock == 0) {
-	pcr &= ~(PCR_SLOT_0_RST);
+		pcr &= ~(PCR_SLOT_0_RST);
 		if (configure->reset)
-		pcr |= PCR_SLOT_0_RST;
+			pcr |= PCR_SLOT_0_RST;
 	}
 	else {
 		pcr &= ~(PCR_SLOT_1_RST);

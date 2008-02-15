@@ -1,5 +1,5 @@
 /* This version ported to the Linux-MTD system by dwmw2@infradead.org
- * $Id: ftl.c,v 1.43 2002/02/13 15:31:37 dwmw2 Exp $
+ * $Id: ftl.c,v 1.42 2001/11/20 11:42:33 dwmw2 Exp $
  *
  * Fixes: Arnaldo Carvalho de Melo <acme@conectiva.com.br>
  * - fixes some leaks on failure in build_maps and ftl_notify_add, cleanups
@@ -26,7 +26,7 @@
     rights and limitations under the License.
 
     The initial developer of the original code is David A. Hinds
-    <dahinds@users.sourceforge.net>.  Portions created by David A. Hinds
+    <dhinds@pcmcia.sourceforge.org>.  Portions created by David A. Hinds
     are Copyright (C) 1999 David A. Hinds.  All Rights Reserved.
 
     Alternatively, the contents of this file may be used under the
@@ -87,7 +87,7 @@
 #define register_disk(dev, drive, minors, ops, size) \
     do { (dev)->part[(drive)*(minors)].nr_sects = size; \
         if (size == 0) (dev)->part[(drive)*(minors)].start_sect = -1; \
-        resetup_one_dev(dev, drive); } while (0)
+        resetup_one_dev(dev, drive); } while (0);
 #endif
 
 #if (LINUX_VERSION_CODE < 0x20320)
@@ -1415,7 +1415,7 @@ int init_ftl(void)
 
     memset(myparts, 0, sizeof(myparts));
     
-    DEBUG(0, "$Id: ftl.c,v 1.43 2002/02/13 15:31:37 dwmw2 Exp $\n");
+    DEBUG(0, "$Id: ftl.c,v 1.42 2001/11/20 11:42:33 dwmw2 Exp $\n");
     
     if (register_blkdev(FTL_MAJOR, "ftl", &ftl_blk_fops)) {
 	printk(KERN_NOTICE "ftl_cs: unable to grab major "
@@ -1455,5 +1455,5 @@ module_exit(cleanup_ftl);
 
 
 MODULE_LICENSE("Dual MPL/GPL");
-MODULE_AUTHOR("David Hinds <dahinds@users.sourceforge.net>");
+MODULE_AUTHOR("David Hinds <dhinds@sonic.net>");
 MODULE_DESCRIPTION("Support code for Flash Translation Layer, used on PCMCIA devices and M-Systems DiskOnChip 1000");

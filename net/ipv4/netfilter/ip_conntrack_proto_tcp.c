@@ -7,10 +7,6 @@
 #include <linux/in.h>
 #include <linux/ip.h>
 #include <linux/tcp.h>
-#include <linux/string.h>
-
-#include <net/tcp.h>
-
 #include <linux/netfilter_ipv4/ip_conntrack.h>
 #include <linux/netfilter_ipv4/ip_conntrack_protocol.h>
 #include <linux/netfilter_ipv4/lockhelp.h>
@@ -184,6 +180,8 @@ static int tcp_packet(struct ip_conntrack *conntrack,
 	if (oldtcpstate == TCP_CONNTRACK_SYN_SENT
 	    && CTINFO2DIR(ctinfo) == IP_CT_DIR_REPLY
 	    && tcph->syn && tcph->ack)
+		conntrack->proto.tcp.handshake_seq
+			= tcph->ack_seq;
 		conntrack->proto.tcp.handshake_ack
 			= htonl(ntohl(tcph->seq) + 1);
 	WRITE_UNLOCK(&tcp_lock);
@@ -200,6 +198,7 @@ static int tcp_packet(struct ip_conntrack *conntrack,
 		if (oldtcpstate == TCP_CONNTRACK_SYN_RECV
 		    && CTINFO2DIR(ctinfo) == IP_CT_DIR_ORIGINAL
 		    && tcph->ack && !tcph->syn
+		    && tcph->seq == conntrack->proto.tcp.handshake_seq
 		    && tcph->ack_seq == conntrack->proto.tcp.handshake_ack)
 			set_bit(IPS_ASSURED_BIT, &conntrack->status);
 
@@ -231,19 +230,7 @@ static int tcp_new(struct ip_conntrack *conntrack,
 	return 1;
 }
 
-static int tcp_exp_matches_pkt(struct ip_conntrack_expect *exp,
-			       struct sk_buff **pskb)
-{
-	struct iphdr *iph = (*pskb)->nh.iph;
-	struct tcphdr *tcph = (struct tcphdr *)((u_int32_t *)iph + iph->ihl);
-	unsigned int datalen;
-
-	datalen = (*pskb)->len - iph->ihl*4 - tcph->doff*4;
-
-	return between(exp->seq, ntohl(tcph->seq), ntohl(tcph->seq) + datalen);
-}
-
 struct ip_conntrack_protocol ip_conntrack_protocol_tcp
 = { { NULL, NULL }, IPPROTO_TCP, "tcp",
     tcp_pkt_to_tuple, tcp_invert_tuple, tcp_print_tuple, tcp_print_conntrack,
-    tcp_packet, tcp_new, NULL, tcp_exp_matches_pkt, NULL };
+    tcp_packet, tcp_new, NULL };

@@ -286,9 +286,6 @@ static int yenta_set_socket(pci_socket_t *socket, socket_state_t *state)
 		}
 		exca_writeb(socket, I365_CSCINT, reg);
 		exca_readb(socket, I365_CSC);
-	
-		if(socket->zoom_video)
-			socket->zoom_video(socket, state->flags & SS_ZVCARD);
 	}
 	config_writew(socket, CB_BRIDGE_CONTROL, bridge);
 	/* Socket event mask: get card insert/remove events.. */
@@ -786,6 +783,7 @@ static void yenta_close(pci_socket_t *sock)
 
 #include "ti113x.h"
 #include "ricoh.h"
+#include "nec.h"
 
 /*
  * Different cardbus controllers have slightly different
@@ -818,7 +816,9 @@ static struct cardbus_override_struct {
 	{ PD(RICOH,RL5C466), &ricoh_ops },
 	{ PD(RICOH,RL5C475), &ricoh_ops },
 	{ PD(RICOH,RL5C476), &ricoh_ops },
-	{ PD(RICOH,RL5C478), &ricoh_ops }
+	{ PD(RICOH,RL5C478), &ricoh_ops },
+
+	{ PD(NEC,VRC4173_CARDU), &nec_ops }
 };
 
 #define NR_OVERRIDES (sizeof(cardbus_override)/sizeof(struct cardbus_override_struct))

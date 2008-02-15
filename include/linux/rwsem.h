@@ -2,8 +2,6 @@
  *
  * Written by David Howells (dhowells@redhat.com).
  * Derived from asm-i386/semaphore.h
- *
- * Trylock by Brian Watson (Brian.J.Watson@compaq.com).
  */
 
 #ifndef _LINUX_RWSEM_H
@@ -38,6 +36,18 @@ extern void FASTCALL(rwsemtrace(struct rw_semaphore *sem, const char *str));
 #endif
 
 /*
+ * Added by Susan -- try to lock for reading
+ */
+
+extern void __try_down_read(struct rw_semaphore *sem, unsigned int *result);
+static inline void try_down_read(struct rw_semaphore *sem, unsigned int *result)
+{
+	rwsemtrace(sem,"Entering down_read");
+	__try_down_read(sem, result);
+	rwsemtrace(sem,"Leaving down_read");
+}
+
+/*
  * lock for reading
  */
 static inline void down_read(struct rw_semaphore *sem)
@@ -48,18 +58,6 @@ static inline void down_read(struct rw_semaphore *sem)
 }
 
 /*
- * trylock for reading -- returns 1 if successful, 0 if contention
- */
-static inline int down_read_trylock(struct rw_semaphore *sem)
-{
-	int ret;
-	rwsemtrace(sem,"Entering down_read_trylock");
-	ret = __down_read_trylock(sem);
-	rwsemtrace(sem,"Leaving down_read_trylock");
-	return ret;
-}
-
-/*
  * lock for writing
  */
 static inline void down_write(struct rw_semaphore *sem)
@@ -67,18 +65,6 @@ static inline void down_write(struct rw_semaphore *sem)
 	rwsemtrace(sem,"Entering down_write");
 	__down_write(sem);
 	rwsemtrace(sem,"Leaving down_write");
-}
-
-/*
- * trylock for writing -- returns 1 if successful, 0 if contention
- */
-static inline int down_write_trylock(struct rw_semaphore *sem)
-{
-	int ret;
-	rwsemtrace(sem,"Entering down_write_trylock");
-	ret = __down_write_trylock(sem);
-	rwsemtrace(sem,"Leaving down_write_trylock");
-	return ret;
 }
 
 /*

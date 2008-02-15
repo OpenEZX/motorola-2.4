@@ -49,7 +49,11 @@ __get_user_2:
 	cmp	r0, r2
 2:	ldrlsbt	r1, [r0], #1
 3:	ldrlsbt	r2, [r0]
+#ifndef __ARMEB__
 	orrls	r1, r1, r2, lsl #8
+#else
+	orrls	r1, r2, r1, lsl #8
+#endif
 	movls	r0, #0
 	movls	pc, lr
 	b	__get_user_bad

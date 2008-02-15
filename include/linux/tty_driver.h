@@ -142,6 +142,11 @@ struct tty_driver {
 	void *driver_state;	/* only used for the PTY driver */
 	
 	/*
+	 * Used for reverse lookup of port from driver (mostly for gs_read_proc) 
+	 */
+	void* local_data;
+
+	/*
 	 * Interface routines from the upper tty layer to the tty
 	 * driver.
 	 */
@@ -176,6 +181,11 @@ struct tty_driver {
 	 */
 	struct tty_driver *next;
 	struct tty_driver *prev;
+	/*---------------------------
+	 * added by jordan
+	 * -------------------------*/
+	int btuart;
+	/*end of jordan*/	
 };
 
 /* tty driver magic number */

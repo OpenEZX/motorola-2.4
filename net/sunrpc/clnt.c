@@ -78,6 +78,10 @@ rpc_create_client(struct rpc_xprt *xprt, char *servname,
 	dprintk("RPC: creating %s client for %s (xprt %p)\n",
 		program->name, servname, xprt);
 
+#ifdef RPC_DEBUG
+	rpc_register_sysctl();
+#endif
+
 	if (!xprt)
 		goto out;
 	if (vers >= program->nrvers || !(version = program->version[vers]))
@@ -99,12 +103,10 @@ rpc_create_client(struct rpc_xprt *xprt, char *servname,
 	clnt->cl_vers     = version->number;
 	clnt->cl_prot     = xprt->prot;
 	clnt->cl_stats    = program->stats;
-	INIT_RPC_WAITQ(&clnt->cl_bindwait, "bindwait");
+	clnt->cl_bindwait = RPC_INIT_WAITQ("bindwait");
 
 	if (!clnt->cl_port)
 		clnt->cl_autobind = 1;
-
-	rpc_init_rtt(&clnt->cl_rtt, xprt->timeout.to_initval);
 
 	if (!rpcauth_create(flavor, clnt))
 		goto out_no_auth;
@@ -335,20 +337,6 @@ rpc_call_setup(struct rpc_task *task, struct rpc_message *msg, int flags)
 		rpcproc_count(task->tk_client, task->tk_msg.rpc_proc)++;
 }
 
-void
-rpc_setbufsize(struct rpc_clnt *clnt, unsigned int sndsize, unsigned int rcvsize)
-{
-	struct rpc_xprt *xprt = clnt->cl_xprt;
-
-	xprt->sndsize = 0;
-	if (sndsize)
-		xprt->sndsize = sndsize + RPC_SLACK_SPACE;
-	xprt->rcvsize = 0;
-	if (rcvsize)
-		xprt->rcvsize = rcvsize + RPC_SLACK_SPACE;
-	xprt_sock_setbufsize(xprt);
-}
-
 /*
  * Restart an (async) RPC call. Usually called from within the
  * exit handler.
@@ -477,8 +465,6 @@ call_encode(struct rpc_task *task)
 {
 	struct rpc_clnt	*clnt = task->tk_client;
 	struct rpc_rqst	*req = task->tk_rqstp;
-	struct xdr_buf *sndbuf = &req->rq_snd_buf;
-	struct xdr_buf *rcvbuf = &req->rq_rcv_buf;
 	unsigned int	bufsiz;
 	kxdrproc_t	encode;
 	int		status;
@@ -491,16 +477,14 @@ call_encode(struct rpc_task *task)
 
 	/* Default buffer setup */
 	bufsiz = rpcproc_bufsiz(clnt, task->tk_msg.rpc_proc)+RPC_SLACK_SPACE;
-	sndbuf->head[0].iov_base = (void *)task->tk_buffer;
-	sndbuf->head[0].iov_len  = bufsiz;
-	sndbuf->tail[0].iov_len  = 0;
-	sndbuf->page_len	 = 0;
-	sndbuf->len		 = 0;
-	rcvbuf->head[0].iov_base = (void *)((char *)task->tk_buffer + bufsiz);
-	rcvbuf->head[0].iov_len  = bufsiz;
-	rcvbuf->tail[0].iov_len  = 0;
-	rcvbuf->page_len	 = 0;
-	rcvbuf->len		 = bufsiz;
+	req->rq_svec[0].iov_base = (void *)task->tk_buffer;
+	req->rq_svec[0].iov_len  = bufsiz;
+	req->rq_slen		 = 0;
+	req->rq_snr		 = 1;
+	req->rq_rvec[0].iov_base = (void *)((char *)task->tk_buffer + bufsiz);
+	req->rq_rvec[0].iov_len  = bufsiz;
+	req->rq_rlen		 = bufsiz;
+	req->rq_rnr		 = 1;
 
 	/* Zero buffer so we have automatic zero-padding of opaque & string */
 	memset(task->tk_buffer, 0, bufsiz);
@@ -591,7 +575,7 @@ call_transmit(struct rpc_task *task)
 	if (task->tk_status < 0)
 		return;
 	xprt_transmit(task);
-	if (!rpcproc_decode(clnt, task->tk_msg.rpc_proc) && task->tk_status >= 0) {
+	if (!rpcproc_decode(clnt, task->tk_msg.rpc_proc)) {
 		task->tk_action = NULL;
 		rpc_wake_up_task(task);
 	}
@@ -605,22 +589,19 @@ call_status(struct rpc_task *task)
 {
 	struct rpc_clnt	*clnt = task->tk_client;
 	struct rpc_xprt *xprt = clnt->cl_xprt;
-	struct rpc_rqst	*req = task->tk_rqstp;
-	int		status;
-
-	if (req->rq_received != 0)
-		task->tk_status = req->rq_received;
+	struct rpc_rqst	*req;
+	int		status = task->tk_status;
 
 	dprintk("RPC: %4d call_status (status %d)\n", 
 				task->tk_pid, task->tk_status);
 
-	status = task->tk_status;
 	if (status >= 0) {
 		task->tk_action = call_decode;
 		return;
 	}
 
 	task->tk_status = 0;
+	req = task->tk_rqstp;
 	switch(status) {
 	case -ETIMEDOUT:
 		task->tk_action = call_timeout;
@@ -685,7 +666,7 @@ call_timeout(struct rpc_task *task)
 		rpc_exit(task, -EIO);
 		return;
 	}
-	if (clnt->cl_chatty && !(task->tk_flags & RPC_CALL_MAJORSEEN) && rpc_ntimeo(&clnt->cl_rtt) > 7) {
+	if (clnt->cl_chatty && !(task->tk_flags & RPC_CALL_MAJORSEEN)) {
 		task->tk_flags |= RPC_CALL_MAJORSEEN;
 		if (req)
 			printk(KERN_NOTICE "%s: server %s not responding, still trying\n",

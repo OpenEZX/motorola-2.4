@@ -165,7 +165,7 @@ struct usb_device;
 /* This structure represents one Isoc request - URB and buffer */
 typedef struct {
 	char *data;
-	struct urb *urb;
+	urb_t *urb;
 } usbvideo_sbuf_t;
 
 typedef struct {

@@ -125,10 +125,7 @@ int ecoscsi_detect(Scsi_Host_Template * tpnt)
     }
 
     NCR5380_init(instance, 0);
-    if (request_region (instance->io_port, instance->n_io_port, "ecoscsi") == NULL) {
-	scsi_unregister(instance);
-	return 0;
-    }
+    request_region (instance->io_port, instance->n_io_port, "ecoscsi");
 
     if (instance->irq != IRQ_NONE)
 	if (request_irq(instance->irq, do_ecoscsi_intr, SA_INTERRUPT, "ecoscsi", NULL)) {

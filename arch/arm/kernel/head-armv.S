@@ -30,6 +30,7 @@
  *
  * swapper_pg_dir, pgtbl and krnladr are all closely related.
  */
+#ifndef CONFIG_XIP_ROM
 #if (TEXTADDR & 0xffff) != 0x8000
 #error TEXTADDR must start at 0xXXXX8000
 #endif
@@ -41,6 +42,26 @@
 		adr	\reg, stext
 		sub	\reg, \reg, #0x4000
 		.endm
+#else
+#if (DATAADDR & 0xffff) != 0x8000
+#error DATAADDR must start at 0xXXXX8000
+#endif
+
+#define	PAGE_OFFSET	0xc0000000
+#ifdef CONFIG_ARCH_LUBBOCK
+#define	PHYS_OFFSET	0xa0000000
+#elif CONFIG_ARCH_OMAP
+#define	PHYS_OFFSET	0x10000000
+#endif
+
+		.globl	SYMBOL_NAME(swapper_pg_dir)
+		.equ	SYMBOL_NAME(swapper_pg_dir), DATAADDR - 0x4000
+
+		.macro	pgtbl, reg, rambase
+		ldr	\reg, PGTBL
+		add	\reg, \reg, #PHYS_OFFSET - PAGE_OFFSET
+		.endm
+#endif
 
 /*
  * Since the page table is closely related to the kernel start address, we
@@ -124,6 +145,36 @@ __entry:
  * FIXME - No bootloader, so manually set 'r1' with our architecture number.
  */
 		mov	r1, #MACH_TYPE_L7200
+#elif defined(CONFIG_ARCH_IXP12EB)
+		mov	r1, #MACH_TYPE_IXP1200
+#elif defined(CONFIG_ARCH_INTEGRATOR)
+		mov	r1, #MACH_TYPE_INTEGRATOR
+#endif
+
+#ifdef CONFIG_XIP_ROM
+
+#if defined(CONFIG_ARCH_LUBBOCK)
+		mov	r1, #MACH_TYPE_LUBBOCK
+#endif
+
+		@ Data cache might be active.
+		@ Be sure to flush kernel binary out of the cache,
+		@ whatever state it is, before it is turned off.
+		@ This is done by fetching through currently executed
+		@ memory to be sure we hit the same cache.
+		bic	r2, pc, #0x1f
+		add	r3, r2, #0x10000	@ 64 kb is quite enough...
+1:		ldr	r0, [r2], #32
+		teq	r2, r3
+		bne	1b
+		mcr	p15, 0, r0, c7, c10, 4	@ drain WB
+		mcr	p15, 0, r0, c7, c7, 0	@ flush I & D caches
+
+		@ disabling MMU and caches
+		mrc	p15, 0, r0, c1, c0, 0	@ read control reg
+		bic	r0, r0, #0x05		@ clear DC, MMU
+		bic	r0, r0, #0x1000		@ clear Icache
+		mcr	p15, 0, r0, c1, c0, 0
 #endif
 
 		mov	r0, #F_BIT | I_BIT | MODE_SVC	@ make sure svc mode
@@ -143,7 +194,6 @@ __entry:
 
 		.type	__switch_data, %object
 __switch_data:	.long	__mmap_switched
-		.long	SYMBOL_NAME(compat)
 		.long	SYMBOL_NAME(__bss_start)
 		.long	SYMBOL_NAME(_end)
 		.long	SYMBOL_NAME(processor_id)
@@ -169,10 +219,20 @@ __ret:		ldr	lr, __switch_data
 		 */
 		.align	5
 __mmap_switched:
+#ifdef CONFIG_XIP_ROM
+		ldr	r3, ETEXT			@ data section copy
+		ldr	r4, SDATA
+		ldr	r5, EDATA
+1:
+		ldr	r6, [r3], #4
+		str	r6, [r4], #4
+		cmp	r4, r5
+		blo	1b
+#endif
+
 		adr	r3, __switch_data + 4
-		ldmia	r3, {r2, r4, r5, r6, r7, r8, sp}@ r2 = compat
+		ldmia	r3, {r4, r5, r6, r7, r8, sp}@ r2 = compat
 							@ sp = stack pointer
-		str	r12, [r2]
 
 		mov	fp, #0				@ Clear BSS (and zero fp)
 1:		cmp	r4, r5
@@ -218,6 +278,7 @@ __create_page_tables:
 		str	r3, [r0], #4
 		teq	r0, r2
 		bne	1b
+#ifndef CONFIG_XIP_ROM
 
 		/*
 		 * Create identity mapping for first MB of kernel to
@@ -245,21 +306,65 @@ __create_page_tables:
 		add	r3, r3, #1 << 20
 		str	r3, [r0], #4			@ KERNEL + 3MB
 
+#ifndef	CONFIG_ARCH_IXP1200
 		/*
 		 * Ensure that the first section of RAM is present.
 		 * we assume that:
 		 *  1. the RAM is aligned to a 32MB boundary
 		 *  2. the kernel is executing in the same 32MB chunk
 		 *     as the start of RAM.
+ 		 *
+		 * This doesn't work on IXP platforms as the lower 8MB or
+ 		 * more of the physical memory map may be reserved for  use 
+		 * by the microengines and cannot be touched by Linux. This
+		 * means that the RAM will not be aligned to 32MB chunks.
 		 */
 		bic	r0, r0, #0x01f00000 >> 18	@ round down
 		and	r2, r5, #0xfe000000		@ round down
 		add	r3, r8, r2			@ flags + rambase
 		str	r3, [r0]
+#endif
+
+#else	/* CONFIG_XIP_ROM */
+
+		mov	r3, pc, lsr #20
+		mov	r3, r3, lsl #20		@ phys kernel start
+
+		add	r0, r4, r3, lsr #18
+		orr	r3, r3, r8
+		str	r3, [r0]
+
+		mov	r0, #TEXTADDR & 0xff000000
+		add	r0, r0, #TEXTADDR & 0x00f00000	@ virt kernel start
+		add	r0, r4, r0, lsr #18
+		add	r2, r3, #4 << 20		@ kernel + 4MB
+
+1:
+		str	r3, [r0], #4
+		add	r3, r3, #1 << 20
+		cmp	r3, r2
+		bne	1b
+
+		bic	r3, r4, #0x000ff000		@ ram start
+		add	r0, r4, r3, lsr #18
+		orr	r3, r3, r8
+		str	r3, [r0], #4
+
+		add	r0, r3, #PAGE_OFFSET - PHYS_OFFSET
+		add	r0, r4, r0, lsr #18
+		add	r2, r3, #4 << 20		@ ram + 4MB
+
+1:
+		str	r3, [r0], #4
+		add	r3, r3, #1 << 20
+		cmp	r3, r2
+		bne	1b
+
+#endif	/* CONFIG_XIP_ROM */
 
 		bic	r8, r8, #0x0c			@ turn off cacheable
 							@ and bufferable bits
-#ifdef CONFIG_DEBUG_LL
+#if	defined(CONFIG_DEBUG_LL) || defined(CONFIG_KGDB)
 		/*
 		 * Map in IO space for serial debugging.
 		 * This allows debug messages to be output
@@ -419,3 +524,13 @@ __lookup_architecture_type:
 		mov	pc, lr
 2:		ldmib	r4, {r5, r6, r7}		@ found, get results
 		mov	pc, lr
+
+#ifdef CONFIG_XIP_ROM
+
+PGTBL:		.long	SYMBOL_NAME(swapper_pg_dir)
+
+ETEXT:		.long	SYMBOL_NAME(_endtext)
+SDATA:		.long	SYMBOL_NAME(_sdata)
+EDATA:		.long	SYMBOL_NAME(__bss_start)
+
+#endif

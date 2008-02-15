@@ -11,9 +11,33 @@ LINKFLAGS	:=-p -X -T arch/arm/vmlinux.lds
 GZFLAGS		:=-9
 CFLAGS		+=-fno-common -pipe
 
+ifeq ($(CONFIG_FRAME_POINTER),y)
+CFLAGS		:=$(CFLAGS:-fomit-frame-pointer=-mapcs -mno-sched-prolog)
+endif
+
+CFLAGS		:=$(CFLAGS:-O2=-Os)
+
 ifeq ($(CONFIG_DEBUG_INFO),y)
 CFLAGS		+=-g
 endif
+
+ifeq ($(CONFIG_KGDB),y)
+CFLAGS		:=$(CFLAGS:-fomit-frame-pointer=-mapcs)
+CFLAGS		+=-ggdb
+endif
+
+ifeq ($(CONFIG_CPU_BIG_ENDIAN),y)
+CC		+= -mbig-endian
+AS		+= -EB
+LD		+= -EB
+endif
+
+
+#
+## Determine GCC version for proper compiler options
+#
+GCC_VERSION	:= $(shell $(CROSS_COMPILE)gcc  -v 2>&1 | grep version | cut -f3 -d' ' | cut -f1 -d.)
+
 
 # Select CPU dependent flags.  Note that order of declaration is important;
 # the options further down the list override previous items.
@@ -25,9 +49,17 @@ apcs-$(CONFIG_CPU_26)		:=-mapcs-26 -mcpu=arm3 -Os
 
 # This selects which instruction set is used.
 arch-y				:=
-arch-$(CONFIG_CPU_32v3)		:=-march=armv3
-arch-$(CONFIG_CPU_32v4)		:=-march=armv4
-arch-$(CONFIG_CPU_32v5)		:=-march=armv5
+arch-$(CONFIG_CPU_32v3)		:=-D__LINUX_ARM_ARCH__=3 -march=armv3
+arch-$(CONFIG_CPU_32v4)		:=-D__LINUX_ARM_ARCH__=4 -march=armv4
+arch-$(CONFIG_CPU_32v5)		:=-D__LINUX_ARM_ARCH__=5 -march=armv5
+
+ifeq ($(GCC_VERSION),3)
+  # The -march=armv5te doesn't seem to really enable XScale features... Why?
+  #arch-$(CONFIG_CPU_XSCALE)	:=-D__LINUX_ARM_ARCH__=5 -march=armv5te
+  arch-$(CONFIG_CPU_XSCALE)	:=-D__LINUX_ARM_ARCH__=5 -mcpu=xscale
+else
+  arch-$(CONFIG_CPU_XSCALE)	:=-D__LINUX_ARM_ARCH__=5 -march=armv4 -Wa,-mxscale
+endif
 
 # This selects how we optimise for the processor.
 tune-y				:=
@@ -39,6 +71,12 @@ tune-$(CONFIG_CPU_ARM922T)	:=-mtune=arm9tdmi
 tune-$(CONFIG_CPU_ARM926T)	:=-mtune=arm9tdmi
 tune-$(CONFIG_CPU_SA110)	:=-mtune=strongarm110
 tune-$(CONFIG_CPU_SA1100)	:=-mtune=strongarm1100
+
+ifeq ($(GCC_VERSION),3)
+  tune-$(CONFIG_CPU_XSCALE)	:=-mtune=xscale
+else
+  tune-$(CONFIG_CPU_XSCALE)	:=-mtune=strongarm
+endif
 
 CFLAGS_BOOT	:=$(apcs-y) $(arch-y) $(tune-y) -mshort-load-bytes -msoft-float
 CFLAGS		+=$(apcs-y) $(arch-y) $(tune-y) -mshort-load-bytes -msoft-float
@@ -58,7 +96,7 @@ endif
 
 ifeq ($(CONFIG_CPU_32),y)
 PROCESSOR	 = armv
-TEXTADDR	 = 0xC0008000
+TEXTADDR	 = 0x$(shell echo $(CONFIG_KERNEL_START)|sed -e's/0000$$/8000/'|sed -e's/^0x//')
 LDSCRIPT	 = arch/arm/vmlinux-armv.lds.in
 endif
 
@@ -113,6 +151,10 @@ endif
 MACHINE		 = sa1100
 endif
 
+ifeq ($(CONFIG_ARCH_PXA),y)
+MACHINE		 = pxa
+endif
+
 ifeq ($(CONFIG_ARCH_L7200),y)
 MACHINE		 = l7200
 endif
@@ -135,11 +177,34 @@ MACHINE		 = clps711x
 endif
 
 ifeq ($(CONFIG_ARCH_FORTUNET),y)
-TEXTADDR	 = 0xc0008000
+TEXTADDR	 = 0xc0208000
 endif
 
 ifeq ($(CONFIG_ARCH_ANAKIN),y)
 MACHINE		 = anakin
+endif
+
+ifeq ($(CONFIG_ARCH_IOP3XX),y)
+MACHINE		 = iop3xx
+endif
+
+ifeq ($(CONFIG_ARCH_ADIFCC),y)
+MACHINE		= adifcc
+endif
+
+ifeq ($(CONFIG_ARCH_IXP1200),y)
+MACHINE		 = ixp1200
+endif
+
+ifeq ($(CONFIG_XIP_ROM),y) 
+  DATAADDR   := $(TEXTADDR)
+  # Replace phys addr with virt addr while keeping offset from base.
+  # Virt base addr also defined in include/asm-arm/arch-*/hardware.h
+  TEXTADDR    = $(shell echo 0x`echo $(CONFIG_XIP_PHYS_ADDR)|sed -e's/^0x//'` |\
+			awk --non-decimal-data '/[:xdigit:]/ \
+			  {printf("0x%x\n",and($$0,0x001fffff)+0xe8000000)}' )
+  LDSCRIPT    = arch/arm/vmlinux-armv-xip.lds.in
+  export DATAADDR
 endif
 
 export	MACHINE PROCESSOR TEXTADDR GZFLAGS CFLAGS_BOOT
@@ -208,7 +273,7 @@ arch/arm/vmlinux.lds: $(LDSCRIPT) dummy
 arch/arm/kernel arch/arm/mm arch/arm/lib: dummy
 	$(MAKE) CFLAGS="$(CFLAGS) $(CFLAGS_KERNEL)" $(subst $@, _dir_$@, $@)
 
-bzImage zImage zinstall Image bootpImage install: vmlinux
+bzImage zImage zinstall Image xipImage bootpImage install %.swap: vmlinux
 	@$(MAKEBOOT) $@
 
 CLEAN_FILES	+= \

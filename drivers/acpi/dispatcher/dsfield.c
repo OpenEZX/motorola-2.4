@@ -181,7 +181,7 @@ acpi_ds_get_field_names (
 	acpi_status             status;
 
 
-	PROC_NAME("acpi_ds_get_field_names"); 
+	FUNCTION_TRACE_U32 ("Ds_get_field_names", info);
 
 
 	/* First field starts at bit zero */

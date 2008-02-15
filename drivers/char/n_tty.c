@@ -23,11 +23,6 @@
  * 2000/01/20   Fixed SMP locking on put_tty_queue using bits of 
  *		the patch by Andrew J. Kroll <ag784@freenet.buffalo.edu>
  *		who actually finally proved there really was a race.
- *
- * 2002/03/18   Implemented n_tty_wakeup to send SIGIO POLL_OUTs to
- *		waiting writing processes-Sapan Bhatia <sapan@corewars.org>.
- *		Also fixed a bug in BLOCKING mode where write_chan returns
- *		EAGAIN
  */
 
 #include <linux/types.h>
@@ -49,6 +44,27 @@
 #include <asm/uaccess.h>
 #include <asm/system.h>
 #include <asm/bitops.h>
+
+/*----------------------------------------------------------
+ * added by jordan for btuart flip flow control :03/09/12
+ * for flip_unthrottle can access btuart_flip_flow_clt
+ * 
+ *----------------------------------------------------------*/
+#include <linux/serial.h>
+#include <linux/serialP.h>
+#include <linux/serial_reg.h>
+#include <asm/serial.h>
+#include <asm/system.h>
+#include <asm/io.h>
+#include <asm/irq.h>
+#include <asm/bitops.h>
+#include <asm/dma.h>
+
+extern int btuart_flip_flow_ctl;
+extern void rs_flip_unthrottle(struct tty_struct *tty);
+/*----------------------------------------------------------
+ * end by jordan 
+ * ---------------------------------------------------------*/
 
 #define CONSOLE_DEV MKDEV(TTY_MAJOR,0)
 #define SYSCONS_DEV  MKDEV(TTYAUX_MAJOR,1)
@@ -716,22 +732,6 @@ static int n_tty_receive_room(struct tty_struct *tty)
 	return 0;
 }
 
-/*
- * Required for the ptys, serial driver etc. since processes
- * that attach themselves to the master and rely on ASYNC
- * IO must be woken up
- */
-
-static void n_tty_write_wakeup(struct tty_struct *tty)
-{
-	if (tty->fasync)
-	{
- 		set_bit(TTY_DO_WRITE_WAKEUP, &tty->flags);
-		kill_fasync(&tty->fasync, SIGIO, POLL_OUT);
-	}
-	return;
-}
-
 static void n_tty_receive_buf(struct tty_struct *tty, const unsigned char *cp,
 			      char *fp, int count)
 {
@@ -788,6 +788,20 @@ static void n_tty_receive_buf(struct tty_struct *tty, const unsigned char *cp,
 			tty->driver.flush_chars(tty);
 	}
 
+	/*-----------------------------------------------------------
+	 * added by jordan for btuart flip flow control :03/09/12
+	 * --------------------------------------------------------*/
+	  if(tty  &&
+	     tty->driver.btuart)
+	    
+	  {
+		rs_flip_unthrottle(tty);
+	  }
+	/*------------------------------------------------------------
+	 * end by jordan
+	 * -----------------------------------------------------------*/
+
+		
 	if (!tty->icanon && (tty->read_cnt >= tty->minimum_to_wake)) {
 		kill_fasync(&tty->fasync, SIGIO, POLL_IN);
 		if (waitqueue_active(&tty->read_wait))
@@ -1178,8 +1192,6 @@ static ssize_t write_chan(struct tty_struct * tty, struct file * file,
 			while (nr > 0) {
 				ssize_t num = opost_block(tty, b, nr);
 				if (num < 0) {
-					if (num == -EAGAIN)
-						break;
 					retval = num;
 					goto break_out;
 				}
@@ -1259,6 +1271,6 @@ struct tty_ldisc tty_ldisc_N_TTY = {
 	normal_poll,		/* poll */
 	n_tty_receive_buf,	/* receive_buf */
 	n_tty_receive_room,	/* receive_room */
-	n_tty_write_wakeup	/* write_wakeup */
+	0			/* write_wakeup */
 };
 

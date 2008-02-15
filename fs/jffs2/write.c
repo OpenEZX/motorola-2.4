@@ -1,7 +1,7 @@
 /*
  * JFFS2 -- Journalling Flash File System, Version 2.
  *
- * Copyright (C) 2001 Red Hat, Inc.
+ * Copyright (C) 2001, 2002 Red Hat, Inc.
  *
  * Created by David Woodhouse <dwmw2@cambridge.redhat.com>
  *
@@ -31,55 +31,34 @@
  * provisions above, a recipient may use your version of this file
  * under either the RHEPL or the GPL.
  *
- * $Id: write.c,v 1.30.2.1 2002/08/08 08:36:31 dwmw2 Exp $
+ * $Id: write.c,v 1.38 2002/01/09 13:25:58 dwmw2 Exp $
  *
  */
 
 #include <linux/kernel.h>
 #include <linux/fs.h>
-#include <linux/jffs2.h>
+#include <linux/slab.h>
 #include <linux/mtd/mtd.h>
 #include "nodelist.h"
 #include "crc32.h"
 
-/* jffs2_new_inode: allocate a new inode and inocache, add it to the hash,
-   fill in the raw_inode while you're at it. */
-struct inode *jffs2_new_inode (struct inode *dir_i, int mode, struct jffs2_raw_inode *ri)
+
+int jffs2_do_new_inode(struct jffs2_sb_info *c, struct jffs2_inode_info *f, uint32_t mode, struct jffs2_raw_inode *ri)
 {
-	struct inode *inode;
-	struct super_block *sb = dir_i->i_sb;
 	struct jffs2_inode_cache *ic;
-	struct jffs2_sb_info *c;
-	struct jffs2_inode_info *f;
-
-	D1(printk(KERN_DEBUG "jffs2_new_inode(): dir_i %ld, mode 0x%x\n", dir_i->i_ino, mode));
-
-	c = JFFS2_SB_INFO(sb);
-	memset(ri, 0, sizeof(*ri));
 
 	ic = jffs2_alloc_inode_cache();
 	if (!ic) {
-		return ERR_PTR(-ENOMEM);
+		return -ENOMEM;
 	}
 	memset(ic, 0, sizeof(*ic));
-	
-	inode = new_inode(sb);
-	
-	if (!inode) {
-		jffs2_free_inode_cache(ic);
-		return ERR_PTR(-ENOMEM);
-	}
 
-	/* Alloc jffs2_inode_info when that's split in 2.5 */
-
-	f = JFFS2_INODE_INFO(inode);
-	memset(f, 0, sizeof(*f));
 	init_MUTEX_LOCKED(&f->sem);
 	f->inocache = ic;
-	inode->i_nlink = f->inocache->nlink = 1;
+	f->inocache->nlink = 1;
 	f->inocache->nodes = (struct jffs2_raw_node_ref *)f->inocache;
-	f->inocache->ino = ri->ino = inode->i_ino = ++c->highest_ino;
-	D1(printk(KERN_DEBUG "jffs2_new_inode(): Assigned ino# %d\n", ri->ino));
+	f->inocache->ino = ri->ino =  ++c->highest_ino;
+	D1(printk(KERN_DEBUG "jffs2_do_new_inode(): Assigned ino# %d\n", ri->ino));
 	jffs2_add_ino_cache(c, f->inocache);
 
 	ri->magic = JFFS2_MAGIC_BITMASK;
@@ -88,7 +67,38 @@ struct inode *jffs2_new_inode (struct inode *dir_i, int mode, struct jffs2_raw_i
 	ri->hdr_crc = crc32(0, ri, sizeof(struct jffs2_unknown_node)-4);
 	ri->mode = mode;
 	f->highest_version = ri->version = 1;
+
+	return 0;
+}
+
+/* jffs2_new_inode: allocate a new inode and inocache, add it to the hash,
+   fill in the raw_inode while you're at it. */
+struct inode *jffs2_new_inode (struct inode *dir_i, int mode, struct jffs2_raw_inode *ri)
+{
+	struct inode *inode;
+	struct super_block *sb = dir_i->i_sb;
+	struct jffs2_sb_info *c;
+	struct jffs2_inode_info *f;
+	int ret;
+
+	D1(printk(KERN_DEBUG "jffs2_new_inode(): dir_i %ld, mode 0x%x\n", dir_i->i_ino, mode));
+
+	c = JFFS2_SB_INFO(sb);
+	
+	inode = new_inode(sb);
+	
+	if (!inode)
+		return ERR_PTR(-ENOMEM);
+
+	/* Alloc jffs2_inode_info when that's split in 2.5 */
+
+	f = JFFS2_INODE_INFO(inode);
+	memset(f, 0, sizeof(*f));
+
+	memset(ri, 0, sizeof(*ri));
+	/* Set OS-specific defaults for new inodes */
 	ri->uid = current->fsuid;
+
 	if (dir_i->i_mode & S_ISGID) {
 		ri->gid = dir_i->i_gid;
 		if (S_ISDIR(mode))
@@ -96,6 +106,15 @@ struct inode *jffs2_new_inode (struct inode *dir_i, int mode, struct jffs2_raw_i
 	} else {
 		ri->gid = current->fsgid;
 	}
+	ri->mode = mode;
+	ret = jffs2_do_new_inode (c, f, mode, ri);
+	if (ret) {
+		make_bad_inode(inode);
+		iput(inode);
+		return ERR_PTR(ret);
+	}
+	inode->i_nlink = 1;
+	inode->i_ino = ri->ino;
 	inode->i_mode = ri->mode;
 	inode->i_gid = ri->gid;
 	inode->i_uid = ri->uid;
@@ -110,9 +129,8 @@ struct inode *jffs2_new_inode (struct inode *dir_i, int mode, struct jffs2_raw_i
 	return inode;
 }
 
-/* This ought to be in core MTD code. All registered MTD devices
-   without writev should have this put in place. Bug the MTD
-   maintainer */
+/* This ought to be in core MTD code. All registered MTD devices without writev should have
+   this put in place. Bug the MTD maintainer */
 static int mtd_fake_writev(struct mtd_info *mtd, const struct iovec *vecs, unsigned long count, loff_t to, size_t *retlen)
 {
 	unsigned long i;
@@ -120,7 +138,7 @@ static int mtd_fake_writev(struct mtd_info *mtd, const struct iovec *vecs, unsig
 	int ret = 0;
 
 	for (i=0; i<count; i++) {
-		ret = mtd->write(mtd, to, vecs[i].iov_len, &thislen, vecs[i].iov_base);
+		mtd->write(mtd, to, vecs[i].iov_len, &thislen, vecs[i].iov_base);
 		totlen += thislen;
 		if (ret || thislen != vecs[i].iov_len)
 			break;
@@ -132,21 +150,21 @@ static int mtd_fake_writev(struct mtd_info *mtd, const struct iovec *vecs, unsig
 }
 
 
-static inline int mtd_writev(struct mtd_info *mtd, const struct iovec *vecs, unsigned long count, loff_t to, size_t *retlen)
+static inline int jffs2_flash_writev(struct jffs2_sb_info *c, const struct iovec *vecs, unsigned long count, loff_t to, size_t *retlen)
 {
-	if (mtd->writev)
-		return mtd->writev(mtd,vecs,count,to,retlen);
+	if (c->mtd->writev)
+		return c->mtd->writev(c->mtd, vecs, count, to, retlen);
 	else
-		return mtd_fake_writev(mtd, vecs, count, to, retlen);
+		return mtd_fake_writev(c->mtd, vecs, count, to, retlen);
 }
 
-static void writecheck(struct mtd_info *mtd, __u32 ofs)
+static void writecheck(struct jffs2_sb_info *c, uint32_t ofs)
 {
 	unsigned char buf[16];
-	ssize_t retlen;
+	size_t retlen;
 	int ret, i;
 
-	ret = mtd->read(mtd, ofs, 16, &retlen, buf);
+	ret = jffs2_flash_read(c, ofs, 16, &retlen, buf);
 	if (ret && retlen != 16) {
 		D1(printk(KERN_DEBUG "read failed or short in writecheck(). ret %d, retlen %d\n", ret, retlen));
 		return;
@@ -171,14 +189,12 @@ static void writecheck(struct mtd_info *mtd, __u32 ofs)
 /* jffs2_write_dnode - given a raw_inode, allocate a full_dnode for it, 
    write it to the flash, link it into the existing inode/fragment list */
 
-struct jffs2_full_dnode *jffs2_write_dnode(struct inode *inode, struct jffs2_raw_inode *ri, const unsigned char *data, __u32 datalen, __u32 flash_ofs,  __u32 *writelen)
+struct jffs2_full_dnode *jffs2_write_dnode(struct jffs2_sb_info *c, struct jffs2_inode_info *f, struct jffs2_raw_inode *ri, const unsigned char *data, uint32_t datalen, uint32_t flash_ofs,  uint32_t *writelen)
 
 {
-	struct jffs2_sb_info *c = JFFS2_SB_INFO(inode->i_sb);
-	struct jffs2_inode_info *f = JFFS2_INODE_INFO(inode);
 	struct jffs2_raw_node_ref *raw;
 	struct jffs2_full_dnode *fn;
-	ssize_t retlen;
+	size_t retlen;
 	struct iovec vecs[2];
 	int ret;
 
@@ -192,7 +208,7 @@ struct jffs2_full_dnode *jffs2_write_dnode(struct inode *inode, struct jffs2_raw
 	vecs[1].iov_base = (unsigned char *)data;
 	vecs[1].iov_len = datalen;
 
-	writecheck(c->mtd, flash_ofs);
+	writecheck(c, flash_ofs);
 
 	if (ri->totlen != sizeof(*ri) + datalen) {
 		printk(KERN_WARNING "jffs2_write_dnode: ri->totlen (0x%08x) != sizeof(*ri) (0x%08x) + datalen (0x%08x)\n", ri->totlen, sizeof(*ri), datalen);
@@ -215,7 +231,7 @@ struct jffs2_full_dnode *jffs2_write_dnode(struct inode *inode, struct jffs2_raw
 	fn->frags = 0;
 	fn->raw = raw;
 
-	ret = mtd_writev(c->mtd, vecs, 2, flash_ofs, &retlen);
+	ret = jffs2_flash_writev(c, vecs, 2, flash_ofs, &retlen);
 	if (ret || (retlen != sizeof(*ri) + datalen)) {
 		printk(KERN_NOTICE "Write of %d bytes at 0x%08x failed. returned %d, retlen %d\n", 
 		       sizeof(*ri)+datalen, flash_ofs, ret, retlen);
@@ -257,18 +273,16 @@ struct jffs2_full_dnode *jffs2_write_dnode(struct inode *inode, struct jffs2_raw
 	return fn;
 }
 
-struct jffs2_full_dirent *jffs2_write_dirent(struct inode *inode, struct jffs2_raw_dirent *rd, const unsigned char *name, __u32 namelen, __u32 flash_ofs,  __u32 *writelen)
+struct jffs2_full_dirent *jffs2_write_dirent(struct jffs2_sb_info *c, struct jffs2_inode_info *f, struct jffs2_raw_dirent *rd, const unsigned char *name, uint32_t namelen, uint32_t flash_ofs,  uint32_t *writelen)
 {
-	struct jffs2_sb_info *c = JFFS2_SB_INFO(inode->i_sb);
-	struct jffs2_inode_info *f = JFFS2_INODE_INFO(inode);
 	struct jffs2_raw_node_ref *raw;
 	struct jffs2_full_dirent *fd;
-	ssize_t retlen;
+	size_t retlen;
 	struct iovec vecs[2];
 	int ret;
 
 	D1(printk(KERN_DEBUG "jffs2_write_dirent(ino #%u, name at *0x%p \"%s\"->ino #%u, name_crc 0x%08x)\n", rd->pino, name, name, rd->ino, rd->name_crc));
-	writecheck(c->mtd, flash_ofs);
+	writecheck(c, flash_ofs);
 
 	D1(if(rd->hdr_crc != crc32(0, rd, sizeof(struct jffs2_unknown_node)-4)) {
 		printk(KERN_CRIT "Eep. CRC not correct in jffs2_write_dirent()\n");
@@ -305,7 +319,7 @@ struct jffs2_full_dirent *jffs2_write_dirent(struct inode *inode, struct jffs2_r
 	fd->name[namelen]=0;
 	fd->raw = raw;
 
-	ret = mtd_writev(c->mtd, vecs, 2, flash_ofs, &retlen);
+	ret = jffs2_flash_writev(c, vecs, 2, flash_ofs, &retlen);
 		if (ret || (retlen != sizeof(*rd) + namelen)) {
 			printk(KERN_NOTICE "Write of %d bytes at 0x%08x failed. returned %d, retlen %d\n", 
 			       sizeof(*rd)+namelen, flash_ofs, ret, retlen);
@@ -332,3 +346,107 @@ struct jffs2_full_dirent *jffs2_write_dirent(struct inode *inode, struct jffs2_r
 	f->inocache->nodes = raw;
 	return fd;
 }
+
+/* The OS-specific code fills in the metadata in the jffs2_raw_inode for us, so that
+   we don't have to go digging in struct inode or its equivalent. It should set:
+   mode, uid, gid, (starting)isize, atime, ctime, mtime */
+int jffs2_write_inode_range(struct jffs2_sb_info *c, struct jffs2_inode_info *f,
+			    struct jffs2_raw_inode *ri, unsigned char *buf, 
+			    uint32_t offset, uint32_t writelen, uint32_t *retlen)
+{
+	int ret = 0;
+	uint32_t writtenlen = 0;
+
+       	D1(printk(KERN_DEBUG "jffs2_write_inode_range(): Ino #%u, ofs 0x%x, len 0x%x\n",
+		  f->inocache->ino, offset, writelen));
+		
+	while(writelen) {
+		struct jffs2_full_dnode *fn;
+		unsigned char *comprbuf = NULL;
+		unsigned char comprtype = JFFS2_COMPR_NONE;
+		uint32_t phys_ofs, alloclen;
+		uint32_t datalen, cdatalen;
+
+		D2(printk(KERN_DEBUG "jffs2_commit_write() loop: 0x%x to write to 0x%x\n", writelen, offset));
+
+		ret = jffs2_reserve_space(c, sizeof(*ri) + JFFS2_MIN_DATA_LEN, &phys_ofs, &alloclen, ALLOC_NORMAL);
+		if (ret) {
+			D1(printk(KERN_DEBUG "jffs2_reserve_space returned %d\n", ret));
+			break;
+		}
+		down(&f->sem);
+		datalen = writelen;
+		cdatalen = min(alloclen - sizeof(*ri), writelen);
+
+		comprbuf = kmalloc(cdatalen, GFP_KERNEL);
+		if (comprbuf) {
+			comprtype = jffs2_compress(buf, comprbuf, &datalen, &cdatalen);
+		}
+		if (comprtype == JFFS2_COMPR_NONE) {
+			/* Either compression failed, or the allocation of comprbuf failed */
+			if (comprbuf)
+				kfree(comprbuf);
+			comprbuf = buf;
+			datalen = cdatalen;
+		}
+		/* Now comprbuf points to the data to be written, be it compressed or not.
+		   comprtype holds the compression type, and comprtype == JFFS2_COMPR_NONE means
+		   that the comprbuf doesn't need to be kfree()d. 
+		*/
+
+		ri->magic = JFFS2_MAGIC_BITMASK;
+		ri->nodetype = JFFS2_NODETYPE_INODE;
+		ri->totlen = sizeof(*ri) + cdatalen;
+		ri->hdr_crc = crc32(0, ri, sizeof(struct jffs2_unknown_node)-4);
+
+		ri->ino = f->inocache->ino;
+		ri->version = ++f->highest_version;
+		ri->isize = max(ri->isize, offset + datalen);
+		ri->offset = offset;
+		ri->csize = cdatalen;
+		ri->dsize = datalen;
+		ri->compr = comprtype;
+		ri->node_crc = crc32(0, ri, sizeof(*ri)-8);
+		ri->data_crc = crc32(0, comprbuf, cdatalen);
+
+		fn = jffs2_write_dnode(c, f, ri, comprbuf, cdatalen, phys_ofs, NULL);
+
+		jffs2_complete_reservation(c);
+
+		if (comprtype != JFFS2_COMPR_NONE)
+			kfree(comprbuf);
+
+		if (IS_ERR(fn)) {
+			ret = PTR_ERR(fn);
+			up(&f->sem);
+			break;
+		}
+		ret = jffs2_add_full_dnode_to_inode(c, f, fn);
+		if (f->metadata) {
+			jffs2_mark_node_obsolete(c, f->metadata->raw);
+			jffs2_free_full_dnode(f->metadata);
+			f->metadata = NULL;
+		}
+		up(&f->sem);
+		if (ret) {
+			/* Eep */
+			D1(printk(KERN_DEBUG "Eep. add_full_dnode_to_inode() failed in commit_write, returned %d\n", ret));
+			jffs2_mark_node_obsolete(c, fn->raw);
+			jffs2_free_full_dnode(fn);
+			break;
+		}
+		if (!datalen) {
+			printk(KERN_WARNING "Eep. We didn't actually write any data in jffs2_write_inode_range()\n");
+			ret = -EIO;
+			break;
+		}
+		D1(printk(KERN_DEBUG "increasing writtenlen by %d\n", datalen));
+		writtenlen += datalen;
+		offset += datalen;
+		writelen -= datalen;
+		buf += datalen;
+	}
+	*retlen = writtenlen;
+	return ret;
+}
+

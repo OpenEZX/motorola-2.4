@@ -50,8 +50,11 @@ static int coda_dentry_revalidate(struct dentry *de, int);
 static int coda_dentry_delete(struct dentry *);
 
 /* support routines */
-static int coda_venus_readdir(struct file *filp, filldir_t filldir,
-			      void *dirent, struct dentry *dir);
+static void coda_prepare_fakefile(struct file *coda_file, 
+				  struct dentry *open_dentry,
+				  struct file *open_file);
+static int coda_venus_readdir(struct file *filp, void *dirent, 
+			      filldir_t filldir);
 int coda_fsync(struct file *, struct dentry *dentry, int datasync);
 
 int coda_hasmknod;
@@ -206,7 +209,7 @@ static int coda_create(struct inode *dir, struct dentry *de, int mode)
         int error=0;
 	const char *name=de->d_name.name;
 	int length=de->d_name.len;
-	struct inode *inode;
+	struct inode *inode = NULL;
 	struct ViceFid newfid;
 	struct coda_vattr attrs;
 
@@ -244,7 +247,7 @@ static int coda_mknod(struct inode *dir, struct dentry *de, int mode, int rdev)
         int error=0;
 	const char *name=de->d_name.name;
 	int length=de->d_name.len;
-	struct inode *inode;
+	struct inode *result = NULL;
 	struct ViceFid newfid;
 	struct coda_vattr attrs;
 
@@ -269,22 +272,23 @@ static int coda_mknod(struct inode *dir, struct dentry *de, int mode, int rdev)
 		return error;
 	}
 
-	inode = coda_iget(dir->i_sb, &newfid, &attrs);
-	if ( IS_ERR(inode) ) {
+	error = coda_cnode_make(&result, &newfid, dir->i_sb);
+	if ( error ) {
 		d_drop(de);
-		return PTR_ERR(inode);
+		result = NULL;
+		return error;
 	}
 
 	/* invalidate the directory cnode's attributes */
 	coda_dir_changed(dir, 0);
-	d_instantiate(de, inode);
+	d_instantiate(de, result);
         return 0;
 }			     
 
 static int coda_mkdir(struct inode *dir, struct dentry *de, int mode)
 {
 	struct inode *inode;
-	struct coda_vattr attrs;
+	struct coda_vattr attr;
 	const char *name = de->d_name.name;
 	int len = de->d_name.len;
 	int error;
@@ -298,9 +302,9 @@ static int coda_mkdir(struct inode *dir, struct dentry *de, int mode)
 	CDEBUG(D_INODE, "mkdir %s (len %d) in %s, mode %o.\n", 
 	       name, len, coda_i2s(dir), mode);
 
-	attrs.va_mode = mode;
+	attr.va_mode = mode;
 	error = venus_mkdir(dir->i_sb, coda_i2f(dir), 
-			       name, len, &newfid, &attrs);
+			       name, len, &newfid, &attr);
         
         if ( error ) {
 	        CDEBUG(D_INODE, "mkdir error: %s result %d\n", 
@@ -312,10 +316,10 @@ static int coda_mkdir(struct inode *dir, struct dentry *de, int mode)
 	CDEBUG(D_INODE, "mkdir: new dir has fid %s.\n", 
 	       coda_f2s(&newfid)); 
 
-	inode = coda_iget(dir->i_sb, &newfid, &attrs);
-	if ( IS_ERR(inode) ) {
+	error = coda_cnode_make(&inode, &newfid, dir->i_sb);
+	if ( error ) {
 		d_drop(de);
-		return PTR_ERR(inode);
+		return error;
 	}
 	
 	/* invalidate the directory cnode's attributes */
@@ -486,143 +490,156 @@ static int coda_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 
 /* file operations for directories */
-int coda_readdir(struct file *coda_file, void *dirent, filldir_t filldir)
+int coda_readdir(struct file *file, void *dirent,  filldir_t filldir)
 {
-	struct dentry *coda_dentry = coda_file->f_dentry;
-	struct coda_file_info *cfi;
-	struct file *host_file;
-	int ret;
-
-	cfi = CODA_FTOC(coda_file);
-	if (!cfi || cfi->cfi_magic != CODA_MAGIC) BUG();
-	host_file = cfi->cfi_container;
+        int result = 0;
+	struct dentry *cdentry;
+	struct inode *cinode, *inode = file->f_dentry->d_inode;
+	struct file *cfile, fakefile;
+	struct coda_inode_info *cii = ITOC(inode);
 
 	coda_vfs_stat.readdir++;
 
-	down(&host_file->f_dentry->d_inode->i_sem);
-	host_file->f_pos = coda_file->f_pos;
+        cfile = cii->c_container;
+        if (!cfile) BUG();
 
-	if ( !host_file->f_op->readdir ) {
+	cinode = cii->c_container->f_dentry->d_inode;
+	if ( S_ISREG(cinode->i_mode) ) {
 		/* Venus: we must read Venus dirents from the file */
-		ret = coda_venus_readdir(host_file, filldir, dirent, coda_dentry);
-	} else {
-		/* potemkin case: we were handed a directory inode */
-		ret = vfs_readdir(host_file, filldir, dirent);
-	}
+		cdentry = cii->c_container->f_dentry;
+		coda_prepare_fakefile(file, cdentry, &fakefile);
 
-	coda_file->f_pos = host_file->f_pos;
-	up(&host_file->f_dentry->d_inode->i_sem);
+		result = coda_venus_readdir(&fakefile, dirent, filldir);
 
-	return ret;
-}
+		file->f_pos = fakefile.f_pos;
+		file->f_version = fakefile.f_version;
+        } else {
+		/* potemkin case: we are handed a directory inode */
+		result = vfs_readdir(file, filldir, dirent);
+        }
 
-static inline unsigned int CDT2DT(unsigned char cdt)
-{
-	unsigned int dt;
-
-	switch(cdt) {
-	case CDT_UNKNOWN: dt = DT_UNKNOWN; break;
-	case CDT_FIFO:	  dt = DT_FIFO;    break;
-	case CDT_CHR:	  dt = DT_CHR;     break;
-	case CDT_DIR:	  dt = DT_DIR;     break;
-	case CDT_BLK:	  dt = DT_BLK;     break;
-	case CDT_REG:	  dt = DT_REG;     break;
-	case CDT_LNK:	  dt = DT_LNK;     break;
-	case CDT_SOCK:	  dt = DT_SOCK;    break;
-	case CDT_WHT:	  dt = DT_WHT;     break;
-	default:	  dt = DT_UNKNOWN; break;
-	}
-	return dt;
+	UPDATE_ATIME(inode);
+	return result;
 }
 
 /* support routines */
-static int coda_venus_readdir(struct file *filp, filldir_t filldir,
-			      void *dirent, struct dentry *dir)
+
+/* instantiate a fake file to pass to coda_venus_readdir */
+static void coda_prepare_fakefile(struct file *coda_file, 
+				  struct dentry *cont_dentry,
+				  struct file *fake_file)
 {
-	int result = 0; /* # of entries returned */
-	struct venus_dirent *vdir;
-	unsigned long vdir_size =
-	    (unsigned long)(&((struct venus_dirent *)0)->d_name);
-	unsigned int type;
-	struct qstr name;
-	ino_t ino;
-	int ret, i;
+	fake_file->f_dentry = cont_dentry;
+	fake_file->f_pos = coda_file->f_pos;
+	fake_file->f_version = coda_file->f_version;
+	fake_file->f_op = cont_dentry->d_inode->i_fop;
+	fake_file->f_flags = coda_file->f_flags;
+	return ;
+}
 
-	vdir = (struct venus_dirent *)kmalloc(sizeof(*vdir), GFP_KERNEL);
-	if (!vdir) return -ENOMEM;
+/* 
+ * this structure is manipulated by filldir in vfs layer.
+ * the count holds the remaining amount of space in the getdents buffer,
+ * beyond the current_dir pointer.
+ *
+ * What structure is this comment referring to?? -JH
+ */
 
-	i = filp->f_pos;
-	switch(i) {
-	case 0:
-		ret = filldir(dirent, ".", 1, 0, dir->d_inode->i_ino, DT_DIR);
-		if (ret < 0) break;
-		result++;
-		filp->f_pos++;
-		/* fallthrough */
-	case 1:
-		ret = filldir(dirent, "..", 2, 1, dir->d_parent->d_inode->i_ino, DT_DIR);
-		if (ret < 0) break;
-		result++;
-		filp->f_pos++;
-		/* fallthrough */
-	default:
-	while (1) {
-		/* read entries from the directory file */
-		ret = kernel_read(filp, filp->f_pos - 2, (char *)vdir,
-				  sizeof(*vdir));
-		if (ret < 0) {
-			printk("coda_venus_readdir: read dir failed %d\n", ret);
-			break;
-		}
-		if (ret == 0) break; /* end of directory file reached */
+/* should be big enough to hold any single directory entry */
+#define DIR_BUFSIZE 2048
 
-		/* catch truncated reads */
-		if (ret < vdir_size || ret < vdir_size + vdir->d_namlen) {
-			printk("coda_venus_readdir: short read: %ld\n",
+static int coda_venus_readdir(struct file *filp, void *getdent, 
+			      filldir_t filldir)
+{
+        int bufsize;
+	int offset = filp->f_pos; /* offset in the directory file */
+	int count = 0;
+	int pos = 0;      /* offset in the block we read */
+	int result = 0; /* either an error or # of entries returned */
+	int errfill;
+        char *buff = NULL;
+        struct venus_dirent *vdirent;
+        int string_offset = (int) (&((struct venus_dirent *)(0))->d_name);
+	int i;
+
+        CODA_ALLOC(buff, char *, DIR_BUFSIZE);
+        if ( !buff ) { 
+                printk("coda_venus_readdir: out of memory.\n");
+                return -ENOMEM;
+        }
+
+        /* we use this routine to read the file into our buffer */
+        bufsize = kernel_read(filp, filp->f_pos, buff, DIR_BUFSIZE);
+        if ( bufsize < 0) {
+                printk("coda_venus_readdir: cannot read directory %d.\n",
+		       bufsize);
+                result = bufsize;
+                goto exit;
+        }
+        if ( bufsize == 0) {
+                result = 0;
+                goto exit;
+        }
+	
+        /* Parse and write into user space. Filldir tells us when done! */
+        CDEBUG(D_FILE, "buffsize: %d offset %d, count %d.\n", 
+	       bufsize, offset, count);
+
+	i = 0;
+	result = 0; 
+        while ( pos + string_offset < bufsize && i < 1024) {
+                vdirent = (struct venus_dirent *) (buff + pos);
+
+                /* test if the name is fully in the buffer */
+                if ( pos + string_offset + (int) vdirent->d_namlen >= bufsize ){
+			if ( result == 0 )
+				printk("CODA: Invalid directory cfino: %ld\n", 
+				       filp->f_dentry->d_inode->i_ino);
+                        break;
+                }
+                /* now we are certain that we can read the entry from buff */
+
+                /* if we don't have a null entry, copy it */
+                if ( vdirent->d_fileno && vdirent->d_reclen ) {
+                        int namlen  = vdirent->d_namlen;
+                        off_t offs  = filp->f_pos; 
+                        ino_t ino   = vdirent->d_fileno;
+                        char *name  = vdirent->d_name;
+
+			errfill = filldir(getdent,  name, namlen, 
+					  offs, ino, DT_UNKNOWN); 
+CDEBUG(D_FILE, "entry %d: ino %ld, namlen %d, reclen %d, type %d, pos %d, string_offs %d, name %*s, offset %d, result: %d, errfill: %d.\n", i,vdirent->d_fileno, vdirent->d_namlen, vdirent->d_reclen, vdirent->d_type, pos,  string_offset, vdirent->d_namlen, vdirent->d_name, (u_int) offs, result, errfill);
+			/* errfill means no space for filling in this round */
+			if ( errfill < 0 ) {
+				result = 0;
+				break;
+			}
+                        /* adjust count */
+                        result++;
+                }
+                /* next one */
+                filp->f_pos += vdirent->d_reclen;
+		if ( filp->f_pos > filp->f_dentry->d_inode->i_size )
+			break; 
+		if ( !vdirent->d_reclen ) {
+			printk("CODA: Invalid directory, cfino: %ld\n", 
 			       filp->f_dentry->d_inode->i_ino);
-			ret = -EBADF;
+			result = -EINVAL;
 			break;
 		}
-		/* validate whether the directory file actually makes sense */
-		if (vdir->d_reclen < vdir_size + vdir->d_namlen ||
-		    vdir->d_namlen > CODA_MAXNAMLEN) {
-			printk("coda_venus_readdir: Invalid dir: %ld\n",
-			       filp->f_dentry->d_inode->i_ino);
-			ret = -EBADF;
-			break;
-		}
-
-		name.len = vdir->d_namlen;
-		name.name = vdir->d_name;
-
-		/* Make sure we skip '.' and '..', we already got those */
-		if (name.name[0] == '.' && (name.len == 1 ||
-		    (vdir->d_name[1] == '.' && name.len == 2)))
-			vdir->d_fileno = name.len = 0;
-
-		/* skip null entries */
-		if (vdir->d_fileno && name.len) {
-			/* try to look up this entry in the dcache, that way
-			 * userspace doesn't have to worry about breaking
-			 * getcwd by having mismatched inode numbers for
-			 * internal volume mountpoints. */
-			ino = find_inode_number(dir, &name);
-			if (!ino) ino = vdir->d_fileno;
-
-			type = CDT2DT(vdir->d_type);
-			ret = filldir(dirent, name.name, name.len, filp->f_pos,
-				      ino, type); 
-			/* failure means no space for filling in this round */
-			if (ret < 0) break;
-			result++;
-		}
-		/* we'll always have progress because d_reclen is unsigned and
-		 * we've already established it is non-zero. */
-		filp->f_pos += vdir->d_reclen;
-	}
+                pos += (unsigned int) vdirent->d_reclen;
+		i++;
 	} 
-	kfree(vdir);
-	return result ? result : ret;
+
+	if ( i >= 1024 ) {
+		printk("Repeating too much in readdir %ld\n", 
+		       filp->f_dentry->d_inode->i_ino);
+		result = -EINVAL;
+	}
+
+exit:
+        CODA_FREE(buff, DIR_BUFSIZE);
+        return result;
 }
 
 /* called when a cache lookup succeeds */
@@ -737,7 +754,9 @@ int coda_revalidate_inode(struct dentry *dentry)
 		if (inode->i_ino != old_ino)
 			goto return_bad_inode;
 		
-		coda_flag_inode_children(inode, C_FLUSH);
+		if ( cii->c_flags ) 
+			coda_flag_inode_children(inode, C_FLUSH);
+		
 		cii->c_flags &= ~(C_VATTR | C_PURGE | C_FLUSH);
 	}
 
@@ -746,6 +765,12 @@ ok:
 	return 0;
 
 return_bad_inode:
+        inode->i_mapping = &inode->i_data;
+	if (cii->c_container) {
+		fput(cii->c_container);
+		cii->c_container = NULL;
+	}
+	make_bad_inode(inode);
 	unlock_kernel();
 	return -EIO;
 }

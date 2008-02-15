@@ -50,6 +50,22 @@
 #define TIOCGPTN	_IOR('T',0x30, unsigned int) /* Get Pty Number (of pty-mux device) */
 #define TIOCSPTLCK	_IOW('T',0x31, int)  /* Lock/unlock Pty */
 
+/* add for BT modeul control pin by maddy */
+#define TIOCWAKEBTS			_IO('T',0x32) 		/* SET BTWAKE Pin */
+#define TIOCWAKEBTC			_IO('T',0x33)	  	/* Clear BTWAKE Pin */
+#define TIOCRESETBTS			_IO('T',0x34) 		/* SET BTRESET Pin */
+#define TIOCRESETBTC			_IO('T',0x35)  		/* Clear BTRESET Pin */
+#define TIOCAUDIOON			_IO('T',0x36) 		/* BT audio open */
+#define TIOCAUDIOOFF			_IO('T',0x37)  		/* BT audio close */
+#define TIOC_ENABLE_IFLOW		_IO('T',0x38)  		/* RTS of BTUART is controlled by hardware flow control and asserted */
+#define TIOC_DISABLE_IFLOW_RTS_LOW	_IO('T',0x39)  		/* RTS of BTUART is controlled by software flow control and de_asserted */
+#define TIOC_HOST_WAKE_STATE		_IOR('T',0x40, int)  	/* The state of HOST_WAKE immediately*/
+#define TIOC_HOST_WAKE_WATCH		_IOR('T',0x41, int)  	/* The state of HOST_WAKE blocked*/
+//#define TIOCENABLEBTS			_IO('T',0x42)	   	/* SET ENABLE Pin */
+//#define TIOCENABLEBTC			_IO('T',0x43)   	/* Clear ENABLE Pin */
+
+
+
 #define FIONCLEX	0x5450  /* these numbers need to be adjusted. */
 #define FIOCLEX		0x5451
 #define FIOASYNC	0x5452
@@ -79,3 +95,12 @@
 #define TIOCSER_TEMT	0x01	/* Transmitter physically empty */
 
 #endif
+
+
+
+
+
+
+
+
+

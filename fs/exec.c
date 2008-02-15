@@ -38,6 +38,8 @@
 #define __NO_VERSION__
 #include <linux/module.h>
 
+#include <linux/trace.h>
+
 #include <asm/uaccess.h>
 #include <asm/pgalloc.h>
 #include <asm/mmu_context.h>
@@ -182,34 +184,25 @@ static int count(char ** argv, int max)
  */
 int copy_strings(int argc,char ** argv, struct linux_binprm *bprm) 
 {
-	struct page *kmapped_page = NULL;
-	char *kaddr = NULL;
-	int ret;
-
 	while (argc-- > 0) {
 		char *str;
 		int len;
 		unsigned long pos;
 
-		if (get_user(str, argv+argc) ||
-				!(len = strnlen_user(str, bprm->p))) {
-			ret = -EFAULT;
-			goto out;
-		}
-
-		if (bprm->p < len)  {
-			ret = -E2BIG;
-			goto out;
-		}
+		if (get_user(str, argv+argc) || !(len = strnlen_user(str, bprm->p)))
+			return -EFAULT;
+		if (bprm->p < len) 
+			return -E2BIG; 
 
 		bprm->p -= len;
 		/* XXX: add architecture specific overflow check here. */ 
-		pos = bprm->p;
 
+		pos = bprm->p;
 		while (len > 0) {
+			char *kaddr;
 			int i, new, err;
-			int offset, bytes_to_copy;
 			struct page *page;
+			int offset, bytes_to_copy;
 
 			offset = pos % PAGE_SIZE;
 			i = pos/PAGE_SIZE;
@@ -218,44 +211,32 @@ int copy_strings(int argc,char ** argv, struct linux_binprm *bprm)
 			if (!page) {
 				page = alloc_page(GFP_HIGHUSER);
 				bprm->page[i] = page;
-				if (!page) {
-					ret = -ENOMEM;
-					goto out;
-				}
+				if (!page)
+					return -ENOMEM;
 				new = 1;
 			}
+			kaddr = kmap(page);
 
-			if (page != kmapped_page) {
-				if (kmapped_page)
-					kunmap(kmapped_page);
-				kmapped_page = page;
-				kaddr = kmap(kmapped_page);
-			}
 			if (new && offset)
 				memset(kaddr, 0, offset);
 			bytes_to_copy = PAGE_SIZE - offset;
 			if (bytes_to_copy > len) {
 				bytes_to_copy = len;
 				if (new)
-					memset(kaddr+offset+len, 0,
-						PAGE_SIZE-offset-len);
+					memset(kaddr+offset+len, 0, PAGE_SIZE-offset-len);
 			}
-			err = copy_from_user(kaddr+offset, str, bytes_to_copy);
-			if (err) {
-				ret = -EFAULT;
-				goto out;
-			}
+			err = copy_from_user(kaddr + offset, str, bytes_to_copy);
+			kunmap(page);
+
+			if (err)
+				return -EFAULT; 
 
 			pos += bytes_to_copy;
 			str += bytes_to_copy;
 			len -= bytes_to_copy;
 		}
 	}
-	ret = 0;
-out:
-	if (kmapped_page)
-		kunmap(kmapped_page);
-	return ret;
+	return 0;
 }
 
 /*
@@ -327,8 +308,13 @@ int setup_arg_pages(struct linux_binprm *bprm)
 
 	mpnt = kmem_cache_alloc(vm_area_cachep, SLAB_KERNEL);
 	if (!mpnt) 
-		return -ENOMEM; 
-	
+		return -ENOMEM;
+
+	if (!vm_enough_memory((STACK_TOP - (PAGE_MASK & (unsigned long) bprm->p)) >> PAGE_SHIFT,1)) {
+		kmem_cache_free(vm_area_cachep, mpnt);
+		return -ENOMEM;
+	}
+
 	down_write(&current->mm->mmap_sem);
 	{
 		mpnt->vm_mm = current->mm;
@@ -364,7 +350,8 @@ struct file *open_exec(const char *name)
 	struct file *file;
 	int err = 0;
 
-	err = path_lookup(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, &nd);
+	if (path_init(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, &nd))
+		err = path_walk(name, &nd);
 	file = ERR_PTR(err);
 	if (!err) {
 		inode = nd.dentry->d_inode;
@@ -440,8 +427,8 @@ static int exec_mmap(void)
 		active_mm = current->active_mm;
 		current->mm = mm;
 		current->active_mm = mm;
-		task_unlock(current);
 		activate_mm(active_mm, mm);
+		task_unlock(current);
 		mm_release();
 		if (old_mm) {
 			if (active_mm != old_mm) BUG();
@@ -886,6 +873,11 @@ int do_execve(char * filename, char ** argv, char ** envp, struct pt_regs * regs
 	if (IS_ERR(file))
 		return retval;
 
+	TRACE_FILE_SYSTEM(TRACE_EV_FILE_SYSTEM_EXEC,
+			  0,
+			  file->f_dentry->d_name.len,
+			  file->f_dentry->d_name.name);
+
 	bprm.p = PAGE_SIZE*MAX_ARG_PAGES-sizeof(void *);
 	memset(bprm.page, 0, MAX_ARG_PAGES*sizeof(bprm.page[0])); 
 
@@ -953,28 +945,61 @@ void set_binfmt(struct linux_binfmt *new)
 		__MOD_DEC_USE_COUNT(old->module);
 }
 
+#ifdef CONFIG_MULTITHREADED_CORES
+static spinlock_t coredump_lock = SPIN_LOCK_UNLOCKED;
+#endif
+
+
 int do_coredump(long signr, struct pt_regs * regs)
 {
 	struct linux_binfmt * binfmt;
-	char corename[6+sizeof(current->comm)+10];
+	char corename[6+sizeof(current->comm)+10+sizeof(CONFIG_COREDUMP_PATH)];
 	struct file * file;
 	struct inode * inode;
 	int retval = 0;
+        int corepathlen = sizeof(CONFIG_COREDUMP_PATH)-1;
 
+	/* printk("\nCONFIG_COREDUMP_PATH=%s, size is %d\n", CONFIG_COREDUMP_PATH, corepathlen); */
 	lock_kernel();
 	binfmt = current->binfmt;
 	if (!binfmt || !binfmt->core_dump)
 		goto fail;
+#ifdef CONFIG_MULTITHREADED_CORES
+	spin_lock (&coredump_lock);
+	if (!current->mm->dumpable) {
+		spin_unlock (&coredump_lock);
+		goto fail;
+	}
+	current->mm->dumpable = 0;
+	spin_unlock (&coredump_lock);
+#else
 	if (!current->mm->dumpable)
 		goto fail;
 	current->mm->dumpable = 0;
+#endif
 	if (current->rlim[RLIMIT_CORE].rlim_cur < binfmt->min_coredump)
 		goto fail;
 
-	memcpy(corename,"core", 5); /* include trailing \0 */
- 	if (core_uses_pid || atomic_read(&current->mm->mm_users) != 1)
- 		sprintf(&corename[4], ".%d", current->pid);
-	file = filp_open(corename, O_CREAT | 2 | O_NOFOLLOW, 0600);
+	memset(corename, 0, sizeof(corename));
+	memcpy(corename, CONFIG_COREDUMP_PATH, corepathlen);
+	memcpy(corename+corepathlen, "core", 4);
+#ifndef CONFIG_MULTITHREADED_CORES
+  	if (core_uses_pid || atomic_read(&current->mm->mm_users) != 1)
+ 		sprintf(&corename[corepathlen+4], ".%d", current->pid);
+#else
+  	if (core_uses_pid)
+ 		sprintf(&corename[corepathlen+4], ".%d", current->pid);
+#endif
+
+        if(corepathlen != 0)
+        {
+            strcat(corename, ".");
+            strncat(corename, current->comm, sizeof(current->comm));
+        }
+
+        /* printk("\ncore name is %s\n", corename); */
+
+	file = filp_open(corename, O_CREAT | 2 | O_NOFOLLOW, 0666);
 	if (IS_ERR(file))
 		goto fail;
 	inode = file->f_dentry->d_inode;
@@ -992,7 +1017,17 @@ int do_coredump(long signr, struct pt_regs * regs)
 	if (do_truncate(file->f_dentry, 0) != 0)
 		goto close_fail;
 
+#ifdef CONFIG_MULTITHREADED_CORES
+	/* Stop our siblings.  We have the kernel lock, but schedule() will
+	   nicely release it for us.  */
+	if (stop_all_threads (current->mm) != 0)
+		goto close_fail;
+#endif
 	retval = binfmt->core_dump(signr, regs, file);
+#ifdef CONFIG_MULTITHREADED_CORES
+	/* Restart our siblings (so they can die, or whatever).  */
+	start_all_threads (current->mm);
+#endif
 
 close_fail:
 	filp_close(file, NULL);

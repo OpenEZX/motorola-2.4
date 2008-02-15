@@ -15,27 +15,43 @@
 
 /*
  * Return current * instruction pointer ("program counter").
+ *
+ * Two implementations.  The ``la'' version results in shorter code for
+ * the kernel which we assume to reside in the 32-bit compat address space.
+ * The  ``jal'' version is for use by modules which live in outer space.
+ * This is just a single instruction unlike the long dla macro expansion.
  */
+#ifdef MODULE
 #define current_text_addr()						\
 ({									\
 	void *_a;							\
 									\
-	__asm__ ("bal\t1f\t\t\t# current_text_addr\n"			\
-		"1:\tmove\t%0, $31"					\
-		: "=r" (_a)						\
-		:							\
-		: "$31");						\
+	__asm__ ("jal\t1f, %0\n\t"					\
+		"1:"							\
+		: "=r" (_a));						\
 									\
 	_a;								\
 })
+#else
+#define current_text_addr()						\
+({									\
+	void *_a;							\
+									\
+	__asm__ ("dla\t%0, 1f\n\t"					\
+		"1:"							\
+		: "=r" (_a));						\
+									\
+	_a;								\
+})
+#endif
 
-#ifndef __ASSEMBLY__
+#if !defined (_LANGUAGE_ASSEMBLY)
 #include <asm/cachectl.h>
 #include <asm/mipsregs.h>
 #include <asm/reg.h>
 #include <asm/system.h>
 
-#if defined(CONFIG_SGI_IP27)
+#if (defined(CONFIG_SGI_IP27))
 #include <asm/sn/types.h>
 #include <asm/sn/intr_public.h>
 #endif
@@ -74,7 +90,6 @@ extern void (*cpu_wait)(void);
 extern void r3081_wait(void);
 extern void r39xx_wait(void);
 extern void r4k_wait(void);
-extern void au1k_wait(void);
 
 extern unsigned int vced_count, vcei_count;
 extern struct cpuinfo_mips cpu_data[];
@@ -87,13 +102,12 @@ extern struct cpuinfo_mips cpu_data[];
 
 /*
  * Bus types (default is ISA, but people can check others with these..)
+ * MCA_bus hardcoded to 0 for now.
+ *
+ * This needs to be extended since MIPS systems are being delivered with
+ * numerous different types of bus systems.
  */
-#ifdef CONFIG_EISA
 extern int EISA_bus;
-#else
-#define EISA_bus (0)
-#endif
-
 #define MCA_bus 0
 #define MCA_bus__is_a_macro /* for versions in ksyms.c */
 
@@ -120,7 +134,7 @@ extern struct task_struct *last_task_used_math;
  * is limited to 1TB by the R4000 architecture; R10000 and better can
  * support 16TB.
  */
-#define TASK_SIZE32	   0x7fff8000UL
+#define TASK_SIZE32	   0x80000000UL
 #define TASK_SIZE	0x10000000000UL
 
 /* This decides where the kernel will search for a free chunk of vm
@@ -196,7 +210,7 @@ struct thread_struct {
 	unsigned long irix_oldctx;
 };
 
-#endif /* !__ASSEMBLY__ */
+#endif /* !defined (_LANGUAGE_ASSEMBLY) */
 
 #define INIT_THREAD  { \
         /* \
@@ -226,7 +240,7 @@ struct thread_struct {
 
 #define KERNEL_STACK_SIZE 0x4000
 
-#ifndef __ASSEMBLY__
+#if !defined (_LANGUAGE_ASSEMBLY)
 
 /* Free all resources held by a thread. */
 #define release_thread(thread) do { } while(0)
@@ -292,7 +306,7 @@ unsigned long get_wchan(struct task_struct *p);
 
 #define cpu_relax()	do { } while (0)
 
-#endif /* !__ASSEMBLY__ */
+#endif /* !defined (_LANGUAGE_ASSEMBLY) */
 #endif /* __KERNEL__ */
 
 /*

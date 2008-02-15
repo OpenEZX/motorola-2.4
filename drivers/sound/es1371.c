@@ -1566,6 +1566,7 @@ static int es1371_mmap(struct file *file, struct vm_area_struct *vma)
 		ret = -EAGAIN;
 		goto out;
 	}
+	vma->vm_flags &= ~VM_IO;
 	db->mapped = 1;
 out:
 	up(&s->sem);
@@ -1824,7 +1825,7 @@ static int es1371_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 		if (s->dma_adc.mapped)
 			s->dma_adc.count &= s->dma_adc.fragsize-1;
 		spin_unlock_irqrestore(&s->lock, flags);
-                return copy_to_user((void *)arg, &cinfo, sizeof(cinfo)) ? -EFAULT : 0;
+                return copy_to_user((void *)arg, &cinfo, sizeof(cinfo));
 
         case SNDCTL_DSP_GETOPTR:
 		if (!(file->f_mode & FMODE_WRITE))
@@ -1842,7 +1843,7 @@ static int es1371_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 		if (s->dma_dac2.mapped)
 			s->dma_dac2.count &= s->dma_dac2.fragsize-1;
 		spin_unlock_irqrestore(&s->lock, flags);
-                return copy_to_user((void *)arg, &cinfo, sizeof(cinfo)) ? -EFAULT : 0;
+                return copy_to_user((void *)arg, &cinfo, sizeof(cinfo));
 
         case SNDCTL_DSP_GETBLKSIZE:
 		if (file->f_mode & FMODE_WRITE) {
@@ -2133,6 +2134,7 @@ static int es1371_mmap_dac(struct file *file, struct vm_area_struct *vma)
 	ret = -EAGAIN;
 	if (remap_page_range(vma->vm_start, virt_to_phys(s->dma_dac1.rawbuf), size, vma->vm_page_prot))
 		goto out;
+	vma->vm_flags &= ~VM_IO;
 	s->dma_dac1.mapped = 1;
 	ret = 0;
 out:
@@ -2292,7 +2294,7 @@ static int es1371_ioctl_dac(struct inode *inode, struct file *file, unsigned int
 		if (s->dma_dac1.mapped)
 			s->dma_dac1.count &= s->dma_dac1.fragsize-1;
 		spin_unlock_irqrestore(&s->lock, flags);
-                return copy_to_user((void *)arg, &cinfo, sizeof(cinfo)) ? -EFAULT : 0;
+                return copy_to_user((void *)arg, &cinfo, sizeof(cinfo));
 
         case SNDCTL_DSP_GETBLKSIZE:
 		if ((val = prog_dmabuf_dac1(s)))
@@ -2968,8 +2970,7 @@ static int __devinit es1371_probe(struct pci_dev *pcidev, const struct pci_devic
 	/* turn on S/PDIF output driver if requested */
 	outl(cssr, s->io+ES1371_REG_STATUS);
 	/* register gameport */
-	if(s->gameport.io)
-		gameport_register_port(&s->gameport);
+	gameport_register_port(&s->gameport);
 	/* store it in the driver field */
 	pci_set_drvdata(pcidev, s);
 	/* put it into driver list */

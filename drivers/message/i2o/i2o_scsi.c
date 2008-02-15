@@ -119,12 +119,14 @@ static void i2o_retry_run(unsigned long f)
 	int i;
 	unsigned long flags;
 	
-	spin_lock_irqsave(&io_request_lock, flags);
+	save_flags(flags);
+	cli();
+
 	for(i=0;i<retry_ct;i++)
 		i2o_post_message(retry_ctrl[i], virt_to_bus(retry[i]));
 	retry_ct=0;
 	
-	spin_unlock_irqrestore(&io_request_lock, flags);
+	restore_flags(flags);
 }
 
 static void flush_pending(void)
@@ -132,7 +134,8 @@ static void flush_pending(void)
 	int i;
 	unsigned long flags;
 	
-	spin_lock_irqsave(&io_request_lock, flags);
+	save_flags(flags);
+	cli();
 
 	for(i=0;i<retry_ct;i++)
 	{
@@ -142,7 +145,7 @@ static void flush_pending(void)
 	}
 	retry_ct=0;
 	
-	spin_unlock_irqrestore(&io_request_lock, flags);
+	restore_flags(flags);
 }
 
 static void i2o_scsi_reply(struct i2o_handler *h, struct i2o_controller *c, struct i2o_message *msg)
@@ -209,9 +212,9 @@ static void i2o_scsi_reply(struct i2o_handler *h, struct i2o_controller *c, stru
 	 *	Low byte is device status, next is adapter status,
 	 *	(then one byte reserved), then request status.
 	 */
-	ds=(u8)le32_to_cpu(m[4]); 
-	as=(u8)le32_to_cpu(m[4]>>8);
-	st=(u8)le32_to_cpu(m[4]>>24);
+	ds=(u8)m[4]; 
+	as=(u8)(m[4]>>8);
+	st=(u8)(m[4]>>24);
 	
 	dprintk(("i2o got a scsi reply %08X: ", m[0]));
 	dprintk(("m[2]=%08X: ", m[2]));
@@ -228,10 +231,7 @@ static void i2o_scsi_reply(struct i2o_handler *h, struct i2o_controller *c, stru
 		printk(KERN_ERR "i2o_scsi: bus reset reply.\n");
 		return;
 	}
-
-	/*
- 	 *	FIXME: 64bit breakage
-	 */
+	
 	current_command = (Scsi_Cmnd *)m[3];
 	
 	/*
@@ -252,11 +252,11 @@ static void i2o_scsi_reply(struct i2o_handler *h, struct i2o_controller *c, stru
 	
 	if(st == 0x06)
 	{
-		if(le32_to_cpu(m[5]) < current_command->underflow)
+		if(m[5] < current_command->underflow)
 		{
 			int i;
 			printk(KERN_ERR "SCSI: underflow 0x%08X 0x%08X\n",
-				le32_to_cpu(m[5]), current_command->underflow);
+				m[5], current_command->underflow);
 			printk("Cmd: ");
 			for(i=0;i<15;i++)
 				printk("%02X ", current_command->cmnd[i]);
@@ -319,7 +319,7 @@ static int i2o_find_lun(struct i2o_controller *c, struct i2o_device *d, int *tar
 	return 0;
 }
 
-static void i2o_scsi_init(struct i2o_controller *c, struct i2o_device *d, struct Scsi_Host *shpnt)
+void i2o_scsi_init(struct i2o_controller *c, struct i2o_device *d, struct Scsi_Host *shpnt)
 {
 	struct i2o_device *unit;
 	struct i2o_scsi_host *h =(struct i2o_scsi_host *)shpnt->hostdata;
@@ -379,7 +379,7 @@ static void i2o_scsi_init(struct i2o_controller *c, struct i2o_device *d, struct
 	}		
 }
 
-static int i2o_scsi_detect(Scsi_Host_Template * tpnt)
+int i2o_scsi_detect(Scsi_Host_Template * tpnt)
 {
 	unsigned long flags;
 	struct Scsi_Host *shpnt = NULL;
@@ -473,7 +473,7 @@ static int i2o_scsi_detect(Scsi_Host_Template * tpnt)
 	return count;
 }
 
-static int i2o_scsi_release(struct Scsi_Host *host)
+int i2o_scsi_release(struct Scsi_Host *host)
 {
 	if(--i2o_scsi_hosts==0)
 	{
@@ -490,14 +490,45 @@ static int i2o_scsi_release(struct Scsi_Host *host)
 }
 
 
-static const char *i2o_scsi_info(struct Scsi_Host *SChost)
+const char *i2o_scsi_info(struct Scsi_Host *SChost)
 {
 	struct i2o_scsi_host *hostdata;
+
 	hostdata = (struct i2o_scsi_host *)SChost->hostdata;
+
 	return(&hostdata->controller->name[0]);
 }
 
-static int i2o_scsi_queuecommand(Scsi_Cmnd * SCpnt, void (*done) (Scsi_Cmnd *))
+
+/*
+ * From the wd93 driver:
+ * Returns true if there will be a DATA_OUT phase with this command, 
+ * false otherwise.
+ * (Thanks to Joerg Dorchain for the research and suggestion.)
+ *
+ */
+static int is_dir_out(Scsi_Cmnd *cmd)
+{
+	switch (cmd->cmnd[0]) 
+	{
+     		case WRITE_6:           case WRITE_10:          case WRITE_12:
+      		case WRITE_LONG:        case WRITE_SAME:        case WRITE_BUFFER:
+      		case WRITE_VERIFY:      case WRITE_VERIFY_12:      
+      		case COMPARE:           case COPY:              case COPY_VERIFY:
+      		case SEARCH_EQUAL:      case SEARCH_HIGH:       case SEARCH_LOW:
+      		case SEARCH_EQUAL_12:   case SEARCH_HIGH_12:    case SEARCH_LOW_12:      
+      		case FORMAT_UNIT:       case REASSIGN_BLOCKS:   case RESERVE:
+      		case MODE_SELECT:       case MODE_SELECT_10:    case LOG_SELECT:
+      		case SEND_DIAGNOSTIC:   case CHANGE_DEFINITION: case UPDATE_BLOCK:
+      		case SET_WINDOW:        case MEDIUM_SCAN:       case SEND_VOLUME_TAG:
+      		case 0xea:
+        		return 1;
+		default:
+        		return 0;
+	}
+}
+
+int i2o_scsi_queuecommand(Scsi_Cmnd * SCpnt, void (*done) (Scsi_Cmnd *))
 {
 	int i;
 	int tid;
@@ -563,10 +594,9 @@ static int i2o_scsi_queuecommand(Scsi_Cmnd * SCpnt, void (*done) (Scsi_Cmnd *))
 	do
 	{
 		mb();
-		m = le32_to_cpu(I2O_POST_READ32(c));
+		m = I2O_POST_READ32(c);
 	}
 	while(m==0xFFFFFFFF);
-
 	msg = (u32 *)(c->mem_offset + m);
 	
 	/*
@@ -576,29 +606,28 @@ static int i2o_scsi_queuecommand(Scsi_Cmnd * SCpnt, void (*done) (Scsi_Cmnd *))
 	len = SCpnt->request_bufflen;
 	direction = 0x00000000;			// SGL IN  (osm<--iop)
 	
-	if(SCpnt->sc_data_direction == SCSI_DATA_NONE)
-		scsidir = 0x00000000;			// DATA NO XFER
-	else if(SCpnt->sc_data_direction == SCSI_DATA_WRITE)
+	/*
+	 *	The scsi layer should be handling this stuff
+	 */
+	
+	scsidir = 0x00000000;			// DATA NO XFER
+	if(len)
 	{
-		direction=0x04000000;	// SGL OUT  (osm-->iop)
-		scsidir  =0x80000000;	// DATA OUT (iop-->dev)
-	}
-	else if(SCpnt->sc_data_direction == SCSI_DATA_READ)
-	{
-		scsidir  =0x40000000;	// DATA IN  (iop<--dev)
-	}
-	else
-	{
-		/* Unknown - kill the command */
-		SCpnt->result = DID_NO_CONNECT << 16;
-		done(SCpnt);
-		return 0;
+		if(is_dir_out(SCpnt))
+		{
+			direction=0x04000000;	// SGL OUT  (osm-->iop)
+			scsidir  =0x80000000;	// DATA OUT (iop-->dev)
+		}
+		else
+		{
+			scsidir  =0x40000000;	// DATA IN  (iop<--dev)
+		}
 	}
 	
-	i2o_raw_writel(I2O_CMD_SCSI_EXEC<<24|HOST_TID<<12|tid, &msg[1]);
-	i2o_raw_writel(scsi_context, &msg[2]);	/* So the I2O layer passes to us */
+	__raw_writel(I2O_CMD_SCSI_EXEC<<24|HOST_TID<<12|tid, &msg[1]);
+	__raw_writel(scsi_context, &msg[2]);	/* So the I2O layer passes to us */
 	/* Sorry 64bit folks. FIXME */
-	i2o_raw_writel((u32)SCpnt, &msg[3]);	/* We want the SCSI control block back */
+	__raw_writel((u32)SCpnt, &msg[3]);	/* We want the SCSI control block back */
 
 	/* LSI_920_PCI_QUIRK
 	 *
@@ -641,7 +670,7 @@ static int i2o_scsi_queuecommand(Scsi_Cmnd * SCpnt, void (*done) (Scsi_Cmnd *))
 	}
 
 	/* Direction, disconnect ok, tag, CDBLen */
-	i2o_raw_writel(scsidir|0x20000000|SCpnt->cmd_len|tag, &msg[4]);
+	__raw_writel(scsidir|0x20000000|SCpnt->cmd_len|tag, &msg[4]);
 
 	mptr=msg+5;
 
@@ -661,8 +690,6 @@ static int i2o_scsi_queuecommand(Scsi_Cmnd * SCpnt, void (*done) (Scsi_Cmnd *))
 	 *	FIXME: we need to set the sglist limits according to the 
 	 *	message size of the I2O controller. We might only have room
 	 *	for 6 or so worst case
-	 *
-	 *	FIXME: pci dma mapping
 	 */
 	
 	if(SCpnt->use_sg)
@@ -678,8 +705,8 @@ static int i2o_scsi_queuecommand(Scsi_Cmnd * SCpnt, void (*done) (Scsi_Cmnd *))
 			/*
 			 *	Need to chain!
 			 */
-			i2o_raw_writel(direction|0xB0000000|(SCpnt->use_sg*2*4), mptr++);
-			i2o_raw_writel(virt_to_bus(sg_chain_pool + sg_chain_tag), mptr);
+			__raw_writel(direction|0xB0000000|(SCpnt->use_sg*2*4), mptr++);
+			__raw_writel(virt_to_bus(sg_chain_pool + sg_chain_tag), mptr);
 			mptr = (u32*)(sg_chain_pool + sg_chain_tag);
 			if (SCpnt->use_sg > max_sg_len)
 			{
@@ -702,22 +729,22 @@ static int i2o_scsi_queuecommand(Scsi_Cmnd * SCpnt, void (*done) (Scsi_Cmnd *))
 		{		
 			for(i = 0 ; i < SCpnt->use_sg; i++)
 			{
-				i2o_raw_writel(direction|0x10000000|sg->length, mptr++);
+				__raw_writel(direction|0x10000000|sg->length, mptr++);
 				len+=sg->length;
-				i2o_raw_writel(virt_to_bus(sg->address), mptr++);
+				__raw_writel(virt_to_bus(sg->address), mptr++);
 				sg++;
 			}
 
 			/* Make this an end of list. Again evade the 920 bug and
 			   unwanted PCI read traffic */
 		
-			i2o_raw_writel(direction|0xD0000000|(sg-1)->length, &mptr[-2]);
+			__raw_writel(direction|0xD0000000|(sg-1)->length, &mptr[-2]);
 		}
 		
 		if(!chain)
 			reqlen = mptr - msg;
 		
-		i2o_raw_writel(len, lenptr);
+		__raw_writel(len, lenptr);
 		
 		if(len != SCpnt->underflow)
 			printk("Cmd len %08X Cmd underflow %08X\n",
@@ -727,15 +754,15 @@ static int i2o_scsi_queuecommand(Scsi_Cmnd * SCpnt, void (*done) (Scsi_Cmnd *))
 	{
 		dprintk(("non sg for %p, %d\n", SCpnt->request_buffer,
 				SCpnt->request_bufflen));
-		i2o_raw_writel(len = SCpnt->request_bufflen, lenptr);
+		__raw_writel(len = SCpnt->request_bufflen, lenptr);
 		if(len == 0)
 		{
 			reqlen = 9;
 		}
 		else
 		{
-			i2o_raw_writel(0xD0000000|direction|SCpnt->request_bufflen, mptr++);
-			i2o_raw_writel(virt_to_bus(SCpnt->request_buffer), mptr++);
+			__raw_writel(0xD0000000|direction|SCpnt->request_bufflen, mptr++);
+			__raw_writel(virt_to_bus(SCpnt->request_buffer), mptr++);
 		}
 	}
 	
@@ -743,7 +770,7 @@ static int i2o_scsi_queuecommand(Scsi_Cmnd * SCpnt, void (*done) (Scsi_Cmnd *))
 	 *	Stick the headers on 
 	 */
 
-	i2o_raw_writel(reqlen<<16 | SGL_OFFSET_10, msg);
+	__raw_writel(reqlen<<16 | SGL_OFFSET_10, msg);
 	
 	/* Queue the message */
 	i2o_post_message(c,m);
@@ -767,7 +794,7 @@ static void internal_done(Scsi_Cmnd * SCpnt)
 	SCpnt->SCp.Status++;
 }
 
-static int i2o_scsi_command(Scsi_Cmnd * SCpnt)
+int i2o_scsi_command(Scsi_Cmnd * SCpnt)
 {
 	i2o_scsi_queuecommand(SCpnt, internal_done);
 	SCpnt->SCp.Status = 0;
@@ -776,12 +803,12 @@ static int i2o_scsi_command(Scsi_Cmnd * SCpnt)
 	return SCpnt->result;
 }
 
-static int i2o_scsi_abort(Scsi_Cmnd * SCpnt)
+int i2o_scsi_abort(Scsi_Cmnd * SCpnt)
 {
 	struct i2o_controller *c;
 	struct Scsi_Host *host;
 	struct i2o_scsi_host *hostdata;
-	unsigned long msg;
+	u32 *msg;
 	u32 m;
 	int tid;
 	
@@ -805,30 +832,30 @@ static int i2o_scsi_abort(Scsi_Cmnd * SCpnt)
 	do
 	{
 		mb();
-		m = le32_to_cpu(I2O_POST_READ32(c));
+		m = I2O_POST_READ32(c);
 	}
 	while(m==0xFFFFFFFF);
-	msg = c->mem_offset + m;
+	msg = (u32 *)(c->mem_offset + m);
 	
-	i2o_raw_writel(FIVE_WORD_MSG_SIZE, msg);
-	i2o_raw_writel(I2O_CMD_SCSI_ABORT<<24|HOST_TID<<12|tid, msg+4);
-	i2o_raw_writel(scsi_context, msg+8);
-	i2o_raw_writel(0, msg+12);	/* Not needed for an abort */
-	i2o_raw_writel((u32)SCpnt, msg+16);	/* FIXME 32bitism */
+	__raw_writel(FIVE_WORD_MSG_SIZE, &msg[0]);
+	__raw_writel(I2O_CMD_SCSI_ABORT<<24|HOST_TID<<12|tid, &msg[1]);
+	__raw_writel(scsi_context, &msg[2]);
+	__raw_writel(0, &msg[3]);	/* Not needed for an abort */
+	__raw_writel((u32)SCpnt, &msg[4]);	
 	wmb();
 	i2o_post_message(c,m);
 	wmb();
 	return SCSI_ABORT_PENDING;
 }
 
-static int i2o_scsi_reset(Scsi_Cmnd * SCpnt, unsigned int reset_flags)
+int i2o_scsi_reset(Scsi_Cmnd * SCpnt, unsigned int reset_flags)
 {
 	int tid;
 	struct i2o_controller *c;
 	struct Scsi_Host *host;
 	struct i2o_scsi_host *hostdata;
 	u32 m;
-	unsigned long msg;
+	u32 *msg;
 
 	/*
 	 *	Find the TID for the bus
@@ -847,7 +874,7 @@ static int i2o_scsi_reset(Scsi_Cmnd * SCpnt, unsigned int reset_flags)
 	 *	possibly ?
 	 */
 	 
-	m = le32_to_cpu(I2O_POST_READ32(c));
+	m = I2O_POST_READ32(c);
 	
 	/*
 	 *	No free messages, try again next time - no big deal
@@ -856,13 +883,13 @@ static int i2o_scsi_reset(Scsi_Cmnd * SCpnt, unsigned int reset_flags)
 	if(m == 0xFFFFFFFF)
 		return SCSI_RESET_PUNT;
 	
-	msg = c->mem_offset + m;
-	i2o_raw_writel(FOUR_WORD_MSG_SIZE|SGL_OFFSET_0, msg);
-	i2o_raw_writel(I2O_CMD_SCSI_BUSRESET<<24|HOST_TID<<12|tid, msg+4);
-	i2o_raw_writel(scsi_context|0x80000000, msg+8);
+	msg = (u32 *)(c->mem_offset + m);
+	__raw_writel(FOUR_WORD_MSG_SIZE|SGL_OFFSET_0, &msg[0]);
+	__raw_writel(I2O_CMD_SCSI_BUSRESET<<24|HOST_TID<<12|tid, &msg[1]);
+	__raw_writel(scsi_context|0x80000000, &msg[2]);
 	/* We use the top bit to split controller and unit transactions */
 	/* Now store unit,tid so we can tie the completion back to a specific device */
-	i2o_raw_writel(c->unit << 16 | tid, msg+12);
+	__raw_writel(c->unit << 16 | tid, &msg[3]);
 	wmb();
 	i2o_post_message(c,m);
 	return SCSI_RESET_PENDING;
@@ -872,7 +899,7 @@ static int i2o_scsi_reset(Scsi_Cmnd * SCpnt, unsigned int reset_flags)
  *	This is anyones guess quite frankly.
  */
  
-static int i2o_scsi_bios_param(Disk * disk, kdev_t dev, int *ip)
+int i2o_scsi_bios_param(Disk * disk, kdev_t dev, int *ip)
 {
 	int size;
 

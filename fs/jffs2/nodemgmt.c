@@ -1,7 +1,7 @@
 /*
  * JFFS2 -- Journalling Flash File System, Version 2.
  *
- * Copyright (C) 2001 Red Hat, Inc.
+ * Copyright (C) 2001, 2002 Red Hat, Inc.
  *
  * Created by David Woodhouse <dwmw2@cambridge.redhat.com>
  *
@@ -31,13 +31,12 @@
  * provisions above, a recipient may use your version of this file
  * under either the RHEPL or the GPL.
  *
- * $Id: nodemgmt.c,v 1.45.2.1 2002/02/23 14:13:34 dwmw2 Exp $
+ * $Id: nodemgmt.c,v 1.51 2002/01/09 13:25:58 dwmw2 Exp $
  *
  */
 
 #include <linux/kernel.h>
 #include <linux/slab.h>
-#include <linux/jffs2.h>
 #include <linux/mtd/mtd.h>
 #include <linux/interrupt.h>
 #include "nodelist.h"
@@ -62,9 +61,9 @@
  *	for the requested allocation.
  */
 
-static int jffs2_do_reserve_space(struct jffs2_sb_info *c,  __u32 minsize, __u32 *ofs, __u32 *len);
+static int jffs2_do_reserve_space(struct jffs2_sb_info *c,  uint32_t minsize, uint32_t *ofs, uint32_t *len);
 
-int jffs2_reserve_space(struct jffs2_sb_info *c, __u32 minsize, __u32 *ofs, __u32 *len, int prio)
+int jffs2_reserve_space(struct jffs2_sb_info *c, uint32_t minsize, uint32_t *ofs, uint32_t *len, int prio)
 {
 	int ret = -EAGAIN;
 	int blocksneeded = JFFS2_RESERVED_BLOCKS_WRITE;
@@ -122,7 +121,7 @@ int jffs2_reserve_space(struct jffs2_sb_info *c, __u32 minsize, __u32 *ofs, __u3
 	return ret;
 }
 
-int jffs2_reserve_space_gc(struct jffs2_sb_info *c, __u32 minsize, __u32 *ofs, __u32 *len)
+int jffs2_reserve_space_gc(struct jffs2_sb_info *c, uint32_t minsize, uint32_t *ofs, uint32_t *len)
 {
 	int ret = -EAGAIN;
 	minsize = PAD(minsize);
@@ -141,7 +140,7 @@ int jffs2_reserve_space_gc(struct jffs2_sb_info *c, __u32 minsize, __u32 *ofs, _
 }
 
 /* Called with alloc sem _and_ erase_completion_lock */
-static int jffs2_do_reserve_space(struct jffs2_sb_info *c,  __u32 minsize, __u32 *ofs, __u32 *len)
+static int jffs2_do_reserve_space(struct jffs2_sb_info *c,  uint32_t minsize, uint32_t *ofs, uint32_t *len)
 {
 	struct jffs2_eraseblock *jeb = c->nextblock;
 	
@@ -227,7 +226,7 @@ static int jffs2_do_reserve_space(struct jffs2_sb_info *c,  __u32 minsize, __u32
  *	Must be called with the alloc_sem held.
  */
  
-int jffs2_add_physical_node_ref(struct jffs2_sb_info *c, struct jffs2_raw_node_ref *new, __u32 len, int dirty)
+int jffs2_add_physical_node_ref(struct jffs2_sb_info *c, struct jffs2_raw_node_ref *new, uint32_t len, int dirty)
 {
 	struct jffs2_eraseblock *jeb;
 
@@ -286,7 +285,7 @@ void jffs2_mark_node_obsolete(struct jffs2_sb_info *c, struct jffs2_raw_node_ref
 	int blocknr;
 	struct jffs2_unknown_node n;
 	int ret;
-	ssize_t retlen;
+	size_t retlen;
 
 	if(!ref) {
 		printk(KERN_NOTICE "EEEEEK. jffs2_mark_node_obsolete called with NULL node\n");
@@ -319,15 +318,6 @@ void jffs2_mark_node_obsolete(struct jffs2_sb_info *c, struct jffs2_raw_node_ref
 
 	ACCT_PARANOIA_CHECK(jeb);
 
-	if (c->flags & JFFS2_SB_FLAG_MOUNTING) {
-		/* Mount in progress. Don't muck about with the block
-		   lists because they're not ready yet, and don't actually
-		   obliterate nodes that look obsolete. If they weren't 
-		   marked obsolete on the flash at the time they _became_
-		   obsolete, there was probably a reason for that. */
-		spin_unlock_bh(&c->erase_completion_lock);
-		return;
-	}
 	if (jeb == c->nextblock) {
 		D2(printk(KERN_DEBUG "Not moving nextblock 0x%08x to dirty/erase_pending list\n", jeb->offset));
 	} else if (jeb == c->gcblock) {
@@ -358,11 +348,11 @@ void jffs2_mark_node_obsolete(struct jffs2_sb_info *c, struct jffs2_raw_node_ref
 
 	if (c->mtd->type != MTD_NORFLASH && c->mtd->type != MTD_RAM)
 		return;
-	if (OFNI_BS_2SFFJ(c)->s_flags & MS_RDONLY)
+	if (jffs2_is_readonly(c))
 		return;
 
 	D1(printk(KERN_DEBUG "obliterating obsoleted node at 0x%08x\n", ref->flash_offset &~3));
-	ret = c->mtd->read(c->mtd, ref->flash_offset &~3, sizeof(n), &retlen, (char *)&n);
+	ret = jffs2_flash_read(c, ref->flash_offset &~3, sizeof(n), &retlen, (char *)&n);
 	if (ret) {
 		printk(KERN_WARNING "Read error reading from obsoleted node at 0x%08x: %d\n", ref->flash_offset &~3, ret);
 		return;
@@ -380,7 +370,7 @@ void jffs2_mark_node_obsolete(struct jffs2_sb_info *c, struct jffs2_raw_node_ref
 		return;
 	}
 	n.nodetype &= ~JFFS2_NODE_ACCURATE;
-	ret = c->mtd->write(c->mtd, ref->flash_offset&~3, sizeof(n), &retlen, (char *)&n);
+	ret = jffs2_flash_write(c, ref->flash_offset&~3, sizeof(n), &retlen, (char *)&n);
 	if (ret) {
 		printk(KERN_WARNING "Write error in obliterating obsoleted node at 0x%08x: %d\n", ref->flash_offset &~3, ret);
 		return;

@@ -121,8 +121,9 @@ static void irtty_cleanup(void)
 	
 	/* Unregister tty line-discipline */
 	if ((ret = tty_register_ldisc(N_IRDA, NULL))) {
-		ERROR("%s(), can't unregister line discipline (err = %d)\n",
-			__FUNCTION__, ret);
+		ERROR(__FUNCTION__ 
+		      "(), can't unregister line discipline (err = %d)\n",
+		      ret);
 	}
 
 	/*
@@ -454,7 +455,8 @@ static int irtty_change_speed(struct irda_task *task)
 			irda_task_next_state(task, IRDA_TASK_CHILD_DONE);
 		break;
 	case IRDA_TASK_CHILD_WAIT:
-		WARNING("%s(), changing speed of dongle timed out!\n", __FUNCTION__);
+		WARNING(__FUNCTION__ 
+			"(), changing speed of dongle timed out!\n");
 		ret = -1;		
 		break;
 	case IRDA_TASK_CHILD_DONE:
@@ -712,6 +714,8 @@ static void irtty_write_wakeup(struct tty_struct *tty)
 
 		self->tx_buff.data += actual;
 		self->tx_buff.len  -= actual;
+
+		self->stats.tx_packets++;		      
 	} else {		
 		/* 
 		 *  Now serial buffer is almost free & we can start 
@@ -719,8 +723,6 @@ static void irtty_write_wakeup(struct tty_struct *tty)
 		 */
 		IRDA_DEBUG(5, "%s(), finished with frame!\n", __FUNCTION__);
 		
-		self->stats.tx_packets++;		      
-
 		tty->flags &= ~(1 << TTY_DO_WRITE_WAKEUP);
 
 		if (self->new_speed) {
@@ -758,11 +760,14 @@ static int irtty_set_dtr_rts(struct net_device *dev, int dtr, int rts)
 	struct irtty_cb *self;
 	struct tty_struct *tty;
 	mm_segment_t fs;
-	int arg = TIOCM_MODEM_BITS;
+	int arg = 0;
 
 	self = (struct irtty_cb *) dev->priv;
 	tty = self->tty;
 
+#ifdef TIOCM_OUT2 /* Not defined for ARM */
+	arg = TIOCM_OUT2;
+#endif
 	if (rts)
 		arg |= TIOCM_RTS;
 	if (dtr)

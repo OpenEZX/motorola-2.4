@@ -63,7 +63,6 @@ enum tbl_flag {
 	HAS_8023X		= 0x0400,
 	COMET_MAC_ADDR		= 0x0800,
 	HAS_PCI_MWI		= 0x1000,
-	HAS_PHY_IRQ		= 0x2000,
 };
 
 
@@ -85,7 +84,6 @@ enum chips {
 	COMPEX9881,
 	I21145,
 	DM910X,
-	CONEXANT,
 };
 
 
@@ -389,8 +387,7 @@ struct tulip_private {
 	int susp_rx;
 	unsigned long nir;
 	unsigned long base_addr;
-	int csr12_shadow;
-	int pad0;		/* Used for 8-byte alignment */
+	int pad0, pad1;		/* Used for 8-byte alignment */
 };
 
 

@@ -128,7 +128,7 @@ int	arlan_command(struct net_device * dev, int command);
 
 EXPORT_SYMBOL(arlan_command);
 
-static inline long long arlan_time(void)
+extern inline long long arlan_time(void)
 {
 	struct timeval timev;
 	do_gettimeofday(&timev);
@@ -186,7 +186,7 @@ static inline long long arlan_time(void)
 
 
 
-static inline int arlan_drop_tx(struct net_device *dev)
+extern inline int arlan_drop_tx(struct net_device *dev)
 {
 	struct arlan_private *priv = ((struct arlan_private *) dev->priv);
 
@@ -554,7 +554,7 @@ command_busy_end:
 
 };
 
-static inline void arlan_command_process(struct net_device *dev)
+extern inline void arlan_command_process(struct net_device *dev)
 {
 	struct arlan_private *priv = ((struct arlan_private *) dev->priv);
 
@@ -575,7 +575,7 @@ static inline void arlan_command_process(struct net_device *dev)
 }
 
 
-static inline void arlan_retransmit_now(struct net_device *dev)
+extern inline void arlan_retransmit_now(struct net_device *dev)
 {
 	struct arlan_private *priv = ((struct arlan_private *) dev->priv);
 
@@ -677,7 +677,7 @@ static void arlan_registration_timer(unsigned long data)
 		arlan_retransmit_now(dev);
 	}
 	if (!registrationBad(dev) &&
-		time_after(jiffies, priv->tx_done_delayed) &&
+		priv->tx_done_delayed < jiffies &&
 		priv->tx_done_delayed != 0)
 	{
 		TXLAST(dev).offset = 0;
@@ -1405,7 +1405,7 @@ bad_end:
 }
 
 
-static inline int DoNotReTransmitCrap(struct net_device *dev)
+extern inline int DoNotReTransmitCrap(struct net_device *dev)
 {
 	struct arlan_private *priv = ((struct arlan_private *) dev->priv);
 
@@ -1415,7 +1415,7 @@ static inline int DoNotReTransmitCrap(struct net_device *dev)
 
 }
 
-static inline int DoNotWaitReTransmitCrap(struct net_device *dev)
+extern inline int DoNotWaitReTransmitCrap(struct net_device *dev)
 {
 	struct arlan_private *priv = ((struct arlan_private *) dev->priv);
 
@@ -1424,7 +1424,7 @@ static inline int DoNotWaitReTransmitCrap(struct net_device *dev)
 	return 0;
 }
 
-static inline void arlan_queue_retransmit(struct net_device *dev)
+extern inline void arlan_queue_retransmit(struct net_device *dev)
 {
 	struct arlan_private *priv = ((struct arlan_private *) dev->priv);
 

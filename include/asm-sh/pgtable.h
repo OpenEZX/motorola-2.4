@@ -41,7 +41,6 @@ extern void paging_init(void);
 #define flush_dcache_page(page)			do { } while (0)
 #define flush_icache_range(start, end)		do { } while (0)
 #define flush_icache_page(vma,pg)		do { } while (0)
-#define flush_icache_user_range(vma,pg,adr,len)	do { } while (0)
 #define flush_cache_sigtramp(vaddr)		do { } while (0)
 
 #define p3_cache_init()				do { } while (0)
@@ -65,7 +64,6 @@ extern void flush_cache_sigtramp(unsigned long addr);
 
 #define flush_page_to_ram(page)			do { } while (0)
 #define flush_icache_page(vma,pg)		do { } while (0)
-#define flush_icache_user_range(vma,pg,adr,len)	do { } while (0)
 
 /* Initialization of P3 area for copy_user_page */
 extern void p3_cache_init(void);
@@ -208,6 +206,11 @@ extern unsigned long empty_zero_page[1024];
 #define pmd_clear(xp)	do { set_pmd(xp, __pmd(0)); } while (0)
 #define	pmd_bad(x)	((pmd_val(x) & (~PAGE_MASK & ~_PAGE_USER)) != _KERNPG_TABLE)
 
+/*
+ * Permanent address of a page. Obviously must never be
+ * called on a highmem page.
+ */
+#define page_address(page)  ((page)->virtual) /* P1 address of the page */
 #define pages_to_mb(x)	((x) >> (20-PAGE_SHIFT))
 #define pte_page(x) 	phys_to_page(pte_val(x)&PTE_PHYS_MASK)
 
@@ -232,6 +235,19 @@ static inline pte_t pte_mkexec(pte_t pte)	{ set_pte(&pte, __pte(pte_val(pte) | _
 static inline pte_t pte_mkdirty(pte_t pte)	{ set_pte(&pte, __pte(pte_val(pte) | _PAGE_DIRTY)); return pte; }
 static inline pte_t pte_mkyoung(pte_t pte)	{ set_pte(&pte, __pte(pte_val(pte) | _PAGE_ACCESSED)); return pte; }
 static inline pte_t pte_mkwrite(pte_t pte)	{ set_pte(&pte, __pte(pte_val(pte) | _PAGE_RW)); return pte; }
+
+/*
+ * Macro and implementation to make a page protection as uncachable.
+ */
+#define pgprot_noncached pgprot_noncached
+
+static inline pgprot_t pgprot_noncached(pgprot_t _prot)
+{
+	unsigned long prot = pgprot_val(_prot);
+
+	prot &= ~_PAGE_CACHABLE;
+	return __pgprot(prot);
+}
 
 /*
  * Conversion functions: convert a page and protection to a page entry,

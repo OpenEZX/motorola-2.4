@@ -17,7 +17,6 @@
 #include <linux/timer.h>
 #include <linux/proc_fs.h>
 #include <linux/init.h>
-#include <linux/crc32.h>
 #include <asm/prom.h>
 #include <asm/dbdma.h>
 #include <asm/io.h>
@@ -25,11 +24,11 @@
 #include <asm/pgtable.h>
 #include <asm/machdep.h>
 #include <asm/pmac_feature.h>
-#include <asm/irq.h>
 #ifdef CONFIG_PMAC_PBOOK
 #include <linux/adb.h>
 #include <linux/pmu.h>
-#endif /* CONFIG_PMAC_PBOOK */
+#include <asm/irq.h>
+#endif
 #include "bmac.h"
 
 #define trunc_page(x)	((void *)(((unsigned long)(x)) & ~((unsigned long)(PAGE_SIZE - 1))))
@@ -1049,13 +1048,16 @@ static void bmac_set_multicast(struct net_device *dev)
 
 /* The version of set_multicast below was lifted from sunhme.c */
 
+#define CRC_POLYNOMIAL_BE 0x04c11db7UL  /* Ethernet CRC, big endian */
+#define CRC_POLYNOMIAL_LE 0xedb88320UL  /* Ethernet CRC, little endian */
+
 static void bmac_set_multicast(struct net_device *dev)
 {
 	struct dev_mc_list *dmi = dev->mc_list;
 	char *addrs;
 	int i, j, bit, byte;
 	unsigned short rx_cfg;
-	u32 crc;
+	u32 crc, poly = CRC_POLYNOMIAL_LE;
 
 	if((dev->flags & IFF_ALLMULTI) || (dev->mc_count > 64)) {
 		bmwrite(dev, BHASH0, 0xffff);
@@ -1082,7 +1084,17 @@ static void bmac_set_multicast(struct net_device *dev)
 			if(!(*addrs & 1))
 				continue;
 
-			crc = ether_crc_le(6, addrs);
+			crc = 0xffffffffU;
+			for(byte = 0; byte < 6; byte++) {
+				for(bit = *addrs++, j = 0; j < 8; j++, bit >>= 1) {
+					int test;
+
+					test = ((bit ^ crc) & 0x01);
+					crc >>= 1;
+					if(test)
+						crc = crc ^ poly;
+				}
+			}
 			crc >>= 26;
 			hash_table[crc >> 4] |= 1 << (crc & 0xf);
 		}

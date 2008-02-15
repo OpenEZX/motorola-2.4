@@ -34,6 +34,11 @@ ENTRY(__do_softirq)
  * stack.
  */
 ret_fast_syscall:
+#if (CONFIG_TRACE || CONFIG_TRACE_MODULE)
+	mov	r7, r0				@ save returned r0
+	bl	SYMBOL_NAME(trace_real_syscall_exit)
+	mov	r0, r7
+#endif
 	ldr	r1, [tsk, #TSK_NEED_RESCHED]
 	ldr	r2, [tsk, #TSK_SIGPENDING]
 	teq	r1, #0				@ need_resched || sigpending
@@ -131,6 +136,16 @@ ENTRY(vector_swi)
 	mcr	p15, 0, ip, c1, c0		@ update control register
 #endif
 	enable_irqs ip
+#if (CONFIG_TRACE || CONFIG_TRACE_MODULE)
+	/* zzz note that validity of scno is not yet checked.
+	 * zzz The visualizer checks it.
+	 */
+	add	r1, sp, #S_R0			@ pointer to regs
+	mov	r0, scno  		        @ syscall number
+	bl	SYMBOL_NAME(trace_real_syscall_entry)
+	add	r1, sp, #S_R0			@ pointer to regs
+	ldmia	r1, {r0 - r3}			@ have to reload r0 - r3
+#endif
 
 	str	r4, [sp, #-S_OFF]!		@ push fifth arg
 
@@ -171,6 +186,9 @@ __sys_trace:
 
 __sys_trace_return:
 	str	r0, [sp, #S_R0 + S_OFF]!	@ save returned r0
+#if (CONFIG_TRACE || CONFIG_TRACE_MODULE)
+	bl	SYMBOL_NAME(trace_real_syscall_exit)
+#endif
 	mov	r1, sp
 	mov	r0, #1				@ trace exit [IP = 1]
 	bl	SYMBOL_NAME(syscall_trace)

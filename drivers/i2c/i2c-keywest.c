@@ -1,10 +1,9 @@
 /*
+    i2c-keywest.c - Part of lm_sensors,  Linux kernel modules
+                for hardware monitoring
+
     i2c Support for Apple Keywest I2C Bus Controller
 
-    Copyright (c) 2001 Benjamin Herrenschmidt <benh@kernel.crashing.org>
-
-    Original work by
-    
     Copyright (c) 2000 Philip Edelbrock <phil@stimpy.netroedge.com>
 
     This program is free software; you can redistribute it and/or modify
@@ -23,24 +22,9 @@
 
     Changes:
 
-    2001/12/13 BenH	New implementation
-    2001/12/15 BenH	Add support for "byte" and "quick"
-                        transfers. Add i2c_xfer routine.
-
-    My understanding of the various modes supported by keywest are:
-
-     - Dumb mode : not implemented, probably direct tweaking of lines
-     - Standard mode : simple i2c transaction of type
-         S Addr R/W A Data A Data ... T
-     - Standard sub mode : combined 8 bit subaddr write with data read
-         S Addr R/W A SubAddr A Data A Data ... T
-     - Combined mode : Subaddress and Data sequences appended with no stop
-         S Addr R/W A SubAddr S Addr R/W A Data A Data ... T
-
-    Currently, this driver uses only Standard mode for i2c xfer, and
-    smbus byte & quick transfers ; and uses StandardSub mode for
-    other smbus transfers instead of combined as we need that for the
-    sound driver to be happy
+    2001/7/14  Paul Harrison:
+    		- got write working sufficient to bring Tumbler audio up, 
+		  read still untested
 */
 
 #include <linux/module.h>
@@ -54,575 +38,551 @@
 #include <linux/i2c.h>
 #include <linux/init.h>
 #include <linux/mm.h>
-#include <linux/timer.h>
-#include <linux/spinlock.h>
-#include <linux/completion.h>
 
 #include <asm/io.h>
 #include <asm/prom.h>
 #include <asm/machdep.h>
 #include <asm/pmac_feature.h>
 
-#include "i2c-keywest.h"
+/* The Tumbler audio equalizer can be really slow sometimes */
+#define POLL_SANITY 10000
 
-#define DBG(x...) do {\
-	if (debug > 0) \
-		printk(KERN_DEBUG "KW:" x); \
-	} while(0)
+/* PCI device */
+#define VENDOR		0x106b
+#define DEVICE		0x22
+
+/*****    Protos    ******/
+
+s32 keywest_access(struct i2c_adapter *adap, u16 addr,
+		   unsigned short flags, char read_write,
+		   u8 command, int size, union i2c_smbus_data *data);
+u32 keywest_func(struct i2c_adapter *adapter);
+
+ /**/ 
+
+struct keywest_iface {
+	void *base;
+	void *steps;
+	void *mode;
+	void *control;
+	void *status;
+	void *ISR;
+	void *IER;
+	void *addr;
+	void *subaddr;
+	void *data;
+	struct i2c_adapter *i2c_adapt;
+	struct keywest_iface *next;
+};
+
+static struct i2c_algorithm smbus_algorithm = {
+	/* name */ "Non-I2C SMBus adapter",
+	/* id */ I2C_ALGO_SMBUS,
+	/* master_xfer */ NULL,
+	/* smbus_access */ keywest_access,
+	/* slave_send */ NULL,
+	/* slave_rcv */ NULL,
+	/* algo_control */ NULL,
+	/* functionality */ keywest_func,
+};
+
+void dump_ifaces(struct keywest_iface **ifaces);
+int cleanup(struct keywest_iface **ifaces);
+
+/***** End of Protos ******/
 
 
-MODULE_AUTHOR("Benjamin Herrenschmidt <benh@kernel.crashing.org>");
-MODULE_DESCRIPTION("I2C driver for Apple's Keywest");
-MODULE_LICENSE("GPL");
-MODULE_PARM(probe, "i");
-MODULE_PARM(debug, "i");
-EXPORT_NO_SYMBOLS;
+/** Vars **/
 
-int probe = 0;
-int debug = 0;
-
-static struct keywest_iface *ifaces = NULL;
+struct keywest_iface *ifaces = NULL;
 
 
-static void
-do_stop(struct keywest_iface* iface, int result)
+/** Functions **/
+
+/* keywest needs a small delay to defuddle itself after changing a setting */
+void writeb_wait(int value, void *addr)
 {
-	write_reg(reg_control, read_reg(reg_control) | KW_I2C_CTL_STOP);
-	iface->state = state_stop;
-	iface->result = result;
+	writeb(value, addr);
+	(void)readb(addr);
+	udelay(10);
 }
 
-/* Main state machine for standard & standard sub mode */
-static int
-handle_interrupt(struct keywest_iface *iface, u8 isr)
+int poll_interrupt(void *ISR)
 {
-	int ack;
-	int rearm_timer = 1;
-	
-	DBG("handle_interrupt(), got: %x, status: %x, state: %d\n",
-		isr, read_reg(reg_status), iface->state);
-	if (isr == 0 && iface->state != state_stop) {
-		do_stop(iface, -1);
-		return rearm_timer;
+	int i, res;
+	for (i = 0; i < POLL_SANITY; i++) {
+		udelay(100);
+
+		res = readb(ISR) & 0x0F;
+		if (res > 0) {
+			/* printk("i2c-keywest: received interrupt: 0x%02X\n",res); */
+			return res;
+		}
 	}
-	if (isr & KW_I2C_IRQ_STOP && iface->state != state_stop) {
-		iface->result = -1;
-		iface->state = state_stop;
-	}
-	switch(iface->state) {
-	case state_addr:
-		if (!(isr & KW_I2C_IRQ_ADDR)) {
-			do_stop(iface, -1);
-			break;
-		}
-		ack = read_reg(reg_status);
-		DBG("ack on set address: %x\n", ack);
-		if ((ack & KW_I2C_STAT_LAST_AAK) == 0) {
-			do_stop(iface, -1);
-			break;
-		}
-		/* Handle rw "quick" mode */
-		if (iface->datalen == 0)
-			do_stop(iface, 0);
-		else if (iface->read_write == I2C_SMBUS_READ) {
-			iface->state = state_read;
-			if (iface->datalen > 1)
-				write_reg(reg_control, read_reg(reg_control)
-					| KW_I2C_CTL_AAK);
-		} else {
-			iface->state = state_write;
-			DBG("write byte: %x\n", *(iface->data));
-			write_reg(reg_data, *(iface->data++));
-			iface->datalen--;
-		}
-		
-		break;
-	case state_read:
-		if (!(isr & KW_I2C_IRQ_DATA)) {
-			do_stop(iface, -1);
-			break;
-		}
-		*(iface->data++) = read_reg(reg_data);
-		DBG("read byte: %x\n", *(iface->data-1));
-		iface->datalen--;
-		if (iface->datalen == 0)
-			iface->state = state_stop;
-		else
-			write_reg(reg_control, 0);
-		break;
-	case state_write:
-		if (!(isr & KW_I2C_IRQ_DATA)) {
-			do_stop(iface, -1);
-			break;
-		}
-		/* Check ack status */
-		ack = read_reg(reg_status);
-		DBG("ack on data write: %x\n", ack);
-		if ((ack & KW_I2C_STAT_LAST_AAK) == 0) {
-			do_stop(iface, -1);
-			break;
-		}
-		if (iface->datalen) {
-			DBG("write byte: %x\n", *(iface->data));
-			write_reg(reg_data, *(iface->data++));
-			iface->datalen--;
-		} else
-			do_stop(iface, 0);
-		break;
-		
-	case state_stop:
-		if (!(isr & KW_I2C_IRQ_STOP) && (++iface->stopretry) < 10)
-			do_stop(iface, -1);
-		else {
-			rearm_timer = 0;
-			iface->state = state_idle;
-			write_reg(reg_control, 0x00);
-			write_reg(reg_ier, 0x00);
-			complete(&iface->complete);
-		}
-		break;
-	}
-	
-	write_reg(reg_isr, isr);
 
-	return rearm_timer;
-}
-
-/* Interrupt handler */
-static void
-keywest_irq(int irq, void *dev_id, struct pt_regs *regs)
-{
-	struct keywest_iface *iface = (struct keywest_iface *)dev_id;
-
-	spin_lock(&iface->lock);
-	del_timer(&iface->timeout_timer);
-	if (handle_interrupt(iface, read_reg(reg_isr))) {
-		iface->timeout_timer.expires = jiffies + POLL_TIMEOUT;
-		add_timer(&iface->timeout_timer);
-	}
-	spin_unlock(&iface->lock);
-}
-
-static void
-keywest_timeout(unsigned long data)
-{
-	struct keywest_iface *iface = (struct keywest_iface *)data;
-
-	DBG("timeout !\n");
-	spin_lock_irq(&iface->lock);
-	if (handle_interrupt(iface, read_reg(reg_isr))) {
-		iface->timeout_timer.expires = jiffies + POLL_TIMEOUT;
-		add_timer(&iface->timeout_timer);
-	}
-	spin_unlock(&iface->lock);
-}
-
-/*
- * SMBUS-type transfer entrypoint
- */
-static s32
-keywest_smbus_xfer(	struct i2c_adapter*	adap,
-			u16			addr,
-			unsigned short		flags,
-			char			read_write,
-			u8			command,
-			int			size,
-			union i2c_smbus_data*	data)
-{
-	struct keywest_chan* chan = (struct keywest_chan*)adap->data;
-	struct keywest_iface* iface = chan->iface;
-	int len;
-	u8* buffer;
-	u16 cur_word;
-	int rc = 0;
-
-	if (iface->state == state_dead)
+	if (i == POLL_SANITY) {
+		printk("i2c-keywest: Sanity check failed!  Expected interrupt never happened.\n");
 		return -1;
-		
-	/* Prepare datas & select mode */
-	iface->cur_mode &= ~KW_I2C_MODE_MODE_MASK;
-	switch (size) {
-	    case I2C_SMBUS_QUICK:
-	    	len = 0;
-	    	buffer = NULL;
-	    	iface->cur_mode |= KW_I2C_MODE_STANDARD;
-	    	break;
-	    case I2C_SMBUS_BYTE:
-	    	len = 1;
-	    	buffer = &data->byte;
-	    	iface->cur_mode |= KW_I2C_MODE_STANDARD;
-	    	break;
-	    case I2C_SMBUS_BYTE_DATA:
-	    	len = 1;
-	    	buffer = &data->byte;
-	    	iface->cur_mode |= KW_I2C_MODE_STANDARDSUB;
-	    	break;
-	    case I2C_SMBUS_WORD_DATA:
-	    	len = 2;
-	    	cur_word = cpu_to_le16(data->word);
-	    	buffer = (u8 *)&cur_word;
-	    	iface->cur_mode |= KW_I2C_MODE_STANDARDSUB;
-		break;
-	    case I2C_SMBUS_BLOCK_DATA:
-	    	len = data->block[0];
-	    	buffer = &data->block[1];
-	    	iface->cur_mode |= KW_I2C_MODE_STANDARDSUB;
-		break;
-	    default:
-	    	return -1;
 	}
 
-	/* Original driver had this limitation */
-	if (len > 32)
-		len = 32;
+	return -1;		/* Should never get here */
+}
 
-	down(&iface->sem);
 
-	DBG("chan: %d, addr: 0x%x, transfer len: %d, read: %d\n",
-		chan->chan_no, addr, len, read_write == I2C_SMBUS_READ);
+void keywest_reset(struct keywest_iface *ifaceptr)
+{
+	int interrupt_state;
 
-	iface->data = buffer;
-	iface->datalen = len;
-	iface->state = state_addr;
-	iface->result = 0;
-	iface->stopretry = 0;
-	iface->read_write = read_write;
-	
-	/* Setup channel & clear pending irqs */
-	write_reg(reg_mode, iface->cur_mode | (chan->chan_no << 4));
-	write_reg(reg_isr, read_reg(reg_isr));
-	write_reg(reg_status, 0);
+	/* Clear all past interrupts */
+	interrupt_state = readb(ifaceptr->ISR) & 0x0F;
+	if (interrupt_state)
+		writeb(interrupt_state,ifaceptr->ISR);
+}
+
+s32 keywest_access(struct i2c_adapter *adap, u16 addr,
+		   unsigned short flags, char read_write,
+		   u8 command, int size, union i2c_smbus_data *data)
+{
+
+	struct keywest_iface *ifaceptr;
+	int interrupt_state = 1;
+	int ack;
+	int error_state = 0;
+	int len, i;		/* for block transfers */
+
+	ifaceptr = (struct keywest_iface *) adap->data;
+
+	keywest_reset(ifaceptr);
 
 	/* Set up address and r/w bit */
-	write_reg(reg_addr,
-		(addr << 1) | ((read_write == I2C_SMBUS_READ) ? 0x01 : 0x00));
+	writeb_wait(((addr << 1) | (read_write == I2C_SMBUS_READ ?1:0)),
+		    (void *) ifaceptr->addr);
 
-	/* Set up the sub address */
-	if ((iface->cur_mode & KW_I2C_MODE_MODE_MASK) == KW_I2C_MODE_STANDARDSUB
-	    || (iface->cur_mode & KW_I2C_MODE_MODE_MASK) == KW_I2C_MODE_COMBINED)
-		write_reg(reg_subaddr, command);
-
-	/* Arm timeout */
-	iface->timeout_timer.expires = jiffies + POLL_TIMEOUT;
-	add_timer(&iface->timeout_timer);
-
-	/* Start sending address & enable interrupt*/
-	write_reg(reg_control, read_reg(reg_control) | KW_I2C_CTL_XADDR);
-	write_reg(reg_ier, KW_I2C_IRQ_MASK);
-
-	wait_for_completion(&iface->complete);	
-
-	rc = iface->result;	
-	DBG("transfer done, result: %d\n", rc);
-
-	if (rc == 0 && size == I2C_SMBUS_WORD_DATA && read_write == I2C_SMBUS_READ)
-	    	data->word = le16_to_cpu(cur_word);
+	/* Set up 'sub address' which I'm guessing is the command field? */
+	writeb_wait(command, (void *) ifaceptr->subaddr);
 	
-	/* Release sem */
-	up(&iface->sem);
-	
-	return rc;
-}
+	/* Start sending address */
+	writeb_wait(readb(ifaceptr->control) | 2, ifaceptr->control);
+	interrupt_state = poll_interrupt(ifaceptr->ISR);
+	ack = readb(ifaceptr->status) & 0x0F;
 
-/*
- * Generic i2c master transfer entrypoint
- */
-static int
-keywest_xfer(	struct i2c_adapter *adap,
-		struct i2c_msg msgs[], 
-		int num)
-{
-	struct keywest_chan* chan = (struct keywest_chan*)adap->data;
-	struct keywest_iface* iface = chan->iface;
-	struct i2c_msg *pmsg;
-	int i, completed;
-	int rc = 0;
+	if ((ack & 0x02) == 0) {
+		printk("i2c-keywest: Ack Status on addr expected but got: 0x%02X on addr: 0x%02X\n",
+		     ack, addr);
+		return -1;
+	} 
 
-	down(&iface->sem);
-
-	/* Set adapter to standard mode */
-	iface->cur_mode &= ~KW_I2C_MODE_MODE_MASK;
-	iface->cur_mode |= KW_I2C_MODE_STANDARD;
-
-	completed = 0;
-	for (i = 0; rc >= 0 && i < num;) {
-		u8 addr;
+	/* Set ACK if reading */
+	if (read_write == I2C_SMBUS_READ)
+		writeb_wait(1 | readb(ifaceptr->control), ifaceptr->control);	
 		
-		pmsg = &msgs[i++];
-		addr = pmsg->addr;
-		if (pmsg->flags & I2C_M_TEN) {
-			printk(KERN_ERR "i2c-keywest: 10 bits addr not supported !\n");
-			rc = -EINVAL;
-			break;
+	switch (size) {
+	    case I2C_SMBUS_BYTE_DATA:
+		if (read_write == I2C_SMBUS_WRITE) {
+			writeb_wait(data->byte, ifaceptr->data);
+				    
+			/* Clear interrupt and go */
+			writeb_wait(interrupt_state, ifaceptr->ISR);	
+			interrupt_state = poll_interrupt(ifaceptr->ISR);
+			if (interrupt_state < 0) 
+				error_state = -1;
+
+			if ((readb(ifaceptr->status) & 0x02) == 0) {
+				printk("i2c-keywest: Ack Expected by not received(2)!\n");
+				error_state = -1;
+			}
+			
+			/* Send stop */
+			writeb_wait(readb(ifaceptr->control) | 4, ifaceptr->control);
+
+			writeb_wait(interrupt_state, ifaceptr->control);
+			
+			interrupt_state = poll_interrupt(ifaceptr->ISR);
+			if (interrupt_state < 0) 
+				error_state = -1;
+			writeb_wait(interrupt_state, ifaceptr->ISR);	
+		} else {
+			/* Clear interrupt and go */
+			writeb_wait(interrupt_state, ifaceptr->ISR);	
+			interrupt_state = poll_interrupt(ifaceptr->ISR);
+			data->byte = readb(ifaceptr->data);
+			
+			/* End read: clear ack */
+			writeb_wait(0, ifaceptr->control);	
 		}
-		DBG("xfer: chan: %d, doing %s %d bytes to 0x%02x - %d of %d messages\n",
-		     chan->chan_no,
-		     pmsg->flags & I2C_M_RD ? "read" : "write",
-                     pmsg->len, addr, i, num);
-    
-		/* Setup channel & clear pending irqs */
-		write_reg(reg_mode, iface->cur_mode | (chan->chan_no << 4));
-		write_reg(reg_isr, read_reg(reg_isr));
-		write_reg(reg_status, 0);
-		
-		iface->data = pmsg->buf;
-		iface->datalen = pmsg->len;
-		iface->state = state_addr;
-		iface->result = 0;
-		iface->stopretry = 0;
-		if (pmsg->flags & I2C_M_RD)
-			iface->read_write = I2C_SMBUS_READ;
-		else
-			iface->read_write = I2C_SMBUS_WRITE;
+		break;
 
-		/* Set up address and r/w bit */
-		if (pmsg->flags & I2C_M_REV_DIR_ADDR)
-			addr ^= 1;		
-		write_reg(reg_addr,
-			(addr << 1) |
-			((iface->read_write == I2C_SMBUS_READ) ? 0x01 : 0x00));
+	    case I2C_SMBUS_WORD_DATA:
+		if (read_write == I2C_SMBUS_WRITE) {
+			writeb_wait(data->word & 0x0ff, ifaceptr->data);
 
-		/* Arm timeout */
-		iface->timeout_timer.expires = jiffies + POLL_TIMEOUT;
-		add_timer(&iface->timeout_timer);
+			/* Clear interrupt and go */
+			writeb_wait(interrupt_state, ifaceptr->ISR);	
+			interrupt_state = poll_interrupt(ifaceptr->ISR);
+			if (interrupt_state < 0)
+				error_state = -1;
 
-		/* Start sending address & enable interrupt*/
-		write_reg(reg_control, read_reg(reg_control) | KW_I2C_CTL_XADDR);
-		write_reg(reg_ier, KW_I2C_IRQ_MASK);
+			if ((readb(ifaceptr->status) & 0x02) == 0) {
+				printk("i2c-keywest: Ack Expected by not received(2)!\n");
+				error_state = -1;
+			}
 
-		wait_for_completion(&iface->complete);	
+			writeb_wait((data->word & 0x0ff00) >> 8,
+				    ifaceptr->data);
+	
+			/* Clear interrupt and go */
+			writeb_wait(interrupt_state, ifaceptr->ISR);
+			interrupt_state = poll_interrupt(ifaceptr->ISR);
+			if (interrupt_state < 0) 
+				error_state = -1;
 
-		rc = iface->result;
-		if (rc == 0)
-			completed++;
-		DBG("transfer done, result: %d\n", rc);
+			if ((readb(ifaceptr->status) & 0x02) == 0) {
+				printk("i2c-keywest: Ack Expected by not received(3)!\n");
+				error_state = -1;
+			}
+
+			/* Send stop */
+			writeb_wait(readb(ifaceptr->control) | 4, ifaceptr->control);
+
+			writeb_wait(interrupt_state, ifaceptr->control);
+			
+			interrupt_state = poll_interrupt(ifaceptr->ISR);
+			if (interrupt_state < 0) 
+				error_state = -1;
+			writeb_wait(interrupt_state, ifaceptr->ISR);	
+		} else {
+			/* Clear interrupt and go */
+			writeb_wait(interrupt_state, ifaceptr->ISR);	
+			interrupt_state =
+			    poll_interrupt(ifaceptr->ISR);
+			data->word =
+			    (readb(ifaceptr->data) << 8);
+
+			/* Send ack */
+			writeb_wait(1, ifaceptr->control);	
+
+			/* Clear interrupt and go */	
+			writeb_wait(interrupt_state, ifaceptr->ISR);	
+			interrupt_state = poll_interrupt(ifaceptr->ISR);
+			data->word |= (readb(ifaceptr->data));
+		}
+		break;
+
+	case I2C_SMBUS_BLOCK_DATA:
+		if (read_write == I2C_SMBUS_WRITE) {
+			len = data->block[0];
+			if (len < 0)
+				len = 0;
+			if (len > 32)
+				len = 32;
+
+			for(i=1; i<=len; i++) {
+				writeb_wait(data->block[i],
+					    ifaceptr->data);
+
+				/* Clear interrupt and go */
+				writeb_wait(interrupt_state,ifaceptr->ISR); 
+
+				interrupt_state = poll_interrupt(ifaceptr->ISR);
+				if ((readb(ifaceptr->status) & 0x02) == 0) {
+					printk("i2c-keywest: Ack Expected by not received(block)!\n");
+					error_state = -1;
+				}
+			}
+
+			/* Send stop */
+			writeb_wait(readb(ifaceptr->control) | 4, ifaceptr->control);
+
+			writeb_wait(interrupt_state, ifaceptr->control);
+			
+			interrupt_state = poll_interrupt(ifaceptr->ISR);
+			if (interrupt_state < 0) 
+				error_state = -1;
+			writeb_wait(interrupt_state, ifaceptr->ISR);	
+		} else {
+			for(i=1; i<=data->block[0]; i++) {
+				/* Send ack */
+				writeb_wait(1, ifaceptr->control);
+
+				/* Clear interrupt and go */
+				writeb_wait(interrupt_state, ifaceptr->ISR);
+				interrupt_state = poll_interrupt(ifaceptr->ISR);
+				data->block[i] = readb(ifaceptr->data);
+			}
+		}
+		break;
+
+	    default:
+		printk("i2c-keywest: operation not supported\n");
+		error_state = -1;
 	}
 
-	/* Release sem */
-	up(&iface->sem);
+	/* End read: clear ack */
+	if (read_write == I2C_SMBUS_READ)
+		writeb_wait(0, ifaceptr->control);
 
-	return completed;
+	return error_state;
 }
 
-static u32
-keywest_func(struct i2c_adapter * adapter)
+u32 keywest_func(struct i2c_adapter * adapter)
 {
 	return I2C_FUNC_SMBUS_QUICK | I2C_FUNC_SMBUS_BYTE |
 	       I2C_FUNC_SMBUS_BYTE_DATA | I2C_FUNC_SMBUS_WORD_DATA |
 	       I2C_FUNC_SMBUS_BLOCK_DATA;
 }
 
-static void
-keywest_inc(struct i2c_adapter *adapter)
+void keywest_inc(struct i2c_adapter *adapter)
 {
 	MOD_INC_USE_COUNT;
 }
 
-static void
-keywest_dec(struct i2c_adapter *adapter)
+void keywest_dec(struct i2c_adapter *adapter)
 {
 	MOD_DEC_USE_COUNT;
 }
 
-/* For now, we only handle combined mode (smbus) */
-static struct i2c_algorithm keywest_algorithm = {
-	name:		"Keywest i2c",
-	id:		I2C_ALGO_SMBUS,
-	smbus_xfer:	keywest_smbus_xfer,
-	master_xfer:	keywest_xfer,
-	functionality:	keywest_func,
-};
+/**** Internal Functions ****/
 
-
-static int
-create_iface(struct device_node* np)
+int init_iface(void *base, void *steps, struct keywest_iface **ifaces)
 {
-	unsigned long steps, *psteps, *prate;
-	unsigned bsteps, tsize, i, nchan, addroffset;
-	struct keywest_iface* iface;
-	int rc;
+	struct i2c_adapter *keywest_adapter;
+	struct keywest_iface **temp_hdl = ifaces;
+	int res;
 
-	psteps = (unsigned long *)get_property(np, "AAPL,address-step", NULL);
-	steps = psteps ? (*psteps) : 0x10;
-
-	/* Hrm... maybe we can be smarter here */
-	for (bsteps = 0; (steps & 0x01) == 0; bsteps++)
-		steps >>= 1;
-
-	if (!strcmp(np->parent->name, "uni-n")) {
-		nchan = 2;
-		addroffset = 3;
-	} else {
-		addroffset = 0;
-		nchan = 1;
+	if (ifaces == NULL) {
+		printk("Ah!  Passed a null handle to init_iface");
+		return -1;
 	}
 
-	tsize = sizeof(struct keywest_iface) +
-		(sizeof(struct keywest_chan) + 4) * nchan;
-	iface = (struct keywest_iface *) kmalloc(tsize, GFP_KERNEL);
-	if (iface == NULL) {
-		printk(KERN_ERR "i2c-keywest: can't allocate inteface !\n");
-		return -ENOMEM;
-	}
-	memset(iface, 0, tsize);
-	init_MUTEX(&iface->sem);
-	spin_lock_init(&iface->lock);
-	init_completion(&iface->complete);
-	iface->bsteps = bsteps;
-	iface->chan_count = nchan;
-	iface->state = state_idle;
-	iface->irq = np->intrs[0].line;
-	iface->channels = (struct keywest_chan *)
-		(((unsigned long)(iface + 1) + 3UL) & ~3UL);
-	iface->base = (unsigned long)ioremap(np->addrs[0].address + addroffset,
-						np->addrs[0].size);
-	if (iface->base == 0) {
-		printk(KERN_ERR "i2c-keywest: can't map inteface !\n");
-		kfree(iface);
-		return -ENOMEM;
+	while ((*temp_hdl) != NULL) {
+		temp_hdl = &(*temp_hdl)->next;
 	}
 
-	init_timer(&iface->timeout_timer);
-	iface->timeout_timer.function = keywest_timeout;
-	iface->timeout_timer.data = (unsigned long)iface;
-
-	/* Select interface rate */
-	iface->cur_mode = KW_I2C_MODE_100KHZ;
-	prate = (unsigned long *)get_property(np, "AAPL,i2c-rate", NULL);
-	if (prate) switch(*prate) {
-	case 100:
-		iface->cur_mode = KW_I2C_MODE_100KHZ;
-		break;
-	case 50:
-		iface->cur_mode = KW_I2C_MODE_50KHZ;
-		break;
-	case 25:
-		iface->cur_mode = KW_I2C_MODE_25KHZ;
-		break;
-	default:
-		printk(KERN_WARNING "i2c-keywest: unknown rate %ldKhz, using 100KHz\n",
-			*prate);
+	*temp_hdl =
+	    (struct keywest_iface *) kmalloc(sizeof(struct keywest_iface),
+					     GFP_KERNEL);
+	if (*temp_hdl == NULL) {
+		printk("kmalloc failed on temp_hdl!");
+		return -1;
 	}
+
+	(*temp_hdl)->next = NULL;
+	base = ioremap((int) base, (int) steps * 8);
+	(*temp_hdl)->base = base;
+	(*temp_hdl)->steps = steps;
+	(*temp_hdl)->mode = (void *) base;
+	(*temp_hdl)->control = (void *) ((__u32) base + (__u32) steps);
+	(*temp_hdl)->status = (void *) ((__u32) base + (__u32) steps * 2);
+	(*temp_hdl)->ISR = (void *) ((__u32) base + (__u32) steps * 3);
+	(*temp_hdl)->IER = (void *) ((__u32) base + (__u32) steps * 4);
+	(*temp_hdl)->addr = (void *) ((__u32) base + (__u32) steps * 5);
+	(*temp_hdl)->subaddr = (void *) ((__u32) base + (__u32) steps * 6);
+	(*temp_hdl)->data = (void *) ((__u32) base + (__u32) steps * 7);
 	
-	/* Select standard mode by default */
-	iface->cur_mode |= KW_I2C_MODE_STANDARD;
+	keywest_adapter =
+	    (struct i2c_adapter *) kmalloc(sizeof(struct i2c_adapter),
+					   GFP_KERNEL);
+	if (keywest_adapter == NULL) {
+		printk("kmalloc failed on keywest_adapter!");
+		return -1;
+	}
+	memset((void *) keywest_adapter, 0, (sizeof(struct i2c_adapter)));
 	
-	/* Write mode */
-	write_reg(reg_mode, iface->cur_mode);
+	strcpy(keywest_adapter->name, "keywest i2c");
+	keywest_adapter->id = I2C_ALGO_SMBUS;
+	keywest_adapter->algo = &smbus_algorithm;
+	keywest_adapter->algo_data = NULL;
+	keywest_adapter->inc_use = keywest_inc;
+	keywest_adapter->dec_use = keywest_dec;
+	keywest_adapter->client_register = NULL;
+	keywest_adapter->client_unregister = NULL;
+	keywest_adapter->data = (void *) (*temp_hdl);
 	
-	/* Switch interrupts off & clear them*/
-	write_reg(reg_ier, 0x00);
-	write_reg(reg_isr, KW_I2C_IRQ_MASK);
-
-	/* Request chip interrupt */	
-	rc = request_irq(iface->irq, keywest_irq, 0, "keywest i2c", iface);
-	if (rc) {
-		printk(KERN_ERR "i2c-keywest: can't get IRQ %d !\n", iface->irq);
-		iounmap((void *)iface->base);
-		kfree(iface);
-		return -ENODEV;
+	(*temp_hdl)->i2c_adapt = keywest_adapter;
+	
+	if ((res = i2c_add_adapter((*temp_hdl)->i2c_adapt)) != 0) {
+		printk("i2c-keywest.o: Adapter registration failed, module not inserted.\n");
+		/* cleanup(); */
 	}
 
-	for (i=0; i<nchan; i++) {
-		struct keywest_chan* chan = &iface->channels[i];
-		u8 addr;
-		
-		sprintf(chan->adapter.name, "%s %d", np->parent->name, i);
-		chan->iface = iface;
-		chan->chan_no = i;
-		chan->adapter.id = I2C_ALGO_SMBUS;
-		chan->adapter.algo = &keywest_algorithm;
-		chan->adapter.algo_data = NULL;
-		chan->adapter.inc_use = keywest_inc;
-		chan->adapter.dec_use = keywest_dec;
-		chan->adapter.client_register = NULL;
-		chan->adapter.client_unregister = NULL;
-		chan->adapter.data = chan;
+	/* Now actually do the initialization of the device */
 
-		rc = i2c_add_adapter(&chan->adapter);
-		if (rc) {
-			printk("i2c-keywest.c: Adapter %s registration failed\n",
-				chan->adapter.name);
-			chan->adapter.data = NULL;
-		}
-		if (probe) {
-			printk("Probe: ");
-			for (addr = 0x00; addr <= 0x7f; addr++) {
-				if (i2c_smbus_xfer(&chan->adapter,addr,
-				    0,0,0,I2C_SMBUS_QUICK,NULL) >= 0)
-					printk("%02x ", addr);
-			}
-			printk("\n");
-		}
-	}
+	/* Select standard sub mode 
+	 
+	   ie for <Address><Ack><Command><Ack><data><Ack>... style transactions
+	 */
+	writeb_wait(0x08, (*temp_hdl)->mode);
 
-	printk(KERN_INFO "Found KeyWest i2c on \"%s\", %d channel%s, stepping: %d bits\n",
-		np->parent->name, nchan, nchan > 1 ? "s" : "", bsteps);
-		
-	iface->next = ifaces;
-	ifaces = iface;
-	return 0;
+        /* Enable interrupts */
+	writeb_wait(1 + 2 + 4 + 8, (*temp_hdl)->IER);
+
+	keywest_reset(*temp_hdl);
+
+	return res;
 }
 
-static void
-dispose_iface(struct keywest_iface *iface)
+void dump_ifaces(struct keywest_iface **ifaces)
 {
-	int i, rc;
+	if (ifaces == NULL) {
+		printk("Ah!  Passed null handle to dump!\n");
+		return;
+	}
+	if (*ifaces != NULL) {
+		printk("Interface @%X,%X  Locations:\n", (u32) (*ifaces)->base,
+		       (u32) (*ifaces)->steps);
+		printk("  mode:%X control:%X status:%X ISR:%X IER:%X addr:%X subaddr:%X data:%X\n",
+		     (u32) (*ifaces)->mode, (u32) (*ifaces)->control,
+		     (u32) (*ifaces)->status, (u32) (*ifaces)->ISR, (u32) (*ifaces)->IER,
+		     (u32) (*ifaces)->addr, (u32) (*ifaces)->subaddr, (u32) (*ifaces)->data);
+		printk("Contents:\n");
+		printk("  mode:0x%02X control: 0x%02X status:0x%02X ISR:0x%02X IER:0x%02X addr:0x%02X subaddr:0x%02X data:0x%02X\n",
+		     readb((*ifaces)->mode), readb((*ifaces)->control),
+		     readb((*ifaces)->status), readb((*ifaces)->ISR),
+		     readb((*ifaces)->IER), readb((*ifaces)->addr),
+		     readb((*ifaces)->subaddr), readb((*ifaces)->data));
+		printk("I2C-Adapter:\n");
+		printk("  name:%s\n", (*ifaces)->i2c_adapt->name);
+		dump_ifaces(&(*ifaces)->next);
+	} else {
+		printk("End of ifaces.\n");
+	}
+}
+
+int cleanup(struct keywest_iface **ifaces)
+{
+	int res = 0;
+
+	if (ifaces == NULL) {
+		printk("Ah!  Passed null handle to cleanup!\n");
+		return 0;
+	}
 	
-	ifaces = iface->next;
+	if (*ifaces != NULL) {
+		if (cleanup(&(*ifaces)->next) != 0)
+			res = -1;
 
-	/* Make sure we stop all activity */
-	down(&iface->sem);
-	spin_lock_irq(&iface->lock);
-	while (iface->state != state_idle) {
-		spin_unlock_irq(&iface->lock);
-		set_task_state(current,TASK_UNINTERRUPTIBLE);
-		schedule_timeout(HZ/10);
-		spin_lock_irq(&iface->lock);
-	}
-	iface->state = state_dead;
-	spin_unlock_irq(&iface->lock);
-	free_irq(iface->irq, iface);
-	up(&iface->sem);
+		printk("Cleaning up interface @%X,%X\n", (u32) (*ifaces)->base,
+		       (u32) (*ifaces)->steps);
+		       
+		if (i2c_del_adapter((*ifaces)->i2c_adapt) != 0) {
+			printk("i2c-keywest.o: i2c_del_adapter failed, module not removed\n");
+			res = -1;
+		}
 
-	/* Release all channels */
-	for (i=0; i<iface->chan_count; i++) {
-		struct keywest_chan* chan = &iface->channels[i];
-		if (!chan->adapter.data)
-			continue;
-		rc = i2c_del_adapter(&chan->adapter);
-		chan->adapter.data = NULL;
-		/* We aren't that prepared to deal with this... */
-		if (rc)
-			printk("i2c-keywest.c: i2c_del_adapter failed, that's bad !\n");
+		kfree(*ifaces);
+		iounmap((*ifaces)->base);
+		(*ifaces) = NULL;
 	}
-	iounmap((void *)iface->base);
-	kfree(iface);
+
+	return res;
+}
+
+#ifdef DEBUG
+static void scan_of(char *dev_type)
+{
+	struct device_node *np = NULL;
+	struct property *dp = NULL;
+	int i;
+
+	np = find_devices(dev_type);
+
+	if (np == 0) {
+		printk("No %s devices found.\n", dev_type);
+	}
+	
+	while (np != 0) {
+		printk("%s found: %s, with properties:\n", dev_type,
+		       np->full_name);
+		dp = np->properties;
+		while (dp != 0) {
+			printk("     %s = %s [ ", dp->name, dp->value);
+			for (i = 0; i < dp->length; i++) {
+				printk("%02X", (char) dp->value[i]);
+				if (((i + 1) % 4) == 0) {
+					printk(" ");
+				}
+			}
+			printk("] (length=%d)\n", dp->length);
+			dp = dp->next;
+		}
+		np = np->next;
+	}
+}
+#endif
+
+static int find_keywest(void)
+{
+	struct device_node *i2c_device;
+	void **temp;
+	void *base = NULL;
+	void *steps = NULL;
+
+#ifdef DEBUG
+	scan_of("i2c");
+#endif
+
+	i2c_device = find_compatible_devices("i2c", "keywest");
+	
+	if (i2c_device == 0) {
+		printk("No Keywest i2c devices found.\n");
+		return -1;
+	}
+	
+	while (i2c_device != 0) {
+		printk("Keywest device found: %s\n",
+		       i2c_device->full_name);
+		temp =
+		    (void **) get_property(i2c_device, "AAPL,address",
+					   NULL);
+		if (temp != NULL) {
+			base = *temp;
+		} else {
+			printk("no 'address' prop!\n");
+		}
+
+		temp =
+		    (void **) get_property(i2c_device, "AAPL,address-step",
+					   NULL);
+		if (temp != NULL) {
+			steps = *temp;
+		} else {
+			printk("no 'address-step' prop!\n");
+		}
+		
+		/* printk("Device found. base: %X steps: %X\n", base, steps); */
+
+		if (init_iface(base, steps, &ifaces) != 0) {
+			cleanup(&ifaces);
+			return -ENODEV;
+		}
+
+		i2c_device = i2c_device->next;
+	}
+	
+	if (ifaces == NULL) {
+		printk("ifaces null! :'(");
+	}
+	
+	/* dump_ifaces(&ifaces); */
+	return 0;
 }
 
 static int __init
 i2c_keywest_init(void)
 {
-	struct device_node *np;
-	int rc = -ENODEV;
-	
-	np = find_compatible_devices("i2c", "keywest");
-	while (np != 0) {
-		if (np->n_addrs >= 1 && np->n_intrs >= 1)
-			rc = create_iface(np);
-		np = np->next;
-	}
-	if (ifaces)
-		rc = 0;
-	return rc;
+	return find_keywest();
 }
 
 static void __exit
 i2c_keywest_cleanup(void)
 {
-	while(ifaces)
-		dispose_iface(ifaces);
+	cleanup(&ifaces);
 }
 
 module_init(i2c_keywest_init);
 module_exit(i2c_keywest_cleanup);
+
+MODULE_AUTHOR("Philip Edelbrock <phil@netroedge.com");
+MODULE_DESCRIPTION("I2C driver for Apple's Keywest");
+MODULE_LICENSE("GPL");
+EXPORT_NO_SYMBOLS;

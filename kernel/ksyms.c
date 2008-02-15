@@ -47,8 +47,11 @@
 #include <linux/in6.h>
 #include <linux/completion.h>
 #include <linux/seq_file.h>
-#include <linux/dnotify.h>
+#include <linux/ptrace.h>
 #include <asm/checksum.h>
+#ifdef CONFIG_ILATENCY
+#include <linux/ilatency.h>
+#endif
 
 #if defined(CONFIG_PROC_FS)
 #include <linux/proc_fs.h>
@@ -91,6 +94,7 @@ EXPORT_SYMBOL(exit_fs);
 EXPORT_SYMBOL(exit_sighand);
 
 /* internal kernel memory management */
+EXPORT_SYMBOL(start_aggressive_readahead);
 EXPORT_SYMBOL(_alloc_pages);
 EXPORT_SYMBOL(__alloc_pages);
 EXPORT_SYMBOL(alloc_pages_node);
@@ -104,15 +108,15 @@ EXPORT_SYMBOL(kmem_cache_create);
 EXPORT_SYMBOL(kmem_cache_destroy);
 EXPORT_SYMBOL(kmem_cache_shrink);
 EXPORT_SYMBOL(kmem_cache_alloc);
+EXPORT_SYMBOL(kmem_cache_zalloc);
 EXPORT_SYMBOL(kmem_cache_free);
-EXPORT_SYMBOL(kmem_cache_size);
 EXPORT_SYMBOL(kmalloc);
 EXPORT_SYMBOL(kfree);
 EXPORT_SYMBOL(vfree);
 EXPORT_SYMBOL(__vmalloc);
-EXPORT_SYMBOL(vmalloc_to_page);
 EXPORT_SYMBOL(mem_map);
 EXPORT_SYMBOL(remap_page_range);
+EXPORT_SYMBOL(remap_page_array);
 EXPORT_SYMBOL(max_mapnr);
 EXPORT_SYMBOL(high_memory);
 EXPORT_SYMBOL(vmtruncate);
@@ -124,8 +128,6 @@ EXPORT_SYMBOL(kmap_high);
 EXPORT_SYMBOL(kunmap_high);
 EXPORT_SYMBOL(highmem_start_page);
 EXPORT_SYMBOL(create_bounce);
-EXPORT_SYMBOL(kmap_prot);
-EXPORT_SYMBOL(kmap_pte);
 #endif
 
 /* filesystem internal functions */
@@ -141,6 +143,8 @@ EXPORT_SYMBOL(fget);
 EXPORT_SYMBOL(igrab);
 EXPORT_SYMBOL(iunique);
 EXPORT_SYMBOL(iget4);
+EXPORT_SYMBOL(icreate);
+EXPORT_SYMBOL(unlock_new_inode);
 EXPORT_SYMBOL(iput);
 EXPORT_SYMBOL(force_delete);
 EXPORT_SYMBOL(follow_up);
@@ -169,7 +173,6 @@ EXPORT_SYMBOL(mark_buffer_dirty);
 EXPORT_SYMBOL(set_buffer_async_io); /* for reiserfs_writepage */
 EXPORT_SYMBOL(__mark_buffer_dirty);
 EXPORT_SYMBOL(__mark_inode_dirty);
-EXPORT_SYMBOL(fd_install);
 EXPORT_SYMBOL(get_empty_filp);
 EXPORT_SYMBOL(init_private_file);
 EXPORT_SYMBOL(filp_open);
@@ -192,8 +195,6 @@ EXPORT_SYMBOL(inode_change_ok);
 EXPORT_SYMBOL(write_inode_now);
 EXPORT_SYMBOL(notify_change);
 EXPORT_SYMBOL(set_blocksize);
-EXPORT_SYMBOL(sb_set_blocksize);
-EXPORT_SYMBOL(sb_min_blocksize);
 EXPORT_SYMBOL(getblk);
 EXPORT_SYMBOL(cdget);
 EXPORT_SYMBOL(cdput);
@@ -245,6 +246,7 @@ EXPORT_SYMBOL(shrink_dcache_parent);
 EXPORT_SYMBOL(find_inode_number);
 EXPORT_SYMBOL(is_subdir);
 EXPORT_SYMBOL(get_unused_fd);
+EXPORT_SYMBOL(put_unused_fd);
 EXPORT_SYMBOL(vfs_create);
 EXPORT_SYMBOL(vfs_mkdir);
 EXPORT_SYMBOL(vfs_mknod);
@@ -262,7 +264,7 @@ EXPORT_SYMBOL(poll_freewait);
 EXPORT_SYMBOL(ROOT_DEV);
 EXPORT_SYMBOL(__find_get_page);
 EXPORT_SYMBOL(__find_lock_page);
-EXPORT_SYMBOL(find_or_create_page);
+EXPORT_SYMBOL(grab_cache_page);
 EXPORT_SYMBOL(grab_cache_page_nowait);
 EXPORT_SYMBOL(read_cache_page);
 EXPORT_SYMBOL(set_page_dirty);
@@ -277,12 +279,7 @@ EXPORT_SYMBOL(__get_lease);
 EXPORT_SYMBOL(lease_get_mtime);
 EXPORT_SYMBOL(lock_may_read);
 EXPORT_SYMBOL(lock_may_write);
-EXPORT_SYMBOL(dcache_dir_open);
-EXPORT_SYMBOL(dcache_dir_close);
-EXPORT_SYMBOL(dcache_dir_lseek);
-EXPORT_SYMBOL(dcache_dir_fsync);
 EXPORT_SYMBOL(dcache_readdir);
-EXPORT_SYMBOL(dcache_dir_ops);
 
 /* for stackable file systems (lofs, wrapfs, cryptfs, etc.) */
 EXPORT_SYMBOL(default_llseek);
@@ -293,6 +290,10 @@ EXPORT_SYMBOL(filemap_fdatasync);
 EXPORT_SYMBOL(filemap_fdatawait);
 EXPORT_SYMBOL(lock_page);
 EXPORT_SYMBOL(unlock_page);
+
+/* for page_buf cache */
+EXPORT_SYMBOL(add_to_page_cache_unique);
+EXPORT_SYMBOL(balance_dirty);
 
 /* device registration */
 EXPORT_SYMBOL(register_chrdev);
@@ -421,9 +422,11 @@ EXPORT_SYMBOL(brw_kiovec);
 EXPORT_SYMBOL(kiobuf_wait_for_io);
 
 /* dma handling */
+#ifdef CONFIG_GENERIC_ISA_DMA
 EXPORT_SYMBOL(request_dma);
 EXPORT_SYMBOL(free_dma);
 EXPORT_SYMBOL(dma_spin_lock);
+#endif
 #ifdef HAVE_DISABLE_HLT
 EXPORT_SYMBOL(disable_hlt);
 EXPORT_SYMBOL(enable_hlt);
@@ -450,9 +453,20 @@ EXPORT_SYMBOL(sleep_on_timeout);
 EXPORT_SYMBOL(interruptible_sleep_on);
 EXPORT_SYMBOL(interruptible_sleep_on_timeout);
 EXPORT_SYMBOL(schedule);
+#ifdef CONFIG_ILATENCY
+EXPORT_SYMBOL(intr_sti);
+EXPORT_SYMBOL(intr_cli);
+EXPORT_SYMBOL(intr_restore_flags); 
+#endif
+#ifdef CONFIG_PREEMPT
+EXPORT_SYMBOL(preempt_schedule);
+#endif
+#ifdef CONFIG_PREEMPT_TIMES
+EXPORT_SYMBOL(latency_start);
+EXPORT_SYMBOL(latency_end);
+EXPORT_SYMBOL(latency_check);
+#endif
 EXPORT_SYMBOL(schedule_timeout);
-EXPORT_SYMBOL(yield);
-EXPORT_SYMBOL(__cond_resched);
 EXPORT_SYMBOL(jiffies);
 EXPORT_SYMBOL(xtime);
 EXPORT_SYMBOL(do_gettimeofday);
@@ -467,7 +481,6 @@ EXPORT_SYMBOL(nr_running);
 
 /* misc */
 EXPORT_SYMBOL(panic);
-EXPORT_SYMBOL(__out_of_line_bug);
 EXPORT_SYMBOL(sprintf);
 EXPORT_SYMBOL(snprintf);
 EXPORT_SYMBOL(sscanf);
@@ -517,7 +530,8 @@ EXPORT_SYMBOL(si_meminfo);
 /* Added to make file system as module */
 EXPORT_SYMBOL(sys_tz);
 EXPORT_SYMBOL(file_fsync);
-EXPORT_SYMBOL(fsync_buffers_list);
+EXPORT_SYMBOL(fsync_inode_buffers);
+EXPORT_SYMBOL(fsync_inode_data_buffers);
 EXPORT_SYMBOL(clear_inode);
 EXPORT_SYMBOL(___strtok);
 EXPORT_SYMBOL(init_special_inode);
@@ -532,7 +546,6 @@ EXPORT_SYMBOL(make_bad_inode);
 EXPORT_SYMBOL(is_bad_inode);
 EXPORT_SYMBOL(event);
 EXPORT_SYMBOL(brw_page);
-EXPORT_SYMBOL(__inode_dir_notify);
 
 #ifdef CONFIG_UID16
 EXPORT_SYMBOL(overflowuid);
@@ -549,6 +562,9 @@ EXPORT_SYMBOL(disk_name);	/* for md.c */
 
 /* binfmt_aout */
 EXPORT_SYMBOL(get_write_access);
+
+/* ptrace */
+EXPORT_SYMBOL(ptrace_notify);
 
 /* library functions */
 EXPORT_SYMBOL(strnicmp);
@@ -576,6 +592,3 @@ EXPORT_SYMBOL(init_task_union);
 
 EXPORT_SYMBOL(tasklist_lock);
 EXPORT_SYMBOL(pidhash);
-
-/* debug */
-EXPORT_SYMBOL(dump_stack);

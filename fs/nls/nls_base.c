@@ -1,5 +1,5 @@
 /*
- * linux/fs/nls_base.c
+ * linux/fs/nls.c
  *
  * Native language support--charsets and unicode translations.
  * By Gordon Chaffee 1996, 1997
@@ -93,7 +93,7 @@ utf8_mbstowcs(wchar_t *pwcs, const __u8 *s, int n)
 				ip++;
 				n--;
 			} else {
-				op++;
+				op += size;
 				ip += size;
 				n -= size;
 			}

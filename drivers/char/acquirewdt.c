@@ -17,9 +17,6 @@
  *
  *	(c) Copyright 1995    Alan Cox <alan@redhat.com>
  *
- *      14-Dec-2001 Matt Domsch <Matt_Domsch@dell.com>
- *          Added nowayout module option to override CONFIG_WATCHDOG_NOWAYOUT
- *          Can't add timeout - driver doesn't allow changing value
  */
 
 #include <linux/config.h>
@@ -45,7 +42,6 @@
 
 static int acq_is_open;
 static spinlock_t acq_lock;
-static int expect_close = 0;
 
 /*
  *	You must set these - there is no sane way to probe for this board.
@@ -54,14 +50,8 @@ static int expect_close = 0;
 #define WDT_STOP 0x43
 #define WDT_START 0x443
 
-#ifdef CONFIG_WATCHDOG_NOWAYOUT
-static int nowayout = 1;
-#else
-static int nowayout = 0;
-#endif
+#define WD_TIMO (100*60)		/* 1 minute */
 
-MODULE_PARM(nowayout,"i");
-MODULE_PARM_DESC(nowayout, "Watchdog cannot be stopped once started (default=CONFIG_WATCHDOG_NOWAYOUT)");
 
 /*
  *	Kernel methods.
@@ -82,21 +72,6 @@ static ssize_t acq_write(struct file *file, const char *buf, size_t count, loff_
 
 	if(count)
 	{
-		if (!nowayout)
-		{
-			size_t i;
-
-			expect_close = 0;
-
-			for (i = 0; i != count; i++) {
-				char c;
-				if (get_user(c, buf + i))
-					return -EFAULT;
-				if (c == 'V')
-					expect_close = 1;
-			}
-		}
-
 		acq_ping();
 		return 1;
 	}
@@ -115,7 +90,7 @@ static int acq_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 {
 	static struct watchdog_info ident=
 	{
-		WDIOF_KEEPALIVEPING | WDIOF_MAGICCLOSE, 1, "Acquire WDT"
+		WDIOF_KEEPALIVEPING, 1, "Acquire WDT"
 	};
 	
 	switch(cmd)
@@ -151,12 +126,10 @@ static int acq_open(struct inode *inode, struct file *file)
 				spin_unlock(&acq_lock);
 				return -EBUSY;
 			}
-			if (nowayout) {
-				MOD_INC_USE_COUNT;
-			}
 			/*
 			 *	Activate 
 			 */
+	 
 			acq_is_open=1;
 			inb_p(WDT_START);      
 			spin_unlock(&acq_lock);
@@ -172,14 +145,9 @@ static int acq_close(struct inode *inode, struct file *file)
 	if(MINOR(inode->i_rdev)==WATCHDOG_MINOR)
 	{
 		spin_lock(&acq_lock);
-		if (expect_close)
-		{
-			inb_p(WDT_STOP);
-		}
-		else
-		{
-			printk(KERN_CRIT "WDT closed unexpectedly.  WDT will not stop!\n");
-		}
+#ifndef CONFIG_WATCHDOG_NOWAYOUT	
+		inb_p(WDT_STOP);
+#endif		
 		acq_is_open=0;
 		spin_unlock(&acq_lock);
 	}
@@ -241,8 +209,7 @@ static int __init acq_init(void)
 	printk("WDT driver for Acquire single board computer initialising.\n");
 
 	spin_lock_init(&acq_lock);
-	if (misc_register(&acq_miscdev))
-		return -ENODEV;
+	misc_register(&acq_miscdev);
 	request_region(WDT_STOP, 1, "Acquire WDT");
 	request_region(WDT_START, 1, "Acquire WDT");
 	register_reboot_notifier(&acq_notifier);

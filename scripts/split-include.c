@@ -39,7 +39,70 @@
 	exit(1);							\
     }
 
+#ifdef __CYGWIN__
+static void add_dos_dash(char* s)
+{
+	int i, len = strlen(s);
 
+	s[len+1] = '\0';
+	for (i=len; i>0; i--)
+		s[i] = s[i-1];
+	s[0] = '-';
+}
+
+static int cvt_illegal_dos_names(char* s)
+{
+	char* scan = s;
+
+	/*
+	 * Perl equivalent: s/\/com(\d)/\/com-\1/g;
+	 */
+	while ((scan = strstr(scan, "/com")) != NULL) {
+		if (scan[4] >= '0' && scan[4] <= '9')
+			add_dos_dash(&scan[4]);
+		scan += 4;
+	}
+	
+	/*
+	 * Perl equivalent: s/\/lpt(\d)/\/lpt-\1/g;
+	 */
+	scan = s;
+	while ((scan = strstr(scan, "/lpt")) != NULL) {
+		if (scan[4] >= '0' && scan[4] <= '9')
+			add_dos_dash(&scan[4]);
+		scan += 4;
+	}
+
+	/*
+	 * Perl equivalent: s/\/aux/\/aux-/g;
+	 */
+	scan = s;
+	while ((scan = strstr(scan, "/aux")) != NULL) {
+		add_dos_dash(&scan[4]);
+		scan += 4;
+	}
+
+	scan = s;
+	while ((scan = strstr(scan, "/prn")) != NULL) {
+		add_dos_dash(&scan[4]);
+		scan += 4;
+	}
+
+	scan = s;
+	while ((scan = strstr(scan, "/con")) != NULL) {
+		add_dos_dash(&scan[4]);
+		scan += 4;
+	}
+
+	scan = s;
+	while ((scan = strstr(scan, "/nul")) != NULL) {
+		add_dos_dash(&scan[4]);
+		scan += 4;
+	}
+	
+	return strlen(s);
+}
+#endif
 
 int main(int argc, const char * argv [])
 {
@@ -115,10 +178,10 @@ int main(int argc, const char * argv [])
 
 	/* Make the output file name. */
 	str_config += sizeof("CONFIG_") - 1;
-	for (itarget = 0; !isspace((int)str_config[itarget]); itarget++)
+	for (itarget = 0; !isspace(str_config[itarget]); itarget++)
 	{
 	    char c = str_config[itarget];
-	    if (isupper((int)c)) c = tolower((int)c);
+	    if (isupper(c)) c = tolower(c);
 	    if (c == '_')   c = '/';
 	    ptarget[itarget] = c;
 	}
@@ -126,6 +189,9 @@ int main(int argc, const char * argv [])
 	ptarget[itarget++] = 'h';
 	ptarget[itarget++] = '\0';
 
+#ifdef __CYGWIN__
+	itarget = cvt_illegal_dos_names(ptarget) + 1;
+#endif	
 	/* Check for existing file. */
 	is_same = 0;
 	if ((fp_target = fopen(ptarget, "r")) != NULL)

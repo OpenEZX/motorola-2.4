@@ -15,6 +15,8 @@
 #include <linux/pagemap.h>
 #include <linux/smp_lock.h>
 
+#include <linux/trace.h>
+
 #include <asm/pgtable.h>
 
 /*
@@ -27,6 +29,9 @@ static int swap_writepage(struct page *page)
 		UnlockPage(page);
 		return 0;
 	}
+
+	TRACE_MEMORY(TRACE_EV_MEMORY_SWAP_OUT, (unsigned long) page);
+
 	rw_swap_page(WRITE, page);
 	return 0;
 }
@@ -117,8 +122,7 @@ void delete_from_swap_cache(struct page *page)
 	if (!PageLocked(page))
 		BUG();
 
-	if (unlikely(!block_flushpage(page, 0)))
-		BUG();	/* an anonymous page cannot have page->buffers set */
+	block_flushpage(page, 0);
 
 	entry.val = page->index;
 

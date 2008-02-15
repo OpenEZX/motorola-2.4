@@ -67,7 +67,7 @@ static inline void d_free(struct dentry *dentry)
 }
 
 /*
- * Release the dentry's inode, using the filesystem
+ * Release the dentry's inode, using the fileystem
  * d_iput() operation if defined.
  * Called with dcache_lock held, drops it.
  */
@@ -320,10 +320,23 @@ static inline void prune_one_dentry(struct dentry * dentry)
  
 void prune_dcache(int count)
 {
+	DEFINE_LOCK_COUNT();
+
 	spin_lock(&dcache_lock);
+
+redo:
 	for (;;) {
 		struct dentry *dentry;
 		struct list_head *tmp;
+
+		if (TEST_LOCK_COUNT(100)) {
+			RESET_LOCK_COUNT();
+			debug_lock_break(1);
+			if (conditional_schedule_needed()) {
+				break_spin_lock(&dcache_lock);
+				goto redo;
+			}
+		}
 
 		tmp = dentry_unused.prev;
 
@@ -480,6 +493,8 @@ static int select_parent(struct dentry * parent)
 	struct list_head *next;
 	int found = 0;
 
+	DEFINE_LOCK_COUNT();
+
 	spin_lock(&dcache_lock);
 repeat:
 	next = this_parent->d_subdirs.next;
@@ -492,6 +507,12 @@ resume:
 			list_del(&dentry->d_lru);
 			list_add(&dentry->d_lru, dentry_unused.prev);
 			found++;
+		}
+		if (TEST_LOCK_COUNT(500) && found > 10) {
+			debug_lock_break(1);
+			if (conditional_schedule_needed())
+				goto out;
+			RESET_LOCK_COUNT();
 		}
 		/*
 		 * Descend a level if the d_subdirs list is non-empty.
@@ -517,6 +538,7 @@ this_parent->d_parent->d_name.name, this_parent->d_name.name, found);
 #endif
 		goto resume;
 	}
+out:
 	spin_unlock(&dcache_lock);
 	return found;
 }
@@ -568,7 +590,8 @@ int shrink_dcache_memory(int priority, unsigned int gfp_mask)
 	count = dentry_stat.nr_unused / priority;
 
 	prune_dcache(count);
-	return kmem_cache_shrink(dentry_cache);
+	kmem_cache_shrink(dentry_cache);
+	return 0;
 }
 
 #define NAME_ALLOC_LEN(len)	((len+16) & ~15)
@@ -1209,7 +1232,7 @@ static void __init dcache_init(unsigned long mempages)
 			__get_free_pages(GFP_ATOMIC, order);
 	} while (dentry_hashtable == NULL && --order >= 0);
 
-	printk(KERN_INFO "Dentry cache hash table entries: %d (order: %ld, %ld bytes)\n",
+	printk("Dentry-cache hash table entries: %d (order: %ld, %ld bytes)\n",
 			nr_hash, order, (PAGE_SIZE << order));
 
 	if (!dentry_hashtable)
@@ -1251,7 +1274,6 @@ EXPORT_SYMBOL(bh_cachep);
 
 extern void bdev_cache_init(void);
 extern void cdev_cache_init(void);
-extern void iobuf_cache_init(void);
 
 void __init vfs_caches_init(unsigned long mempages)
 {
@@ -1283,9 +1305,7 @@ void __init vfs_caches_init(unsigned long mempages)
 
 	dcache_init(mempages);
 	inode_init(mempages);
-	files_init(mempages); 
 	mnt_init(mempages);
 	bdev_cache_init();
 	cdev_cache_init();
-	iobuf_cache_init();
 }

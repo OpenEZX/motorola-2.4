@@ -32,6 +32,12 @@
 #define FBIOPUT_MODEINFO        0x4617
 #define FBIOGET_DISPINFO        0x4618
 
+/* added for backlight control */
+#define FBIOSETBKLIGHT          0x4619
+#define FBIOGETBKLIGHT          0x461A
+#define FBIOSETBRIGHTNESS       0x461B
+#define FBIOGETBRIGHTNESS       0x461C
+
 
 #define FB_TYPE_PACKED_PIXELS		0	/* Packed Pixels	*/
 #define FB_TYPE_PLANES			1	/* Non interleaved planes */
@@ -93,20 +99,8 @@
 #define FB_ACCEL_IGS_CYBER2010	34	/* CyberPro 2010		*/
 #define FB_ACCEL_IGS_CYBER5000	35	/* CyberPro 5000		*/
 #define FB_ACCEL_SIS_GLAMOUR    36	/* SiS 300/630/540              */
-#define FB_ACCEL_3DLABS_PERMEDIA3 37	/* 3Dlabs Permedia 3		*/
-#define FB_ACCEL_ATI_RADEON	38	/* ATI Radeon family		*/
-
-
-#define FB_ACCEL_NEOMAGIC_NM2070 90	/* NeoMagic NM2070              */
-#define FB_ACCEL_NEOMAGIC_NM2090 91	/* NeoMagic NM2090              */
-#define FB_ACCEL_NEOMAGIC_NM2093 92	/* NeoMagic NM2093              */
-#define FB_ACCEL_NEOMAGIC_NM2097 93	/* NeoMagic NM2097              */
-#define FB_ACCEL_NEOMAGIC_NM2160 94	/* NeoMagic NM2160              */
-#define FB_ACCEL_NEOMAGIC_NM2200 95	/* NeoMagic NM2200              */
-#define FB_ACCEL_NEOMAGIC_NM2230 96	/* NeoMagic NM2230              */
-#define FB_ACCEL_NEOMAGIC_NM2360 97	/* NeoMagic NM2360              */
-#define FB_ACCEL_NEOMAGIC_NM2380 98	/* NeoMagic NM2380              */
-
+#define FB_ACCEL_EPSON_SED1356  37      /* Epson SED1356                */
+#define FB_ACCEL_3DLABS_PERMEDIA3 38	/* 3Dlabs Permedia 3		*/
 
 struct fb_fix_screeninfo {
 	char id[16];			/* identification string eg "TT Builtin" */
@@ -228,6 +222,16 @@ struct fb_con2fbmap {
 #define VESA_VSYNC_SUSPEND      1
 #define VESA_HSYNC_SUSPEND      2
 #define VESA_POWERDOWN          3
+/* added for backlight */
+#define BKLIGHT_OFF             0
+#define BKLIGHT_ON               1 
+
+/* added for ts */
+#define SETTONORMAL             0
+//#define SETTOHWR                1
+#define SETTOCUSTOM             1
+#define GETPENSTYLE             2
+
 
 struct fb_monspecs {
 	__u32 hfmin;			/* hfreq lower limit (Hz) */

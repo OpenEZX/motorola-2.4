@@ -69,7 +69,12 @@ enum
 /* CTL_BUS names: */
 enum
 {
-	BUS_ISA=1		/* ISA */
+	BUS_ISA=1,		/* ISA */
+#if	defined(CONFIG_SA1100_H3XXX)
+	BUS_PCMCIA=2,
+	BUS_SLEEVE=3,		/* ipaq sleeve interface */
+	BUS_MMC=4,              /* SD, MMC interface */
+#endif
 };
 
 /* CTL_KERN names: */
@@ -140,9 +145,12 @@ enum
 	VM_PAGERDAEMON=8,	/* struct: Control kswapd behaviour */
 	VM_PGT_CACHE=9,		/* struct: Set page table cache parameters */
 	VM_PAGE_CLUSTER=10,	/* int: set number of pages to swap together */
-	VM_MAX_MAP_COUNT=11,	/* int: Maximum number of active map areas */
-	VM_MIN_READAHEAD=12,    /* Min file readahead */
-	VM_MAX_READAHEAD=13,    /* Max file readahead */
+#if defined(CONFIG_XFS_FS) || defined(CONFIG_XFS_FS_MODULE)
+	VM_PAGEBUF=11,		/* struct: Control pagebuf parameters */
+#endif
+	VM_MIN_READAHEAD=12,	/* Min file readahead */
+	VM_MAX_READAHEAD=13,	/* Max file readahead */
+	VM_OVERCOMMIT_RATIO=14,	/* percent of RAM to allow overcommit in */
 };
 
 
@@ -205,8 +213,7 @@ enum
 	NET_CORE_NO_CONG_THRESH=13,
 	NET_CORE_NO_CONG=14,
 	NET_CORE_LO_CONG=15,
-	NET_CORE_MOD_CONG=16,
-	NET_CORE_DEV_WEIGHT=17
+	NET_CORE_MOD_CONG=16
 };
 
 /* /proc/sys/net/ethernet */
@@ -291,8 +298,7 @@ enum
 	NET_TCP_ADV_WIN_SCALE=87,
 	NET_IPV4_NONLOCAL_BIND=88,
 	NET_IPV4_ICMP_RATELIMIT=89,
-	NET_IPV4_ICMP_RATEMASK=90,
-	NET_TCP_TW_REUSE=91
+	NET_IPV4_ICMP_RATEMASK=90
 };
 
 enum {
@@ -337,8 +343,7 @@ enum
 	NET_IPV4_CONF_BOOTP_RELAY=10,
 	NET_IPV4_CONF_LOG_MARTIANS=11,
 	NET_IPV4_CONF_TAG=12,
-	NET_IPV4_CONF_ARPFILTER=13,
-	NET_IPV4_CONF_MEDIUM_ID=14,
+	NET_IPV4_CONF_ARPFILTER=13
 };
 
 /* /proc/sys/net/ipv6 */
@@ -536,7 +541,7 @@ enum
 	FS_STATINODE=2,
 	FS_MAXINODE=3,	/* int:maximum number of inodes that can be allocated */
 	FS_NRDQUOT=4,	/* int:current number of allocated dquots */
-	FS_MAXDQUOT=5,	/* int:maximum number of dquots that can be allocated */
+	/* was FS_MAXDQUOT */
 	FS_NRFILE=6,	/* int:current number of allocated filedescriptors */
 	FS_MAXFILE=7,	/* int:maximum number of filedescriptors that can be allocated */
 	FS_DENTRY=8,
@@ -547,6 +552,9 @@ enum
 	FS_LEASES=13,	/* int: leases enabled */
 	FS_DIR_NOTIFY=14,	/* int: directory notification enabled */
 	FS_LEASE_TIME=15,	/* int: maximum time to wait for a lease break */
+#if defined(CONFIG_XFS_FS) || defined(CONFIG_XFS_FS_MODULE)
+	FS_XFS=16,	/* struct: control xfs parameters */
+#endif
 };
 
 /* CTL_DEBUG names: */
@@ -627,6 +635,12 @@ enum
 	ABI_DEFHANDLER_LIBCSO=4,/* default handler for an libc.so ELF interp */
 	ABI_TRACE=5,		/* tracing flags */
 	ABI_FAKE_UTSNAME=6,	/* fake target utsname information */
+};
+
+enum {
+	CPU_NR_FREQ_MAX = 1,
+	CPU_NR_FREQ_MIN = 2,
+	CPU_NR_FREQ = 3
 };
 
 #ifdef __KERNEL__

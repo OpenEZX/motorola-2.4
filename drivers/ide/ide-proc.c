@@ -65,7 +65,6 @@
 #include <linux/mm.h>
 #include <linux/pci.h>
 #include <linux/ctype.h>
-#include <linux/hdreg.h>
 #include <linux/ide.h>
 
 #include <asm/io.h>
@@ -126,6 +125,10 @@ int (*slc90e66_display_info)(char *, char **, off_t, int) = NULL;
 extern byte via_proc;
 int (*via_display_info)(char *, char **, off_t, int) = NULL;
 #endif /* CONFIG_BLK_DEV_VIA82CXXX */
+#ifdef CONFIG_BLK_DEV_XILLEON
+extern byte _proc;
+int (*xilleon_ide_display_info)(char *, char **, off_t, int) = NULL;
+#endif /* CONFIG_BLK_DEV_XILLEON */
 
 static int ide_getxdigit(char c)
 {
@@ -415,6 +418,7 @@ static int proc_ide_read_imodel
 		case ide_cy82c693:	name = "cy82c693";	break;
 		case ide_4drives:	name = "4drives";	break;
 		case ide_pmac:		name = "mac-io";	break;
+		case ide_acorn:		name = "acorn";		break;
 		default:		name = "(unknown)";	break;
 	}
 	len = sprintf(page, "%s\n", name);
@@ -448,15 +452,7 @@ static int proc_ide_read_channel
 
 static int proc_ide_get_identify(ide_drive_t *drive, byte *buf)
 {
-	struct hd_drive_task_hdr taskfile;
-	struct hd_drive_hob_hdr hobfile;
-	memset(&taskfile, 0, sizeof(struct hd_drive_task_hdr));
-	memset(&hobfile, 0, sizeof(struct hd_drive_hob_hdr));
-
-	taskfile.sector_count = 0x01;
-	taskfile.command = (drive->media == ide_disk) ? WIN_IDENTIFY : WIN_PIDENTIFY ;
-
-	return ide_wait_taskfile(drive, &taskfile, &hobfile, buf);
+	return ide_wait_cmd(drive, (drive->media == ide_disk) ? WIN_IDENTIFY : WIN_PIDENTIFY, 0, 0, 1, buf);
 }
 
 static int proc_ide_read_identify
@@ -466,7 +462,7 @@ static int proc_ide_read_identify
 	int		len = 0, i = 0;
 
 	if (drive && !proc_ide_get_identify(drive, page)) {
-		unsigned short *val = (unsigned short *) page;
+		unsigned short *val = ((unsigned short *)page) + 2;
 		char *out = ((char *)val) + (SECTOR_WORDS * 4);
 		page = out;
 		do {
@@ -597,8 +593,7 @@ int proc_ide_read_capacity
 	if (!driver)
 		len = sprintf(page, "(none)\n");
         else
-		len = sprintf(page,"%llu\n",
-			      (unsigned long long) ((ide_driver_t *)drive->driver)->capacity(drive));
+		len = sprintf(page,"%li\n", ((ide_driver_t *)drive->driver)->capacity(drive));
 	PROC_IDE_READ_RETURN(page,start,off,count,eof,len);
 }
 
@@ -742,57 +737,22 @@ static void create_proc_ide_drives(ide_hwif_t *hwif)
 	}
 }
 
-void recreate_proc_ide_device(ide_hwif_t *hwif, ide_drive_t *drive)
-{
-	struct proc_dir_entry *ent;
-	struct proc_dir_entry *parent = hwif->proc;
-	char name[64];
-//	ide_driver_t *driver = drive->driver;
-
-	if (drive->present && !drive->proc) {
-		drive->proc = proc_mkdir(drive->name, parent);
-		if (drive->proc)
-			ide_add_proc_entries(drive->proc, generic_drive_entries, drive);
-
-/*
- * assume that we have these already, however, should test FIXME!
- * if (driver) {
- *      ide_add_proc_entries(drive->proc, generic_subdriver_entries, drive);
- *      ide_add_proc_entries(drive->proc, driver->proc, drive);
- * }
- *
- */
-		sprintf(name,"ide%d/%s", (drive->name[2]-'a')/2, drive->name);
-		ent = proc_symlink(drive->name, proc_ide_root, name);
-		if (!ent)
-			return;
-	}
-}
-
-void destroy_proc_ide_device(ide_hwif_t *hwif, ide_drive_t *drive)
-{
-	ide_driver_t *driver = drive->driver;
-
-	if (drive->proc) {
-		if (driver)
-			ide_remove_proc_entries(drive->proc, driver->proc);
-		ide_remove_proc_entries(drive->proc, generic_drive_entries);
-		remove_proc_entry(drive->name, proc_ide_root);
-		remove_proc_entry(drive->name, hwif->proc);
-		drive->proc = NULL;
-	}
-}
-
 void destroy_proc_ide_drives(ide_hwif_t *hwif)
 {
 	int	d;
 
 	for (d = 0; d < MAX_DRIVES; d++) {
 		ide_drive_t *drive = &hwif->drives[d];
-//		ide_driver_t *driver = drive->driver;
+		ide_driver_t *driver = drive->driver;
 
-		if (drive->proc)
-			destroy_proc_ide_device(hwif, drive);
+		if (!drive->proc)
+			continue;
+		if (driver)
+			ide_remove_proc_entries(drive->proc, driver->proc);
+		ide_remove_proc_entries(drive->proc, generic_drive_entries);
+		remove_proc_entry(drive->name, proc_ide_root);
+		remove_proc_entry(drive->name, hwif->proc);
+		drive->proc = NULL;
 	}
 }
 

@@ -2194,8 +2194,6 @@ static int ide_cdrom_packet(struct cdrom_device_info *cdi,
 	   layer. the packet must be complete, as we do not
 	   touch it at all. */
 	memset(&pc, 0, sizeof(pc));
-	if (cgc->sense)
-		memset(cgc->sense, 0, sizeof(struct request_sense));
 	memcpy(pc.c, cgc->cmd, CDROM_PACKET_SIZE);
 	pc.buffer = cgc->buffer;
 	pc.buflen = cgc->buflen;
@@ -2538,8 +2536,8 @@ static int ide_cdrom_register (ide_drive_t *drive, int nslots)
 	devinfo->dev = MKDEV (HWIF(drive)->major, minor);
 	devinfo->ops = &ide_cdrom_dops;
 	devinfo->mask = 0;
-	devinfo->speed = CDROM_STATE_FLAGS (drive)->current_speed;
-	devinfo->capacity = nslots;
+	*(int *)&devinfo->speed = CDROM_STATE_FLAGS (drive)->current_speed;
+	*(int *)&devinfo->capacity = nslots;
 	devinfo->handle = (void *) drive;
 	strcpy(devinfo->name, drive->name);
 	
@@ -2646,9 +2644,14 @@ int ide_cdrom_probe_capabilities (ide_drive_t *drive)
 	 * but they do support reading TOC & audio datas
 	 */
 	if (strcmp (drive->id->model, "MATSHITADVD-ROM SR-8187") == 0 ||
-	    strcmp (drive->id->model, "MATSHITADVD-ROM SR-8186") == 0 ||
-	    strcmp (drive->id->model, "MATSHITADVD-ROM SR-8176") == 0 ||
-	    strcmp (drive->id->model, "MATSHITADVD-ROM SR-8174") == 0)
+	    strcmp (drive->id->model, "MATSHITADVD-ROM SR-8186") == 0)
+		CDROM_CONFIG_FLAGS (drive)->audio_play = 1;
+
+	/* Some drives used by Apple don't advertise audio play
+	 * but they do support reading TOC & audio datas
+	 */
+	if (strcmp (drive->id->model, "MATSHITADVD-ROM SR-8187") == 0 ||
+	    strcmp (drive->id->model, "MATSHITADVD-ROM SR-8186") == 0)
 		CDROM_CONFIG_FLAGS (drive)->audio_play = 1;
 
 #if ! STANDARD_ATAPI
@@ -2965,7 +2968,11 @@ int ide_cdrom_cleanup(ide_drive_t *drive)
 	return 0;
 }
 
-int ide_cdrom_reinit (ide_drive_t *drive);
+static
+int ide_cdrom_reinit (ide_drive_t *drive)
+{
+	return 0;
+}
 
 static ide_driver_t ide_cdrom_driver = {
 	name:			"ide-cdrom",
@@ -2975,8 +2982,6 @@ static ide_driver_t ide_cdrom_driver = {
 	supports_dma:		1,
 	supports_dsc_overlap:	1,
 	cleanup:		ide_cdrom_cleanup,
-	standby:		NULL,
-	flushcache:		NULL,
 	do_request:		ide_do_rw_cdrom,
 	end_request:		NULL,
 	ioctl:			ide_cdrom_ioctl,
@@ -2988,9 +2993,7 @@ static ide_driver_t ide_cdrom_driver = {
 	capacity:		ide_cdrom_capacity,
 	special:		NULL,
 	proc:			NULL,
-	reinit:			ide_cdrom_reinit,
-	ata_prebuilder:		NULL,
-	atapi_prebuilder:	NULL,
+	driver_reinit:		ide_cdrom_reinit,
 };
 
 int ide_cdrom_init(void);
@@ -3006,39 +3009,6 @@ char *ignore = NULL;
 
 MODULE_PARM(ignore, "s");
 MODULE_DESCRIPTION("ATAPI CD-ROM Driver");
-
-int ide_cdrom_reinit (ide_drive_t *drive)
-{
-	struct cdrom_info *info;
-	int failed = 0;
-
-	MOD_INC_USE_COUNT;
-	info = (struct cdrom_info *) kmalloc (sizeof (struct cdrom_info), GFP_KERNEL);
-	if (info == NULL) {
-		printk ("%s: Can't allocate a cdrom structure\n", drive->name);
-		return 1;
-	}
-	if (ide_register_subdriver (drive, &ide_cdrom_driver, IDE_SUBDRIVER_VERSION)) {
-		printk ("%s: Failed to register the driver with ide.c\n", drive->name);
-		kfree (info);
-		return 1;
-	}
-	memset (info, 0, sizeof (struct cdrom_info));
-	drive->driver_data = info;
-	DRIVER(drive)->busy++;
-	if (ide_cdrom_setup (drive)) {
-		DRIVER(drive)->busy--;
-		if (ide_cdrom_cleanup (drive))
-			printk ("%s: ide_cdrom_cleanup failed in ide_cdrom_init\n", drive->name);
-		return 1;
-	}
-	DRIVER(drive)->busy--;
-	failed--;
-
-	ide_register_module(&ide_cdrom_module);
-	MOD_DEC_USE_COUNT;
-	return 0;
-}
 
 static void __exit ide_cdrom_exit(void)
 {

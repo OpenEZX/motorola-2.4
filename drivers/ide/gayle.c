@@ -16,7 +16,6 @@
 #include <linux/hdreg.h>
 #include <linux/ide.h>
 #include <linux/init.h>
-#include <linux/zorro.h>
 
 #include <asm/setup.h>
 #include <asm/amigahw.h>
@@ -89,7 +88,7 @@ static int gayle_ack_intr_a4000(ide_hwif_t *hwif)
 {
     unsigned char ch;
 
-    ch = z_readb(hwif->io_ports[IDE_IRQ_OFFSET]);
+    ch = inb(hwif->io_ports[IDE_IRQ_OFFSET]);
     if (!(ch & GAYLE_IRQ_IDE))
 	return 0;
     return 1;
@@ -99,11 +98,11 @@ static int gayle_ack_intr_a1200(ide_hwif_t *hwif)
 {
     unsigned char ch;
 
-    ch = z_readb(hwif->io_ports[IDE_IRQ_OFFSET]);
+    ch = inb(hwif->io_ports[IDE_IRQ_OFFSET]);
     if (!(ch & GAYLE_IRQ_IDE))
 	return 0;
-    (void)z_readb(hwif->io_ports[IDE_STATUS_OFFSET]);
-    z_writeb(0x7c, hwif->io_ports[IDE_IRQ_OFFSET]);
+    (void)inb(hwif->io_ports[IDE_STATUS_OFFSET]);
+    outb(0x7c, hwif->io_ports[IDE_IRQ_OFFSET]);
     return 1;
 }
 

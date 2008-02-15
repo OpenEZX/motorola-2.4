@@ -73,17 +73,54 @@ static struct usb_driver se401_driver;
  *
  * Memory management
  *
+ * This is a shameless copy from the USB-cpia driver (linux kernel
+ * version 2.3.29 or so, I have no idea what this code actually does ;).
+ * Actually it seems to be a copy of a shameless copy of the bttv-driver.
+ * Or that is a copy of a shameless copy of ... (To the powers: is there
+ * no generic kernel-function to do this sort of stuff?)
+ *
+ * Yes, it was a shameless copy from the bttv-driver. IIRC, Alan says
+ * there will be one, but apparentely not yet -jerdfelt
+ *
+ * So I copied it again for the ov511 driver -claudio
+ *
+ * Same for the se401 driver -Jeroen
  **********************************************************************/
 
+/* Given PGD from the address space's page table, return the kernel
+ * virtual mapping of the physical memory mapped at ADR.
+ */
+static inline unsigned long uvirt_to_kva(pgd_t *pgd, unsigned long adr)
+{
+	unsigned long ret = 0UL;
+	pmd_t *pmd;
+	pte_t *ptep, pte;
+
+	if (!pgd_none(*pgd)) {
+		pmd = pmd_offset(pgd, adr);
+		if (!pmd_none(*pmd)) {
+			ptep = pte_offset(pmd, adr);
+			pte = *ptep;
+			if (pte_present(pte)) {
+				ret = (unsigned long) page_address(pte_page(pte));
+				ret |= (adr & (PAGE_SIZE - 1));
+			}
+		}
+	}
+
+	return ret;
+}
+
 /* Here we want the physical address of the memory.
- * This is used when initializing the contents of the area.
+ * This is used when initializing the contents of the
+ * area and marking the pages as reserved.
  */
 static inline unsigned long kvirt_to_pa(unsigned long adr)
 {
-	unsigned long kva, ret;
+	unsigned long va, kva, ret;
 
-	kva = (unsigned long) page_address(vmalloc_to_page((void *)adr));
-	kva |= adr & (PAGE_SIZE-1); /* restore the offset */
+	va = VMALLOC_VMADDR(adr);
+	kva = uvirt_to_kva(pgd_offset_k(va), va);
 	ret = __pa(kva);
 	return ret;
 }
@@ -91,9 +128,12 @@ static inline unsigned long kvirt_to_pa(unsigned long adr)
 static void *rvmalloc(unsigned long size)
 {
 	void *mem;
-	unsigned long adr;
+	unsigned long adr, page;
 
-	size = PAGE_ALIGN(size);
+	/* Round it off to PAGE_SIZE */
+	size += (PAGE_SIZE - 1);
+	size &= ~(PAGE_SIZE - 1);
+
 	mem = vmalloc_32(size);
 	if (!mem)
 		return NULL;
@@ -101,9 +141,13 @@ static void *rvmalloc(unsigned long size)
 	memset(mem, 0, size); /* Clear the ram out, no junk to the user */
 	adr = (unsigned long) mem;
 	while (size > 0) {
-		mem_map_reserve(vmalloc_to_page((void *)adr));
+		page = kvirt_to_pa(adr);
+		mem_map_reserve(virt_to_page(__va(page)));
 		adr += PAGE_SIZE;
-		size -= PAGE_SIZE;
+		if (size > PAGE_SIZE)
+			size -= PAGE_SIZE;
+		else
+			size = 0;
 	}
 
 	return mem;
@@ -111,16 +155,23 @@ static void *rvmalloc(unsigned long size)
 
 static void rvfree(void *mem, unsigned long size)
 {
-	unsigned long adr;
+	unsigned long adr, page;
 
 	if (!mem)
 		return;
 
-	adr = (unsigned long) mem;
-	while ((long) size > 0) {
-		mem_map_unreserve(vmalloc_to_page((void *)adr));
+	size += (PAGE_SIZE - 1);
+	size &= ~(PAGE_SIZE - 1);
+
+	adr=(unsigned long) mem;
+	while (size > 0) {
+		page = kvirt_to_pa(adr);
+		mem_map_unreserve(virt_to_page(__va(page)));
 		adr += PAGE_SIZE;
-		size -= PAGE_SIZE;
+		if (size > PAGE_SIZE)
+			size -= PAGE_SIZE;
+		else
+			size = 0;
 	}
 	vfree(mem);
 }
@@ -552,7 +603,7 @@ static void se401_send_size(struct usb_se401 *se401, int width, int height)
 */
 static int se401_start_stream(struct usb_se401 *se401)
 {
-	struct urb *urb;
+	urb_t *urb;
 	int err=0, i;
 	se401->streaming=1;
 
@@ -588,7 +639,7 @@ static int se401_start_stream(struct usb_se401 *se401)
 	for (i=0; i<SE401_NUMSBUF; i++) {
 		urb=usb_alloc_urb(0);
 		if(!urb)
-			return -ENOMEM;
+			return ENOMEM;
 
 		FILL_BULK_URB(urb, se401->dev,
 			usb_rcvbulkpipe(se401->dev, SE401_VIDEO_ENDPOINT),
@@ -646,13 +697,14 @@ static int se401_set_size(struct usb_se401 *se401, int width, int height)
 		return 0;
 
 	/* Check for a valid mode */
-	if (width <= 0 || height <= 0)
+	if (!width || !height)
 		return 1;
+	/* Even number? */
 	if ((width & 1) || (height & 1))
 		return 1;
-	if (width>se401->width[se401->sizes-1])
+	if ((width>se401->width[se401->sizes-1]) || (width<se401->width[0]))
 		return 1;
-	if (height>se401->height[se401->sizes-1])
+	if ((height>se401->height[se401->sizes-1]) || (height<se401->width[0]))
 		return 1;
 
 	/* Stop a current stream and start it again at the new size */
@@ -680,8 +732,7 @@ static int se401_set_size(struct usb_se401 *se401, int width, int height)
 static inline void enhance_picture(unsigned char *frame, int len)
 {
 	while (len--) {
-		*frame=(((*frame^255)*(*frame^255))/255)^255;
-		frame++;
+		*frame++=(((*frame^255)*(*frame^255))/255)^255;
 	}
 }
 
@@ -915,8 +966,7 @@ static inline void decode_bayer (struct usb_se401 *se401, struct se401_scratch *
 		/* Fix the top line */
 		framedata+=linelength;
 		for (i=0; i<linelength; i++) {
-			framedata--;
-			*framedata=*(framedata+linelength);
+			*--framedata=*(framedata+linelength);
 		}
 		/* Fix the left side (green is already present) */
 		for (i=0; i<se401->cheight; i++) {
@@ -1369,13 +1419,7 @@ static int se401_init(struct usb_se401 *se401)
 
 	se401->sizes=cp[4]+cp[5]*256;
 	se401->width=kmalloc(se401->sizes*sizeof(int), GFP_KERNEL);
-	if (!se401->width)
-		return 1;
 	se401->height=kmalloc(se401->sizes*sizeof(int), GFP_KERNEL);
-	if (!se401->height) {
-		kfree(se401->width);
-		return 1;
-	}
 	for (i=0; i<se401->sizes; i++) {
 		    se401->width[i]=cp[6+i*4+0]+cp[6+i*4+1]*256;
 		    se401->height[i]=cp[6+i*4+2]+cp[6+i*4+3]*256;

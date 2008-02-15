@@ -86,7 +86,8 @@
 #define PFX AU1000_MODULE_NAME
 
 #ifdef AU1000_DEBUG
-#define dbg(format, arg...) printk(KERN_DEBUG PFX ": " format "\n" , ## arg)
+#define dbg(format, arg...) \
+    printk(KERN_DEBUG "%s: " format "\n" , __func__, ## arg)
 #else
 #define dbg(format, arg...) do {} while (0)
 #endif
@@ -370,7 +371,7 @@ static void set_adc_rate(struct au1000_state *s, unsigned rate)
 	adc_rate = rdcodec(&s->codec, AC97_PCM_LR_ADC_RATE);
 
 #ifdef AU1000_VERBOSE_DEBUG
-	dbg(__FUNCTION__ ": set to %d Hz", adc_rate);
+	dbg("set to %d Hz", adc_rate);
 #endif
 
 	// some codec's don't allow unequal DAC and ADC rates, in which case
@@ -421,7 +422,7 @@ static void set_dac_rate(struct au1000_state *s, unsigned rate)
 	dac_rate = rdcodec(&s->codec, AC97_PCM_FRONT_DAC_RATE);
 
 #ifdef AU1000_VERBOSE_DEBUG
-	dbg(__FUNCTION__ ": set to %d Hz", dac_rate);
+	dbg("set to %d Hz", dac_rate);
 #endif
 
 	// some codec's don't allow unequal DAC and ADC rates, in which case
@@ -443,7 +444,7 @@ static void stop_dac(struct au1000_state *s)
 	spin_lock_irqsave(&s->lock, flags);
 
 	disable_dma(db->dmanr);
-
+	
 	db->stopped = 1;
 
 	spin_unlock_irqrestore(&s->lock, flags);
@@ -460,7 +461,7 @@ static void  stop_adc(struct au1000_state *s)
 	spin_lock_irqsave(&s->lock, flags);
 
 	disable_dma(db->dmanr);
-
+	
 	db->stopped = 1;
 
 	spin_unlock_irqrestore(&s->lock, flags);
@@ -472,14 +473,14 @@ static void set_xmit_slots(int num_channels)
 	u32 ac97_config = au_readl(AC97C_CONFIG) & ~AC97C_XMIT_SLOTS_MASK;
 
 	switch (num_channels) {
-	case 1:		// mono
-	case 2:		// stereo, slots 3,4
+	case 1:	// mono
+	case 2:	// stereo, slots 3,4
 		ac97_config |= (0x3 << AC97C_XMIT_SLOTS_BIT);
 		break;
-	case 4:		// stereo with surround, slots 3,4,7,8
+	case 4:	// stereo with surround, slots 3,4,7,8
 		ac97_config |= (0x33 << AC97C_XMIT_SLOTS_BIT);
 		break;
-	case 6:		// stereo with surround and center/LFE, slots 3,4,6,7,8,9
+	case 6:	// stereo with surround and center/LFE, slots 3,4,6,7,8,9
 		ac97_config |= (0x7b << AC97C_XMIT_SLOTS_BIT);
 		break;
 	}
@@ -533,9 +534,9 @@ static void start_dac(struct au1000_state *s)
 	}
 	set_dma_count(db->dmanr, db->dma_fragsize>>1);
 	enable_dma_buffers(db->dmanr);
-
+	
 	start_dma(db->dmanr);
-
+	
 #ifdef AU1000_VERBOSE_DEBUG
 	dump_au1000_dma_channel(db->dmanr);
 #endif
@@ -580,7 +581,7 @@ static void start_adc(struct au1000_state *s)
 	enable_dma_buffers(db->dmanr);
 
 	start_dma(db->dmanr);
-
+	
 #ifdef AU1000_VERBOSE_DEBUG
 	dump_au1000_dma_channel(db->dmanr);
 #endif
@@ -595,7 +596,7 @@ static void start_adc(struct au1000_state *s)
 #define DMABUF_DEFAULTORDER (17-PAGE_SHIFT)
 #define DMABUF_MINORDER 1
 
-extern inline void dealloc_dmabuf(struct au1000_state *s, struct dmabuf *db)
+static inline void dealloc_dmabuf(struct au1000_state *s, struct dmabuf *db)
 {
 	struct page    *page, *pend;
 
@@ -624,7 +625,7 @@ static int prog_dmabuf(struct au1000_state *s, struct dmabuf *db)
 		for (order = DMABUF_DEFAULTORDER;
 		     order >= DMABUF_MINORDER; order--)
 			if ((db->rawbuf = dma_alloc(PAGE_SIZE << order,
-						  &db->dmaaddr)))
+						    &db->dmaaddr)))
 				break;
 		if (!db->rawbuf)
 			return -ENOMEM;
@@ -636,7 +637,7 @@ static int prog_dmabuf(struct au1000_state *s, struct dmabuf *db)
 		for (page = virt_to_page(db->rawbuf); page <= pend; page++)
 			mem_map_reserve(page);
 	}
-
+	
 	db->cnt_factor = 1;
 	if (db->sample_size == 8)
 		db->cnt_factor *= 2;
@@ -694,14 +695,14 @@ static int prog_dmabuf(struct au1000_state *s, struct dmabuf *db)
 	return 0;
 }
 
-extern inline int prog_dmabuf_adc(struct au1000_state *s)
+static inline int prog_dmabuf_adc(struct au1000_state *s)
 {
 	stop_adc(s);
 	return prog_dmabuf(s, &s->dma_adc);
 
 }
 
-extern inline int prog_dmabuf_dac(struct au1000_state *s)
+static inline int prog_dmabuf_dac(struct au1000_state *s)
 {
 	stop_dac(s);
 	return prog_dmabuf(s, &s->dma_dac);
@@ -848,7 +849,7 @@ static void adc_dma_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 		spin_unlock(&s->lock);
 		stop_adc(s);
 		spin_lock(&s->lock);
-		
+
 		if (adc->count + 2*adc->dma_fragsize > adc->dmasize) {
 			// Overrun. Log the error
 			adc->error++;
@@ -943,6 +944,7 @@ static int drain_dac(struct au1000_state *s, int nonblock)
 		tmo /= s->dma_dac.dma_bytes_per_sample;
 		au1000_delay(tmo);
 	}
+
 	if (signal_pending(current))
 		return -ERESTARTSYS;
 	return 0;
@@ -990,7 +992,7 @@ static int translate_from_user(struct dmabuf *db,
 	for (sample = 0; sample < num_samples; sample++) {
 		if (copy_from_user(usersample, userbuf,
 				   db->user_bytes_per_sample)) {
-			dbg(__FUNCTION__ ": fault");
+			dbg("fault");
 			return -EFAULT;
 		}
 
@@ -1054,7 +1056,7 @@ static int translate_to_user(struct dmabuf *db,
 
 		if (copy_to_user(userbuf, usersample,
 				 db->user_bytes_per_sample)) {
-			dbg(__FUNCTION__ ": fault");
+			dbg("fault");
 			return -EFAULT;
 		}
 
@@ -1204,7 +1206,7 @@ static ssize_t au1000_write(struct file *file, const char *buffer,
 #ifdef AU1000_VERBOSE_DEBUG
 	dbg("write: count=%d", count);
 #endif
-
+	
 	if (ppos != &file->f_pos)
 		return -ESPIPE;
 	if (db->mapped)
@@ -1321,8 +1323,8 @@ static int au1000_mmap(struct file *file, struct vm_area_struct *vma)
 	struct dmabuf  *db;
 	unsigned long   size;
 	int ret = 0;
-
-	dbg(__FUNCTION__);
+	
+	dbg();
     
 	lock_kernel();
 	down(&s->sem);
@@ -1849,9 +1851,9 @@ static int  au1000_open(struct inode *inode, struct file *file)
 
 #ifdef AU1000_VERBOSE_DEBUG
 	if (file->f_flags & O_NONBLOCK)
-		dbg(__FUNCTION__ ": non-blocking");
+		dbg("non-blocking");
 	else
-		dbg(__FUNCTION__ ": blocking");
+		dbg("blocking");
 #endif
 	
 	file->private_data = s;
@@ -1934,7 +1936,9 @@ static int au1000_release(struct inode *inode, struct file *file)
 	}
 	s->open_mode &= ((~file->f_mode) & (FMODE_READ|FMODE_WRITE));
 	up(&s->open_sem);
+
 	wake_up(&s->open_wait);
+
 	unlock_kernel();
 	return 0;
 }
@@ -2067,7 +2071,7 @@ static int __devinit au1000_probe(void)
 	set_dma_mode(s->dma_adc.dmanr,
 		     get_dma_mode(s->dma_adc.dmanr) | DMA_NC);
 #endif
-
+	
 	/* register devices */
 
 	if ((s->dev_audio = register_sound_dsp(&au1000_audio_fops, -1)) < 0)

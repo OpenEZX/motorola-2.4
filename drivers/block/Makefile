@@ -29,9 +29,19 @@ obj-$(CONFIG_BLK_DEV_XD)	+= xd.o
 obj-$(CONFIG_BLK_CPQ_DA)	+= cpqarray.o
 obj-$(CONFIG_BLK_CPQ_CISS_DA)  += cciss.o
 obj-$(CONFIG_BLK_DEV_DAC960)	+= DAC960.o
-obj-$(CONFIG_BLK_DEV_UMEM)	+= umem.o
+
 obj-$(CONFIG_BLK_DEV_NBD)	+= nbd.o
 
 subdir-$(CONFIG_PARIDE) += paride
+
+# Added by Susan
+subdir-$(CONFIG_ROFLASH) += roflash
+# End of modification
+
+ifeq ($(CONFIG_ARCH_ACORN),y)
+mod-subdirs	+= ../acorn/block
+subdir-y	+= ../acorn/block
+obj-y		+= ../acorn/block/acorn-block.o
+endif
 
 include $(TOPDIR)/Rules.make

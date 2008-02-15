@@ -1,28 +1,73 @@
 /*******************************************************************************
 
+  This software program is available to you under a choice of one of two
+  licenses. You may choose to be licensed under either the GNU General Public
+  License 2.0, June 1991, available at http://www.fsf.org/copyleft/gpl.html,
+  or the Intel BSD + Patent License, the text of which follows:
   
-  Copyright(c) 1999 - 2002 Intel Corporation. All rights reserved.
+  Recipient has requested a license and Intel Corporation ("Intel") is willing
+  to grant a license for the software entitled Linux Base Driver for the
+  Intel(R) PRO/1000 Family of Adapters (e1000) (the "Software") being provided
+  by Intel Corporation. The following definitions apply to this license:
   
-  This program is free software; you can redistribute it and/or modify it 
-  under the terms of the GNU General Public License as published by the Free 
-  Software Foundation; either version 2 of the License, or (at your option) 
-  any later version.
+  "Licensed Patents" means patent claims licensable by Intel Corporation which
+  are necessarily infringed by the use of sale of the Software alone or when
+  combined with the operating system referred to below.
   
-  This program is distributed in the hope that it will be useful, but WITHOUT 
-  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or 
-  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for 
-  more details.
+  "Recipient" means the party to whom Intel delivers this Software.
   
-  You should have received a copy of the GNU General Public License along with
-  this program; if not, write to the Free Software Foundation, Inc., 59 
-  Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+  "Licensee" means Recipient and those third parties that receive a license to
+  any operating system available under the GNU General Public License 2.0 or
+  later.
   
-  The full GNU General Public License is included in this distribution in the
-  file called LICENSE.
+  Copyright (c) 1999 - 2002 Intel Corporation.
+  All rights reserved.
   
-  Contact Information:
-  Linux NICS <linux.nics@intel.com>
-  Intel Corporation, 5200 N.E. Elam Young Parkway, Hillsboro, OR 97124-6497
+  The license is provided to Recipient and Recipient's Licensees under the
+  following terms.
+  
+  Redistribution and use in source and binary forms of the Software, with or
+  without modification, are permitted provided that the following conditions
+  are met:
+  
+  Redistributions of source code of the Software may retain the above
+  copyright notice, this list of conditions and the following disclaimer.
+  
+  Redistributions in binary form of the Software may reproduce the above
+  copyright notice, this list of conditions and the following disclaimer in
+  the documentation and/or materials provided with the distribution.
+  
+  Neither the name of Intel Corporation nor the names of its contributors
+  shall be used to endorse or promote products derived from this Software
+  without specific prior written permission.
+  
+  Intel hereby grants Recipient and Licensees a non-exclusive, worldwide,
+  royalty-free patent license under Licensed Patents to make, use, sell, offer
+  to sell, import and otherwise transfer the Software, if any, in source code
+  and object code form. This license shall include changes to the Software
+  that are error corrections or other minor changes to the Software that do
+  not add functionality or features when the Software is incorporated in any
+  version of an operating system that has been distributed under the GNU
+  General Public License 2.0 or later. This patent license shall apply to the
+  combination of the Software and any operating system licensed under the GNU
+  General Public License 2.0 or later if, at the time Intel provides the
+  Software to Recipient, such addition of the Software to the then publicly
+  available versions of such operating systems available under the GNU General
+  Public License 2.0 or later (whether in gold, beta or alpha form) causes
+  such combination to be covered by the Licensed Patents. The patent license
+  shall not apply to any other combinations which include the Software. NO
+  hardware per se is licensed hereunder.
+  
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MECHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL INTEL OR IT CONTRIBUTORS BE LIABLE FOR ANY
+  DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+  (INCLUDING, BUT NOT LIMITED, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+  ANY LOSS OF USE; DATA, OR PROFITS; OR BUSINESS INTERUPTION) HOWEVER CAUSED
+  AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY OR
+  TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 *******************************************************************************/
 
@@ -132,7 +177,7 @@ e1000_proc_single_read(char *page, char **start, off_t off,
 	return e1000_proc_read(page, start, off, count, eof);
 }
 
-static void
+static void __devexit
 e1000_proc_dirs_free(char *name, struct list_head *proc_list_head)
 {
 	struct proc_dir_entry *intel_proc_dir, *proc_dir;
@@ -188,7 +233,7 @@ e1000_proc_dirs_free(char *name, struct list_head *proc_list_head)
 }
 
 
-static int
+static int __devinit
 e1000_proc_singles_create(struct proc_dir_entry *parent,
                           struct list_head *proc_list_head)
 {
@@ -215,7 +260,7 @@ e1000_proc_singles_create(struct proc_dir_entry *parent,
 	return 1;
 }
 
-static void
+static void __devinit
 e1000_proc_dirs_create(void *data, char *name, 
                        struct list_head *proc_list_head)
 {
@@ -255,7 +300,7 @@ e1000_proc_dirs_create(void *data, char *name,
 	info_entry->data = proc_list_head;
 }
 
-static void
+static void __devinit
 e1000_proc_list_add(struct list_head *proc_list_head, char *tag,
                     void *data, size_t len, 
 		    char *(*func)(void *, size_t, char *))
@@ -274,7 +319,7 @@ e1000_proc_list_add(struct list_head *proc_list_head, char *tag,
 	list_add_tail(&new->list, proc_list_head);
 }
 
-static void
+static void __devexit
 e1000_proc_list_free(struct list_head *proc_list_head)
 {
 	struct proc_list *elem;
@@ -542,7 +587,7 @@ e1000_proc_rx_status(void *data, size_t len, char *buf)
 #define LIST_ADD_H(T,D) LIST_ADD_F((T), (D), e1000_proc_hex)
 #define LIST_ADD_U(T,D) LIST_ADD_F((T), (D), e1000_proc_unsigned)
 
-static void
+static void __devinit
 e1000_proc_list_setup(struct e1000_adapter *adapter)
 {
 	struct e1000_hw *hw = &adapter->hw;
@@ -572,7 +617,7 @@ e1000_proc_list_setup(struct e1000_adapter *adapter)
 	}
 
 	LIST_ADD_U("IRQ", &adapter->pdev->irq);
-	LIST_ADD_S("System_Device_Name", adapter->ifname);
+	LIST_ADD_S("System_Device_Name", adapter->netdev->name);
 	LIST_ADD_F("Current_HWaddr",
 	            adapter->netdev->dev_addr, e1000_proc_hwaddr);
 	LIST_ADD_F("Permanent_HWaddr",
@@ -621,11 +666,11 @@ e1000_proc_list_setup(struct e1000_adapter *adapter)
 	LIST_ADD_U("Tx_Multi_Coll_Ok", &adapter->stats.mcc);
 	LIST_ADD_U("Rx_Long_Length_Errors", &adapter->stats.roc);
 	LIST_ADD_U("Rx_Short_Length_Errors", &adapter->stats.ruc);
-
+	
 	/* The 82542 does not have an alignment error count register */
 	if(adapter->hw.mac_type >= e1000_82543)
 		LIST_ADD_U("Rx_Align_Errors", &adapter->stats.algnerrc);
-
+	
 	LIST_ADD_U("Rx_Flow_Control_XON", &adapter->stats.xonrxc);
 	LIST_ADD_U("Rx_Flow_Control_XOFF", &adapter->stats.xoffrxc);
 	LIST_ADD_U("Tx_Flow_Control_XON", &adapter->stats.xontxc);
@@ -667,13 +712,13 @@ e1000_proc_list_setup(struct e1000_adapter *adapter)
  * @adapter: board private structure
  */
 
-void
+void __devinit
 e1000_proc_dev_setup(struct e1000_adapter *adapter)
 {
 	e1000_proc_list_setup(adapter);
 
 	e1000_proc_dirs_create(adapter, 
-	                       adapter->ifname,
+	                       adapter->netdev->name,
 	                       &adapter->proc_list_head);
 }
 
@@ -682,18 +727,18 @@ e1000_proc_dev_setup(struct e1000_adapter *adapter)
  * @adapter: board private structure
  */
 
-void
+void __devexit
 e1000_proc_dev_free(struct e1000_adapter *adapter)
 {
-	e1000_proc_dirs_free(adapter->ifname, &adapter->proc_list_head);
+	e1000_proc_dirs_free(adapter->netdev->name, &adapter->proc_list_head);
 
 	e1000_proc_list_free(&adapter->proc_list_head);
 }
 
 #else /* CONFIG_PROC_FS */
 
-void e1000_proc_dev_setup(struct e1000_adapter *adapter) {}
-void e1000_proc_dev_free(struct e1000_adapter *adapter) {}
+void __devinit e1000_proc_dev_setup(struct e1000_adapter *adapter) {}
+void __devexit e1000_proc_dev_free(struct e1000_adapter *adapter) {}
 
 #endif /* CONFIG_PROC_FS */
 

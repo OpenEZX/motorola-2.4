@@ -1,4 +1,4 @@
-/*
+ /*
  *  linux/mm/oom_kill.c
  * 
  *  Copyright (C)  1998,2000  Rik van Riel
@@ -23,6 +23,7 @@
 
 /* #define DEBUG */
 
+#ifdef CONFIG_EMBEDDED_OOM_KILLER
 /**
  * int_sqrt - oom_kill.c internal function, rough approximation to sqrt
  * @x: integer of which to calculate the sqrt
@@ -110,7 +111,8 @@ static int badness(struct task_struct *p)
 
 /*
  * Simple selection loop. We chose the process with the highest
- * number of 'points'. We expect the caller will lock the tasklist.
+ * number of 'points'. We need the locks to make sure that the
+ * list of task structs doesn't change while we look the other way.
  *
  * (not docbooked, we don't want this one cluttering up the manual)
  */
@@ -120,6 +122,7 @@ static struct task_struct * select_bad_process(void)
 	struct task_struct *p = NULL;
 	struct task_struct *chosen = NULL;
 
+	read_lock(&tasklist_lock);
 	for_each_task(p) {
 		if (p->pid) {
 			int points = badness(p);
@@ -129,6 +132,7 @@ static struct task_struct * select_bad_process(void)
 			}
 		}
 	}
+	read_unlock(&tasklist_lock);
 	return chosen;
 }
 
@@ -137,7 +141,7 @@ static struct task_struct * select_bad_process(void)
  * CAP_SYS_RAW_IO set, send SIGTERM instead (but it's unlikely that
  * we select a process with CAP_SYS_RAW_IO set).
  */
-void oom_kill_task(struct task_struct *p)
+static void oom_kill_task(struct task_struct *p)
 {
 	printk(KERN_ERR "Out of Memory: Killed process %d (%s).\n", p->pid, p->comm);
 
@@ -167,18 +171,16 @@ void oom_kill_task(struct task_struct *p)
  */
 static void oom_kill(void)
 {
-	struct task_struct *p, *q;
-
-	read_lock(&tasklist_lock);
-	p = select_bad_process();
+	struct task_struct *p = select_bad_process(), *q;
 
 	/* Found nothing?!?! Either we hang forever, or we panic. */
 	if (p == NULL)
 		panic("Out of memory and no killable processes...\n");
 
 	/* kill all processes that share the ->mm (i.e. all threads) */
+	read_lock(&tasklist_lock);
 	for_each_task(q) {
-		if (q->mm == p->mm)
+		if(q->mm == p->mm)
 			oom_kill_task(q);
 	}
 	read_unlock(&tasklist_lock);
@@ -188,17 +190,30 @@ static void oom_kill(void)
 	 * killing itself before someone else gets the chance to ask
 	 * for more memory.
 	 */
-	yield();
+	current->policy |= SCHED_YIELD;
+	schedule();
 	return;
 }
+#endif
 
 /**
  * out_of_memory - is the system out of memory?
  */
 void out_of_memory(void)
 {
-	static unsigned long first, last, count, lastkill;
+#ifdef CONFIG_EMBEDDED_OOM_KILLER
+	static unsigned long first, last, count;
 	unsigned long now, since;
+
+	/*
+	 * This is a trade off for embedded systems that typically
+	 * have no swap devices.  By just returning here we run
+	 * the risk of getblk looping forever and hanging the system. . .
+	 * having your embedded application killed doesn't quite work,
+	 * but neither does hanging the system.  If the apps don't
+	 * completely exhaust memory they'll keep running forever, as our
+	 * QA tests have shown.
+	 */
 
 	/*
 	 * Enough swap space left?  Not OOM.
@@ -234,21 +249,12 @@ void out_of_memory(void)
 		return;
 
 	/*
-	 * If we just killed a process, wait a while
-	 * to give that task a chance to exit. This
-	 * avoids killing multiple processes needlessly.
-	 */
-	since = now - lastkill;
-	if (since < HZ*5)
-		return;
-
-	/*
 	 * Ok, really out of memory. Kill something.
 	 */
-	lastkill = now;
 	oom_kill();
 
 reset:
 	first = now;
 	count = 0;
+#endif /* CONFIG_OOM_KILLER */
 }

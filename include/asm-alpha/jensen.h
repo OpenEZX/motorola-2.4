@@ -8,7 +8,7 @@
  */
 
 /* The Jensen is strange */
-/* #define AUX_IRQ (9) *//* done in keyboard.h now */
+#define AUX_IRQ (9)
 
 /*
  * NOTE! The memory operations do not set any memory barriers, as it's

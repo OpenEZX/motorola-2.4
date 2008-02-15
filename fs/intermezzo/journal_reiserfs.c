@@ -1,26 +1,10 @@
-/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
- * vim:expandtab:shiftwidth=8:tabstop=8:
- *
- *  Copyright (C) 1998 Peter J. Braam <braam@clusterfs.com>
- *  Copyright (C) 2000 Red Hat, Inc.
- *  Copyright (C) 2000 Los Alamos National Laboratory
- *  Copyright (C) 2000 TurboLinux, Inc.
- *  Copyright (C) 2001 Mountain View Data, Inc.
- *
- *   This file is part of InterMezzo, http://www.inter-mezzo.org.
- *
- *   InterMezzo is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
- *
- *   InterMezzo is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with InterMezzo; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+/*
+ * Intermezzo. (C) 1998 Peter J. Braam
+ * Intermezzo. (C) 2000 Red Hat, Inc.
+ * Intermezzo. (C) 2000 Los Alamos National Laboratory
+ * Intermezzo. (C) 2000 TurboLinux, Inc.
+ * Intermezzo. (C) 2001 Mountain View Data, Inc.
  */
 
 #include <linux/types.h>
@@ -44,8 +28,9 @@
 #endif
 
 #include <linux/intermezzo_fs.h>
+#include <linux/intermezzo_upcall.h>
 #include <linux/intermezzo_psdev.h>
-
+#include <linux/intermezzo_kml.h>
 #if defined(CONFIG_REISERFS_FS) || defined(CONFIG_REISERFS_FS_MODULE)
 
 
@@ -69,9 +54,9 @@ static void *presto_reiserfs_trans_start(struct presto_file_set *fset,
         __u32 avail_kmlblocks;
 	struct reiserfs_transaction_handle *th ;
 
-	PRESTO_ALLOC(th, sizeof(*th));
+	PRESTO_ALLOC(th, struct reiserfs_transaction_handle *, sizeof(*th));
 	if (!th) { 
-		CERROR("presto: No memory for trans handle\n");
+		printk("presto: No memory for trans handle\n");
 		return NULL;
 	}
 
@@ -98,24 +83,23 @@ static void *presto_reiserfs_trans_start(struct presto_file_set *fset,
         CDEBUG(D_JOURNAL, "creating journal handle (%d blocks)\n", jblocks);
 
 	lock_kernel();
-	journal_begin(th, inode->i_sb, jblocks);
+	//journal_begin(th, inode->i_sb, jblocks);
 	unlock_kernel();
 	return th; 
 }
 
-static void presto_reiserfs_trans_commit(struct presto_file_set *fset,
-                                         void *handle)
+void presto_reiserfs_trans_commit(struct presto_file_set *fset, void *handle)
 {
 	int jblocks;
 	jblocks = 3 + JOURNAL_PER_BALANCE_CNT * 4;
 	
 	lock_kernel();
-	journal_end(handle, fset->fset_cache->cache_sb, jblocks);
+	//journal_end(handle, fset->fset_cache->cache_sb, jblocks);
 	unlock_kernel();
 	PRESTO_FREE(handle, sizeof(struct reiserfs_transaction_handle));
 }
 
-static void presto_reiserfs_journal_file_data(struct inode *inode)
+void presto_reiserfs_journal_file_data(struct inode *inode)
 {
 #ifdef EXT3_JOURNAL_DATA_FL
         inode->u.ext3_i.i_flags |= EXT3_JOURNAL_DATA_FL;
@@ -124,18 +108,11 @@ static void presto_reiserfs_journal_file_data(struct inode *inode)
 #endif
 }
 
-static int presto_reiserfs_has_all_data(struct inode *inode)
-{
-        BUG();
-        return 0;
-}
-
 struct journal_ops presto_reiserfs_journal_ops = {
-        .tr_all_data     = presto_reiserfs_has_all_data,
-        .tr_avail        = presto_reiserfs_freespace,
-        .tr_start        = presto_reiserfs_trans_start,
-        .tr_commit       = presto_reiserfs_trans_commit,
-        .tr_journal_data = presto_reiserfs_journal_file_data
+        tr_avail: presto_reiserfs_freespace,
+        tr_start:  presto_reiserfs_trans_start,
+        tr_commit: presto_reiserfs_trans_commit,
+        tr_journal_data: presto_reiserfs_journal_file_data
 };
 
 #endif

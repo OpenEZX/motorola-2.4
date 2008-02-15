@@ -697,6 +697,4 @@ au1000_pcmcia_proc_status(char *buf, char **start, off_t pos,
 	p+=sprintf(p, "common   : %u\n", pcmcia_socket[sock].speed_mem);
 	return p-buf;
 }
-
-
 #endif  /* defined(CONFIG_PROC_FS) */

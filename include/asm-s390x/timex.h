@@ -25,19 +25,8 @@ static inline cycles_t get_cycles(void)
 {
 	cycles_t cycles;
 
-	__asm__("stck 0(%0)" : : "a" (&(cycles)) : "memory", "cc");
+	__asm__("stck  %0" : "=m" (cycles) : : "cc");
 	return cycles >> 2;
 }
-
-static inline unsigned long long get_clock (void)
-{
-	unsigned long long clock;
-
-	__asm__("stck 0(%0)" : : "a" (&(clock)) : "memory", "cc");
-	return clock;
-}
-
-#define vxtime_lock()		do {} while (0)
-#define vxtime_unlock()		do {} while (0)
 
 #endif

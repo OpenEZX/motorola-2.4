@@ -4,7 +4,8 @@
  * License.  See the file "COPYING" in the main directory of this archive
  * for more details.
  *
- * Copyright (C) 1992 - 1997, 2000-2001 Silicon Graphics, Inc. All rights reserved.
+ * Copyright (C) 1992 - 1997, 2000 Silicon Graphics, Inc.
+ * Copyright (C) 2000 by Colin Ngam
  */
 #ifndef _ASM_SN_PCI_BRIDGE_H
 #define _ASM_SN_PCI_BRIDGE_H
@@ -52,7 +53,7 @@
  *    Bridge address map
  */
 
-#ifndef __ASSEMBLY__
+#if defined(_LANGUAGE_C) || defined(_LANGUAGE_C_PLUS_PLUS)
 
 #ifdef __cplusplus
 extern "C" {
@@ -372,7 +373,7 @@ typedef struct bridge_err_cmdword_s {
 				    ds:2,	/* Data size	  */
 				    gbr:1,	/* GBR enable	  */
 				    vbpm:1,	/* VBPM message	  */
-				    error:1,	/* Error occurred */
+				    error:1,	/* Error occurred  */
 				    barr:1,	/* Barrier op	  */
 				    rsvd:8;
 	} berr_st;
@@ -637,7 +638,7 @@ typedef volatile struct bridge_s {
 
 
 #define berr_field	berr_un.berr_st
-#endif				/* __ASSEMBLY__ */
+#endif				/* LANGUAGE_C */
 
 /*
  * The values of these macros can and should be crosschecked
@@ -902,10 +903,10 @@ typedef volatile struct bridge_s {
 #define BRIDGE_DEVIO_2MB	0x00200000	/* Device IO Offset (0..1) */
 #define BRIDGE_DEVIO_1MB	0x00100000	/* Device IO Offset (2..7) */
 
-#ifndef __ASSEMBLY__
+#if	LANGUAGE_C
 
 #define BRIDGE_DEVIO(x)		((x)<=1 ? BRIDGE_DEVIO0+(x)*BRIDGE_DEVIO_2MB : BRIDGE_DEVIO2+((x)-2)*BRIDGE_DEVIO_1MB)
-#endif				/* __ASSEMBLY__ */
+#endif				/* LANGUAGE_C */
 
 #define BRIDGE_EXTERNAL_FLASH	0x00C00000	/* External Flash PROMS */
 
@@ -970,10 +971,6 @@ typedef volatile struct bridge_s {
 #define BRIDGE_CTRL_CLR_RLLP_CNT	(0x1 << 11)
 #define BRIDGE_CTRL_CLR_TLLP_CNT	(0x1 << 10)
 #define BRIDGE_CTRL_SYS_END		(0x1 << 9)
-#define BRIDGE_CTRL_BUS_SPEED(n)        ((n) << 4)
-#define BRIDGE_CTRL_BUS_SPEED_MASK      (BRIDGE_CTRL_BUS_SPEED(0x3))
-#define BRIDGE_CTRL_BUS_SPEED_33        0x00
-#define BRIDGE_CTRL_BUS_SPEED_66        0x10
 #define BRIDGE_CTRL_MAX_TRANS(n)	((n) << 4)
 #define BRIDGE_CTRL_MAX_TRANS_MASK	(BRIDGE_CTRL_MAX_TRANS(0x1f))
 #define BRIDGE_CTRL_WIDGET_ID(n)	((n) << 0)
@@ -1299,14 +1296,14 @@ typedef volatile struct bridge_s {
 #define PCI32_MAPPED_BASE		BRIDGE_DMA_MAPPED_BASE
 #define PCI32_DIRECT_BASE		BRIDGE_DMA_DIRECT_BASE
 
-#ifndef __ASSEMBLY__
+#if	LANGUAGE_C
 
 #define IS_PCI32_LOCAL(x)	((uint64_t)(x) < PCI32_MAPPED_BASE)
 #define IS_PCI32_MAPPED(x)	((uint64_t)(x) < PCI32_DIRECT_BASE && \
 					(uint64_t)(x) >= PCI32_MAPPED_BASE)
 #define IS_PCI32_DIRECT(x)	((uint64_t)(x) >= PCI32_MAPPED_BASE)
 #define IS_PCI64(x)		((uint64_t)(x) >= PCI64_BASE)
-#endif				/* __ASSEMBLY__ */
+#endif				/* LANGUAGE_C */
 
 /*
  * The GIO address space.
@@ -1321,13 +1318,13 @@ typedef volatile struct bridge_s {
 #define GIO_MAPPED_BASE			BRIDGE_DMA_MAPPED_BASE
 #define GIO_DIRECT_BASE			BRIDGE_DMA_DIRECT_BASE
 
-#ifndef __ASSEMBLY__
+#if	LANGUAGE_C
 
 #define IS_GIO_LOCAL(x)		((uint64_t)(x) < GIO_MAPPED_BASE)
 #define IS_GIO_MAPPED(x)	((uint64_t)(x) < GIO_DIRECT_BASE && \
 					(uint64_t)(x) >= GIO_MAPPED_BASE)
 #define IS_GIO_DIRECT(x)	((uint64_t)(x) >= GIO_MAPPED_BASE)
-#endif				/* __ASSEMBLY__ */
+#endif				/* LANGUAGE_C */
 
 /* PCI to xtalk mapping */
 
@@ -1350,7 +1347,7 @@ typedef volatile struct bridge_s {
 #define PCI64_ATTR_RMF_MASK	0x00ff000000000000
 #define PCI64_ATTR_RMF_SHFT	48
 
-#ifndef __ASSEMBLY__
+#if LANGUAGE_C
 /* Address translation entry for mapped pci32 accesses */
 typedef union ate_u {
     uint64_t		    ent;
@@ -1378,7 +1375,7 @@ typedef union ate_u {
 	uint64_t		valid:1;
     } field;
 } ate_t;
-#endif				/* __ASSEMBLY__ */
+#endif				/* LANGUAGE_C */
 
 #define ATE_V		(1 << 0)
 #define ATE_CO		(1 << 1)
@@ -1404,7 +1401,7 @@ typedef union ate_u {
 #define is_xbridge(bridge) \
         (XWIDGET_PART_NUM(bridge->b_wid_id) == XBRIDGE_WIDGET_PART_NUM)
 
-#ifndef __ASSEMBLY__
+#if	LANGUAGE_C
 
 /* ========================================================================
  */

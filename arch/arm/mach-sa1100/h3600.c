@@ -15,8 +15,8 @@
  *
  * History:
  *
- * 2001-10-??	Andrew Christian   Added support for iPAQ H3800
- *				   and abstracted EGPIO interface.
+ * 2001-10-??   Andrew Christian   Added support for iPAQ H3800
+ *                                 and abstracted EGPIO interface.
  *
  */
 #include <linux/module.h>
@@ -24,344 +24,57 @@
 #include <linux/kernel.h>
 #include <linux/tty.h>
 #include <linux/sched.h>
+#include <linux/pm.h>
 
 #include <asm/irq.h>
 #include <asm/hardware.h>
 #include <asm/setup.h>
+#include <asm/arch/pm.h>
 
+#include <asm/mach/irq.h>
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
 #include <asm/mach/serial_sa1100.h>
+
+#include <asm/arch/irq.h>
+
 #include <linux/serial_core.h>
+
+#if defined (CONFIG_SA1100_H3600) || defined (CONFIG_SA1100_H3100)
 #include <asm/arch/h3600_gpio.h>
+#endif
+
+#ifdef CONFIG_SA1100_H3800
+#include <asm/arch/h3600_asic.h>
+#endif
 
 #include "generic.h"
-
-/*
- * H3600 has extended, write-only memory-mapped GPIO's
- * H3100 has 1/2 extended, write-only GPIO and 1/2 on
- *	 regular GPIO lines.
- * H3800 has memory-mapped GPIO through ASIC1 & 2
- */
-
-#define H3600_EGPIO	(*(volatile unsigned int *)H3600_EGPIO_VIRT)
-
-static unsigned int h3600_egpio;
-
-/************************* H3100 *************************/
-
-#define H3100_DIRECT_EGPIO (GPIO_H3100_BT_ON	  \
-			  | GPIO_H3100_GPIO3	  \
-			  | GPIO_H3100_QMUTE	  \
-			  | GPIO_H3100_LCD_3V_ON  \
-			  | GPIO_H3100_AUD_ON	  \
-			  | GPIO_H3100_AUD_PWR_ON \
-			  | GPIO_H3100_IR_ON	  \
-			  | GPIO_H3100_IR_FSEL)
-
-static void h3100_init_egpio( void )
-{
-	GPDR |= H3100_DIRECT_EGPIO;
-	GPCR = H3100_DIRECT_EGPIO;   /* Initially all off */
-
-	/* Older bootldrs put GPIO2-9 in alternate mode on the
-	   assumption that they are used for video */
-	GAFR &= ~H3100_DIRECT_EGPIO;
-
-	h3600_egpio = EGPIO_H3600_RS232_ON;
-	H3600_EGPIO = h3600_egpio;
-}
-
-static void h3100_control_egpio( enum ipaq_egpio_type x, int setp )
-{
-	unsigned int egpio = 0;
-	long	     gpio = 0;
-	unsigned long flags;
-
-	switch (x) {
-	case IPAQ_EGPIO_LCD_ON:
-		egpio |= EGPIO_H3600_LCD_ON;
-		gpio  |= GPIO_H3100_LCD_3V_ON;
-		break;
-	case IPAQ_EGPIO_CODEC_NRESET:
-		egpio |= EGPIO_H3600_CODEC_NRESET;
-		break;
-	case IPAQ_EGPIO_AUDIO_ON:
-		gpio |= GPIO_H3100_AUD_PWR_ON
-			| GPIO_H3100_AUD_ON;
-		break;
-	case IPAQ_EGPIO_QMUTE:
-		gpio |= GPIO_H3100_QMUTE;
-		break;
-	case IPAQ_EGPIO_OPT_NVRAM_ON:
-		egpio |= EGPIO_H3600_OPT_NVRAM_ON;
-		break;
-	case IPAQ_EGPIO_OPT_ON:
-		egpio |= EGPIO_H3600_OPT_ON;
-		break;
-	case IPAQ_EGPIO_CARD_RESET:
-		egpio |= EGPIO_H3600_CARD_RESET;
-		break;
-	case IPAQ_EGPIO_OPT_RESET:
-		egpio |= EGPIO_H3600_OPT_RESET;
-		break;
-	case IPAQ_EGPIO_IR_ON:
-		gpio |= GPIO_H3100_IR_ON;
-		break;
-	case IPAQ_EGPIO_IR_FSEL:
-		gpio |= GPIO_H3100_IR_FSEL;
-		break;
-	case IPAQ_EGPIO_RS232_ON:
-		egpio |= EGPIO_H3600_RS232_ON;
-		break;
-	case IPAQ_EGPIO_VPP_ON:
-		egpio |= EGPIO_H3600_VPP_ON;
-		break;
-	}
-
-	local_irq_save(flags);
-	if ( setp ) {
-		h3600_egpio |= egpio;
-		GPSR = gpio;
-	} else {
-		h3600_egpio &= ~egpio;
-		GPCR = gpio;
-	}
-	H3600_EGPIO = h3600_egpio;
-	local_irq_restore(flags);
-
-	/*
-	if ( x != IPAQ_EGPIO_VPP_ON ) {
-		printk(__FUNCTION__ " : type=%d (%s) gpio=0x%x (0x%x) egpio=0x%x (0x%x) setp=%d\n",
-		       x, egpio_names[x], GPLR, gpio, h3600_egpio, egpio, setp );
-	}
-	*/
-}
-
-static unsigned long h3100_read_egpio( void )
-{
-	return h3600_egpio;
-}
-
-static struct ipaq_model_ops h3100_model_ops __initdata = {
-	model	     : IPAQ_H3100,
-	generic_name : "3100",
-	initialize   : h3100_init_egpio,
-	control      : h3100_control_egpio,
-	read	     : h3100_read_egpio
-};
-
-
-/************************* H3600 *************************/
-
-static void h3600_init_egpio( void )
-{
-	h3600_egpio = EGPIO_H3600_RS232_ON;
-	H3600_EGPIO = h3600_egpio;
-}
-
-static void h3600_control_egpio( enum ipaq_egpio_type x, int setp )
-{
-	unsigned int egpio = 0;
-	unsigned long flags;
-
-	switch (x) {
-	case IPAQ_EGPIO_LCD_ON:
-		egpio |= EGPIO_H3600_LCD_ON |
-			 EGPIO_H3600_LCD_PCI |
-			 EGPIO_H3600_LCD_5V_ON |
-			 EGPIO_H3600_LVDD_ON;
-		break;
-	case IPAQ_EGPIO_CODEC_NRESET:
-		egpio |= EGPIO_H3600_CODEC_NRESET;
-		break;
-	case IPAQ_EGPIO_AUDIO_ON:
-		egpio |= EGPIO_H3600_AUD_AMP_ON |
-			EGPIO_H3600_AUD_PWR_ON;
-		break;
-	case IPAQ_EGPIO_QMUTE:
-		egpio |= EGPIO_H3600_QMUTE;
-		break;
-	case IPAQ_EGPIO_OPT_NVRAM_ON:
-		egpio |= EGPIO_H3600_OPT_NVRAM_ON;
-		break;
-	case IPAQ_EGPIO_OPT_ON:
-		egpio |= EGPIO_H3600_OPT_ON;
-		break;
-	case IPAQ_EGPIO_CARD_RESET:
-		egpio |= EGPIO_H3600_CARD_RESET;
-		break;
-	case IPAQ_EGPIO_OPT_RESET:
-		egpio |= EGPIO_H3600_OPT_RESET;
-		break;
-	case IPAQ_EGPIO_IR_ON:
-		egpio |= EGPIO_H3600_IR_ON;
-		break;
-	case IPAQ_EGPIO_IR_FSEL:
-		egpio |= EGPIO_H3600_IR_FSEL;
-		break;
-	case IPAQ_EGPIO_RS232_ON:
-		egpio |= EGPIO_H3600_RS232_ON;
-		break;
-	case IPAQ_EGPIO_VPP_ON:
-		egpio |= EGPIO_H3600_VPP_ON;
-		break;
-	}
-
-	local_irq_save(flags);
-	if ( setp )
-		h3600_egpio |= egpio;
-	else
-		h3600_egpio &= ~egpio;
-	H3600_EGPIO = h3600_egpio;
-	local_irq_restore(flags);
-}
-
-static unsigned long h3600_read_egpio( void )
-{
-	return h3600_egpio;
-}
-
-static struct ipaq_model_ops h3600_model_ops __initdata = {
-	model	     : IPAQ_H3600,
-	generic_name : "3600",
-	initialize   : h3600_init_egpio,
-	control      : h3600_control_egpio,
-	read	     : h3600_read_egpio
-};
-
-/************************* H3800 *************************/
-
-#define ASIC1_OUTPUTS	 0x7fff   /* First 15 bits are used */
-
-static unsigned int h3800_asic1_gpio;
-static unsigned int h3800_asic2_gpio;
-
-static void h3800_init_egpio(void)
-{
-	/* Set up ASIC #1 */
-	H3800_ASIC1_GPIO_Direction    = ASIC1_OUTPUTS;		  /* All outputs */
-	H3800_ASIC1_GPIO_Mask	      = ASIC1_OUTPUTS;		  /* No interrupts */
-	H3800_ASIC1_GPIO_SleepMask    = ASIC1_OUTPUTS;
-	H3800_ASIC1_GPIO_SleepDir     = ASIC1_OUTPUTS;
-	H3800_ASIC1_GPIO_SleepOut     = GPIO_H3800_ASIC1_EAR_ON_N;
-	H3800_ASIC1_GPIO_BattFaultDir = ASIC1_OUTPUTS;
-	H3800_ASIC1_GPIO_BattFaultOut = GPIO_H3800_ASIC1_EAR_ON_N;
-
-	h3800_asic1_gpio = GPIO_H3800_ASIC1_IR_ON_N   /* TODO: Check IR level */
-		| GPIO_H3800_ASIC1_RS232_ON
-		| GPIO_H3800_ASIC1_EAR_ON_N;
-
-	H3800_ASIC1_GPIO_Out = h3800_asic1_gpio;
-
-	/* Set up ASIC #2 */
-	H3800_ASIC2_GPIO_Direction = GPIO_H3800_ASIC2_PEN_IRQ
-		| GPIO_H3800_ASIC2_SD_DETECT
-		| GPIO_H3800_ASIC2_EAR_IN_N
-		| GPIO_H3800_ASIC2_USB_DETECT_N
-		| GPIO_H3800_ASIC2_SD_CON_SLT;
-
-	h3800_asic2_gpio = GPIO_H3800_ASIC2_IN_Y1_N | GPIO_H3800_ASIC2_IN_X1_N;
-	H3800_ASIC2_GPIO_Data	      = h3800_asic2_gpio;
-	H3800_ASIC2_GPIO_BattFaultOut = h3800_asic2_gpio;
-
-	/* TODO : Set sleep states & battery fault states */
-
-	/* Clear VPP Enable */
-	H3800_ASIC1_FlashWP_VPP_ON = 0;
-}
-
-static void h3800_control_egpio( enum ipaq_egpio_type x, int setp )
-{
-	unsigned int set_asic1_egpio = 0;
-	unsigned int clear_asic1_egpio = 0;
-	unsigned long flags;
-
-	switch (x) {
-	case IPAQ_EGPIO_LCD_ON:
-		set_asic1_egpio |= GPIO_H3800_ASIC1_LCD_5V_ON
-			| GPIO_H3800_ASIC1_LCD_ON
-			| GPIO_H3800_ASIC1_LCD_PCI
-			| GPIO_H3800_ASIC1_VGH_ON
-			| GPIO_H3800_ASIC1_VGL_ON;
-		break;
-	case IPAQ_EGPIO_CODEC_NRESET:
-		break;
-	case IPAQ_EGPIO_AUDIO_ON:
-		break;
-	case IPAQ_EGPIO_QMUTE:
-		break;
-	case IPAQ_EGPIO_OPT_NVRAM_ON:
-		break;
-	case IPAQ_EGPIO_OPT_ON:
-		break;
-	case IPAQ_EGPIO_CARD_RESET:
-		break;
-	case IPAQ_EGPIO_OPT_RESET:
-		break;
-	case IPAQ_EGPIO_IR_ON:
-		clear_asic1_egpio |= GPIO_H3800_ASIC1_IR_ON_N;	 /* TODO : This is backwards? */
-		break;
-	case IPAQ_EGPIO_IR_FSEL:
-		break;
-	case IPAQ_EGPIO_RS232_ON:
-		set_asic1_egpio |= GPIO_H3800_ASIC1_RS232_ON;
-		break;
-	case IPAQ_EGPIO_VPP_ON:
-		H3800_ASIC1_FlashWP_VPP_ON = setp;
-		break;
-	}
-
-	local_irq_save(flags);
-	if ( setp ) {
-		h3800_asic1_gpio |= set_asic1_egpio;
-		h3800_asic1_gpio &= ~clear_asic1_egpio;
-	}
-	else {
-		h3800_asic1_gpio &= ~set_asic1_egpio;
-		h3800_asic1_gpio |= clear_asic1_egpio;
-	}
-	H3800_ASIC1_GPIO_Out = h3800_asic1_gpio;
-	local_irq_restore(flags);
-}
-
-static unsigned long h3800_read_egpio( void )
-{
-	return h3800_asic1_gpio | (h3800_asic2_gpio << 16);
-}
-
-static struct ipaq_model_ops h3800_model_ops __initdata = {
-	model	     : IPAQ_H3800,
-	generic_name : "3800",
-	initialize   : h3800_init_egpio,
-	control      : h3800_control_egpio,
-	read	     : h3800_read_egpio
-};
-
-
-/*
- * Use command line argument to choose between ipaq handheld model numbers
- */
 
 struct ipaq_model_ops ipaq_model_ops;
 EXPORT_SYMBOL(ipaq_model_ops);
 
-static int __init h3600_init_model_ops(void)
+
+static void h3xxx_lcd_power(int on)
 {
-	if (machine_is_h3xxx()) {
-		if (machine_is_h3100()) {
-			ipaq_model_ops = h3100_model_ops;
-		} else if (machine_is_h3600()) {
-			ipaq_model_ops = h3600_model_ops;
-		} else if (machine_is_h3800()) {
-			ipaq_model_ops = h3800_model_ops;
-		}
-		init_h3600_egpio();
-	}
-	return 0;
+	if (on)
+		set_h3600_egpio(IPAQ_EGPIO_LCD_POWER);
+	else
+		clr_h3600_egpio(IPAQ_EGPIO_LCD_POWER);
 }
 
-__initcall(h3600_init_model_ops);
+static void h3xxx_lcd_enable(int on)
+{
+	if (on)
+		set_h3600_egpio( IPAQ_EGPIO_LCD_ENABLE );
+	else
+		clr_h3600_egpio( IPAQ_EGPIO_LCD_ENABLE );
+}
+
+static void msleep(unsigned int msec)
+{
+	current->state = TASK_INTERRUPTIBLE;
+	schedule_timeout( (msec * HZ + 999) / 1000);
+}
 
 /*
  * low-level UART features
@@ -383,6 +96,7 @@ static u_int h3600_uart_get_mctrl(struct uart_port *port)
 
 	if (port->mapbase == _Ser3UTCR0) {
 		int gplr = GPLR;
+                /* DCD and CTS bits are inverted in GPLR by RS232 transceiver */
 		if (gplr & GPIO_H3600_COM_DCD)
 			ret &= ~TIOCM_CD;
 		if (gplr & GPIO_H3600_COM_CTS)
@@ -396,6 +110,7 @@ static void h3600_dcd_intr(int irq, void *dev_id, struct pt_regs *regs)
 {
 	struct uart_info *info = dev_id;
 	/* Note: should only call this if something has changed */
+        /* DCD and CTS bits are inverted in GPLR by RS232 transceiver */
 	uart_handle_dcd_change(info, !(GPLR & GPIO_H3600_COM_DCD));
 }
 
@@ -403,12 +118,13 @@ static void h3600_cts_intr(int irq, void *dev_id, struct pt_regs *regs)
 {
 	struct uart_info *info = dev_id;
 	/* Note: should only call this if something has changed */
+        /* DCD and CTS bits are inverted in GPLR by RS232 transceiver */
 	uart_handle_cts_change(info, !(GPLR & GPIO_H3600_COM_CTS));
 }
 
 static void h3600_uart_pm(struct uart_port *port, u_int state, u_int oldstate)
 {
-	if (port->mapbase == _Ser2UTCR0) {
+	if (port->mapbase == _Ser2UTCR0) { /* TODO: REMOVE THIS */
 		assign_h3600_egpio( IPAQ_EGPIO_IR_ON, !state );
 	} else if (port->mapbase == _Ser3UTCR0) {
 		assign_h3600_egpio( IPAQ_EGPIO_RS232_ON, !state );
@@ -437,7 +153,7 @@ static int h3600_uart_open(struct uart_port *port, struct uart_info *info)
 {
 	int ret = 0;
 
-	if (port->mapbase == _Ser2UTCR0) {
+	if (port->mapbase == _Ser2UTCR0) {  /* TODO: REMOVE THIS */
 		Ser2UTCR4 = UTCR4_HSE;
 		Ser2HSCR0 = 0;
 		Ser2HSSR0 = HSSR0_EIF | HSSR0_TUR |
@@ -477,47 +193,276 @@ static struct sa1100_port_fns h3600_port_fns __initdata = {
 };
 
 static struct map_desc h3600_io_desc[] __initdata = {
- /* virtual	       physical    length      domain	  r  w	c  b */
-  { 0xe8000000,        0x00000000, 0x02000000, DOMAIN_IO, 0, 1, 0, 0 }, /* Flash bank 0 	 CS#0 */
-  { H3600_EGPIO_VIRT,  0x49000000, 0x01000000, DOMAIN_IO, 0, 1, 0, 0 }, /* EGPIO 0		 CS#5 */
-  { H3600_BANK_2_VIRT, 0x10000000, 0x02800000, DOMAIN_IO, 0, 1, 0, 0 }, /* static memory bank 2  CS#2 */
-  { H3600_BANK_4_VIRT, 0x40000000, 0x00800000, DOMAIN_IO, 0, 1, 0, 0 }, /* static memory bank 4  CS#4 */
+ /* virtual            physical           length      domain     r  w  c  b */
+  { 0xe8000000,        0x00000000,        0x02000000, DOMAIN_IO, 0, 1, 0, 0 }, /* Flash bank 0 	        CS#0 */
+  { H3600_EGPIO_VIRT,  H3600_EGPIO_PHYS,  0x01000000, DOMAIN_IO, 0, 1, 0, 0 }, /* EGPIO 0	        CS#5 */
+  { H3600_BANK_2_VIRT, H3600_BANK_2_PHYS, 0x02800000, DOMAIN_IO, 0, 1, 0, 0 }, /* static memory bank 2  CS#2 */
+  { H3600_BANK_4_VIRT, H3600_BANK_4_PHYS, 0x00800000, DOMAIN_IO, 0, 1, 0, 0 }, /* static memory bank 4  CS#4 */
   LAST_DESC
 };
 
-static void __init h3600_map_io(void)
+/*
+ * Common map_io initialization
+ */
+
+static void __init h3xxx_map_io(void)
 {
 	sa1100_map_io();
 	iotable_init(h3600_io_desc);
 
 	sa1100_register_uart_fns(&h3600_port_fns);
-	sa1100_register_uart(0, 3);
-	sa1100_register_uart(1, 1); /* isn't this one driven elsewhere? */
+	sa1100_register_uart(0, 3); /* Common serial port */
+//	sa1100_register_uart(1, 1); /* Microcontroller on 3100/3600 */
 
-	/*
-	 * Default GPIO settings.  Should be set by machine
-	 */
-	GPCR = 0x0fffffff;
-//	GPDR = 0x0401f3fc;
-	GPDR = GPIO_H3600_COM_RTS  | GPIO_H3600_L3_CLOCK |
-	       GPIO_H3600_L3_MODE  | GPIO_H3600_L3_DATA  |
-	       GPIO_H3600_CLK_SET1 | GPIO_H3600_CLK_SET0 |
-	       GPIO_LDD15 | GPIO_LDD14 | GPIO_LDD13 | GPIO_LDD12 |
-	       GPIO_LDD11 | GPIO_LDD10 | GPIO_LDD9  | GPIO_LDD8;
-
-	init_h3600_egpio();
-
-	/*
-	 * Ensure those pins are outputs and driving low.
-	 */
-	PPDR |= PPC_TXD4 | PPC_SCLK | PPC_SFRM;
-	PPSR &= ~(PPC_TXD4 | PPC_SCLK | PPC_SFRM);
+	/* Ensure those pins are outputs and driving low  */
+ 	PPDR |= PPC_TXD4 | PPC_SCLK | PPC_SFRM;
+ 	PPSR &= ~(PPC_TXD4 | PPC_SCLK | PPC_SFRM);
 
 	/* Configure suspend conditions */
 	PGSR = 0;
 	PWER = PWER_GPIO0 | PWER_RTC;
 	PCFR = PCFR_OPDE;
 	PSDR = 0;
+
+	sa1100fb_lcd_power = h3xxx_lcd_power;
+	sa1100fb_lcd_enable = h3xxx_lcd_enable;
+}
+
+static __inline__ void do_blank( int setp ) {
+	if ( ipaq_model_ops.blank_callback )
+		ipaq_model_ops.blank_callback(1-setp);
+}
+
+/************************* H3100 *************************/
+
+#ifdef CONFIG_SA1100_H3100
+
+#define H3100_EGPIO	(*(volatile unsigned int *)H3600_EGPIO_VIRT)
+static unsigned int h3100_egpio = 0;
+
+static void h3100_control_egpio( enum ipaq_egpio_type x, int setp )
+{
+	unsigned int egpio = 0;
+	long         gpio = 0;
+	unsigned long flags;
+
+	switch (x) {
+	case IPAQ_EGPIO_LCD_POWER:
+		egpio |= EGPIO_H3600_LCD_ON;
+		gpio  |= GPIO_H3100_LCD_3V_ON;
+		do_blank(setp);
+		break;
+	case IPAQ_EGPIO_LCD_ENABLE:
+		break;
+	case IPAQ_EGPIO_CODEC_NRESET:
+		egpio |= EGPIO_H3600_CODEC_NRESET;
+		break;
+	case IPAQ_EGPIO_AUDIO_ON:
+		gpio |= GPIO_H3100_AUD_PWR_ON
+			| GPIO_H3100_AUD_ON;
+		break;
+	case IPAQ_EGPIO_QMUTE:
+		gpio |= GPIO_H3100_QMUTE;
+		break;
+	case IPAQ_EGPIO_OPT_NVRAM_ON:
+		egpio |= EGPIO_H3600_OPT_NVRAM_ON;
+		break;
+	case IPAQ_EGPIO_OPT_ON:
+		egpio |= EGPIO_H3600_OPT_ON;
+		break;
+	case IPAQ_EGPIO_CARD_RESET:
+		egpio |= EGPIO_H3600_CARD_RESET;
+		break;
+	case IPAQ_EGPIO_OPT_RESET:
+		egpio |= EGPIO_H3600_OPT_RESET;
+		break;
+	case IPAQ_EGPIO_IR_ON:
+		gpio |= GPIO_H3100_IR_ON;
+		break;
+	case IPAQ_EGPIO_IR_FSEL:
+		gpio |= GPIO_H3100_IR_FSEL;
+		break;
+	case IPAQ_EGPIO_RS232_ON:
+		egpio |= EGPIO_H3600_RS232_ON;
+		break;
+	case IPAQ_EGPIO_VPP_ON:
+		egpio |= EGPIO_H3600_VPP_ON;
+		break;
+	}
+
+	if ( egpio || gpio ) {
+		local_irq_save(flags);
+		if ( setp ) {
+			h3100_egpio |= egpio;
+			GPSR = gpio;
+		} else {
+			h3100_egpio &= ~egpio;
+			GPCR = gpio;
+		}
+		H3100_EGPIO = h3100_egpio;
+		local_irq_restore(flags);
+	}
+}
+
+static unsigned long h3100_read_egpio( void )
+{
+	return h3100_egpio;
+}
+
+static int h3100_pm_callback( int req )
+{
+	if ( ipaq_model_ops.pm_callback_aux )
+		return ipaq_model_ops.pm_callback_aux(req);
+	return 0;
+}
+
+static struct ipaq_model_ops h3100_model_ops __initdata = {
+	generic_name : "3100",
+	control      : h3100_control_egpio,
+	read         : h3100_read_egpio,
+	pm_callback  : h3100_pm_callback
+};
+
+#define H3100_DIRECT_EGPIO (GPIO_H3100_BT_ON      \
+                          | GPIO_H3100_GPIO3      \
+                          | GPIO_H3100_QMUTE      \
+                          | GPIO_H3100_LCD_3V_ON  \
+	                  | GPIO_H3100_AUD_ON     \
+		          | GPIO_H3100_AUD_PWR_ON \
+			  | GPIO_H3100_IR_ON      \
+			  | GPIO_H3100_IR_FSEL)
+
+static void __init h3100_map_io(void)
+{
+	h3xxx_map_io();
+
+	/* Initialize h3100-specific values here */
+	GPCR = 0x0fffffff;       /* All outputs are set low by default */
+	GPDR = GPIO_H3600_COM_RTS  | GPIO_H3600_L3_CLOCK |
+	       GPIO_H3600_L3_MODE  | GPIO_H3600_L3_DATA  |
+	       GPIO_H3600_CLK_SET1 | GPIO_H3600_CLK_SET0 |
+	       H3100_DIRECT_EGPIO;
+
+	/* Older bootldrs put GPIO2-9 in alternate mode on the 
+	   assumption that they are used for video */
+	GAFR &= ~H3100_DIRECT_EGPIO;
+
+	H3100_EGPIO = h3100_egpio;
+	ipaq_model_ops = h3100_model_ops;
+}
+
+MACHINE_START(H3100, "Compaq iPAQ H3100")
+	BOOT_MEM(0xc0000000, 0x80000000, 0xf8000000)
+	BOOT_PARAMS(0xc0000100)
+	MAPIO(h3100_map_io)
+	INITIRQ(sa1100_init_irq)
+MACHINE_END
+
+#endif /* CONFIG_SA1100_H3100 */
+
+/************************* H3600 *************************/
+
+#ifdef CONFIG_SA1100_H3600
+
+#define H3600_EGPIO	(*(volatile unsigned int *)H3600_EGPIO_VIRT)
+static unsigned int h3600_egpio = EGPIO_H3600_RS232_ON;
+
+static void h3600_control_egpio( enum ipaq_egpio_type x, int setp )
+{
+	unsigned int egpio = 0;
+	unsigned long flags;
+
+	switch (x) {
+	case IPAQ_EGPIO_LCD_POWER:
+		egpio |= EGPIO_H3600_LCD_ON |
+			 EGPIO_H3600_LCD_PCI |
+			 EGPIO_H3600_LCD_5V_ON |
+			 EGPIO_H3600_LVDD_ON;
+		do_blank(setp);
+		break;
+	case IPAQ_EGPIO_LCD_ENABLE:
+		break;
+	case IPAQ_EGPIO_CODEC_NRESET:
+		egpio |= EGPIO_H3600_CODEC_NRESET;
+		break;
+	case IPAQ_EGPIO_AUDIO_ON:
+		egpio |= EGPIO_H3600_AUD_AMP_ON |
+			EGPIO_H3600_AUD_PWR_ON;
+		break;
+	case IPAQ_EGPIO_QMUTE:
+		egpio |= EGPIO_H3600_QMUTE;
+		break;
+	case IPAQ_EGPIO_OPT_NVRAM_ON:
+		egpio |= EGPIO_H3600_OPT_NVRAM_ON;
+		break;
+	case IPAQ_EGPIO_OPT_ON:
+		egpio |= EGPIO_H3600_OPT_ON;
+		break;
+	case IPAQ_EGPIO_CARD_RESET:
+		egpio |= EGPIO_H3600_CARD_RESET;
+		break;
+	case IPAQ_EGPIO_OPT_RESET:
+		egpio |= EGPIO_H3600_OPT_RESET;
+		break;
+	case IPAQ_EGPIO_IR_ON:
+		egpio |= EGPIO_H3600_IR_ON;
+		break;
+	case IPAQ_EGPIO_IR_FSEL:
+		egpio |= EGPIO_H3600_IR_FSEL;
+		break;
+	case IPAQ_EGPIO_RS232_ON:
+		egpio |= EGPIO_H3600_RS232_ON;
+		break;
+	case IPAQ_EGPIO_VPP_ON:
+		egpio |= EGPIO_H3600_VPP_ON;
+		break;
+	}
+
+	if ( egpio ) {
+		local_irq_save(flags);
+		if ( setp )
+			h3600_egpio |= egpio;
+		else
+			h3600_egpio &= ~egpio;
+		H3600_EGPIO = h3600_egpio;
+		local_irq_restore(flags);
+	}
+}
+
+static unsigned long h3600_read_egpio( void )
+{
+	return h3600_egpio;
+}
+
+static int h3600_pm_callback( int req )
+{
+	if ( ipaq_model_ops.pm_callback_aux )
+		return ipaq_model_ops.pm_callback_aux(req);
+	return 0;
+}
+
+static struct ipaq_model_ops h3600_model_ops __initdata = {
+	generic_name : "3600",
+	control      : h3600_control_egpio,
+	read         : h3600_read_egpio,
+	pm_callback  : h3600_pm_callback
+};
+
+static void __init h3600_map_io(void)
+{
+	h3xxx_map_io();
+
+	/* Initialize h3600-specific values here */
+
+	GPCR = 0x0fffffff;       /* All outputs are set low by default */
+	GPDR = GPIO_H3600_COM_RTS  | GPIO_H3600_L3_CLOCK |
+	       GPIO_H3600_L3_MODE  | GPIO_H3600_L3_DATA  |
+	       GPIO_H3600_CLK_SET1 | GPIO_H3600_CLK_SET0 |
+	       GPIO_LDD15 | GPIO_LDD14 | GPIO_LDD13 | GPIO_LDD12 |
+	       GPIO_LDD11 | GPIO_LDD10 | GPIO_LDD9  | GPIO_LDD8;
+
+	H3600_EGPIO = h3600_egpio;         /* Maintains across sleep? */
+	ipaq_model_ops = h3600_model_ops;
 }
 
 MACHINE_START(H3600, "Compaq iPAQ H3600")
@@ -526,15 +471,389 @@ MACHINE_START(H3600, "Compaq iPAQ H3600")
 	MAPIO(h3600_map_io)
 	INITIRQ(sa1100_init_irq)
 MACHINE_END
-MACHINE_START(H3100, "Compaq iPAQ H3100")
-	BOOT_MEM(0xc0000000, 0x80000000, 0xf8000000)
-	BOOT_PARAMS(0xc0000100)
-	MAPIO(h3600_map_io)
-	INITIRQ(sa1100_init_irq)
-MACHINE_END
+
+#endif /* CONFIG_SA1100_H3600 */
+
+/************************* H3800 *************************/
+
+#ifdef CONFIG_SA1100_H3800
+
+#define SET_ASIC1(x) \
+   do {if ( setp ) { H3800_ASIC1_GPIO_OUT |= (x); } else { H3800_ASIC1_GPIO_OUT &= ~(x); }} while(0)
+
+#define SET_ASIC2(x) \
+   do {if ( setp ) { H3800_ASIC2_GPIOPIOD |= (x); } else { H3800_ASIC2_GPIOPIOD &= ~(x); }} while(0)
+
+#define CLEAR_ASIC1(x) \
+   do {if ( setp ) { H3800_ASIC1_GPIO_OUT &= ~(x); } else { H3800_ASIC1_GPIO_OUT |= (x); }} while(0)
+
+#define CLEAR_ASIC2(x) \
+   do {if ( setp ) { H3800_ASIC2_GPIOPIOD &= ~(x); } else { H3800_ASIC2_GPIOPIOD |= (x); }} while(0)
+
+
+/*
+  On screen enable, we get 
+  
+     h3800_video_power_on(1)
+     LCD controller starts
+     h3800_video_lcd_enable(1)
+
+  On screen disable, we get
+  
+     h3800_video_lcd_enable(0)
+     LCD controller stops
+     h3800_video_power_on(0)
+*/
+
+
+static void h3800_video_power_on( int setp )
+{
+	if ( setp ) {
+		H3800_ASIC1_GPIO_OUT |= GPIO1_LCD_ON;
+		msleep(30);
+		H3800_ASIC1_GPIO_OUT |= GPIO1_VGL_ON;
+		msleep(5);
+		H3800_ASIC1_GPIO_OUT |= GPIO1_VGH_ON;
+		msleep(50);
+		H3800_ASIC1_GPIO_OUT |= GPIO1_LCD_5V_ON;
+		msleep(5);
+	}
+	else {
+		msleep(5);
+		H3800_ASIC1_GPIO_OUT &= ~GPIO1_LCD_5V_ON;
+		msleep(50);
+		H3800_ASIC1_GPIO_OUT &= ~GPIO1_VGL_ON;
+		msleep(5);
+		H3800_ASIC1_GPIO_OUT &= ~GPIO1_VGH_ON;
+		msleep(100);
+		H3800_ASIC1_GPIO_OUT &= ~GPIO1_LCD_ON;
+	}
+}
+
+static void h3800_video_lcd_enable( int setp )
+{
+	if ( setp ) {
+		msleep(17);     // Wait one from before turning on
+		H3800_ASIC1_GPIO_OUT |= GPIO1_LCD_PCI;
+	}
+	else {
+		H3800_ASIC1_GPIO_OUT &= ~GPIO1_LCD_PCI;
+		msleep(30);     // Wait before turning off
+	}
+}
+
+
+static void h3800_control_egpio( enum ipaq_egpio_type x, int setp )
+{
+	switch (x) {
+	case IPAQ_EGPIO_LCD_POWER:
+		h3800_video_power_on( setp );
+		break;
+	case IPAQ_EGPIO_LCD_ENABLE:
+		h3800_video_lcd_enable( setp );
+		break;
+	case IPAQ_EGPIO_CODEC_NRESET:
+	case IPAQ_EGPIO_AUDIO_ON:
+	case IPAQ_EGPIO_QMUTE:
+		printk(__FUNCTION__ ": error - should not be called\n");
+		break;
+	case IPAQ_EGPIO_OPT_NVRAM_ON:
+		SET_ASIC2( GPIO2_OPT_ON_NVRAM );
+		break;
+	case IPAQ_EGPIO_OPT_ON:
+		SET_ASIC2( GPIO2_OPT_ON );
+		break;
+	case IPAQ_EGPIO_CARD_RESET:
+		SET_ASIC2( GPIO2_OPT_PCM_RESET );
+		break;
+	case IPAQ_EGPIO_OPT_RESET:
+		SET_ASIC2( GPIO2_OPT_RESET );
+		break;
+	case IPAQ_EGPIO_IR_ON:
+		CLEAR_ASIC1( GPIO1_IR_ON_N );
+		break;
+	case IPAQ_EGPIO_IR_FSEL:
+		break;
+	case IPAQ_EGPIO_RS232_ON:
+		SET_ASIC1( GPIO1_RS232_ON );
+		break;
+	case IPAQ_EGPIO_VPP_ON:
+		H3800_ASIC2_FlashWP_VPP_ON = setp;
+		break;
+	}
+}
+
+static unsigned long h3800_read_egpio( void )
+{
+	return H3800_ASIC1_GPIO_OUT | (H3800_ASIC2_GPIOPIOD << 16);
+}
+
+/* We need to fix ASIC2 GPIO over suspend/resume.  At the moment,
+   it doesn't appear that ASIC1 GPIO has the same problem */
+
+static int h3800_pm_callback( int req )
+{
+	static u16 asic1_data;
+	static u16 asic2_data;
+	int result = 0;
+
+	printk(__FUNCTION__ " %d\n", req);
+
+	switch (req) {
+	case PM_RESUME:
+		MSC2 = (MSC2 & 0x0000ffff) | 0xE4510000;  /* Set MSC2 correctly */
+
+		H3800_ASIC2_GPIOPIOD = asic2_data;
+		H3800_ASIC2_GPIODIR = GPIO2_PEN_IRQ 
+			| GPIO2_SD_DETECT
+			| GPIO2_EAR_IN_N 
+			| GPIO2_USB_DETECT_N 
+			| GPIO2_SD_CON_SLT;
+
+		H3800_ASIC1_GPIO_OUT = asic1_data;
+
+		if ( ipaq_model_ops.pm_callback_aux )
+			result = ipaq_model_ops.pm_callback_aux(req);
+		break;
+
+	case PM_SUSPEND:
+		if ( ipaq_model_ops.pm_callback_aux &&
+		     ((result = ipaq_model_ops.pm_callback_aux(req)) != 0))
+			return result;
+
+		asic1_data = H3800_ASIC1_GPIO_OUT;
+		asic2_data = H3800_ASIC2_GPIOPIOD;
+		break;
+	default:
+		printk(__FUNCTION__ ": unrecognized PM callback\n");
+		break;
+	}
+	return result;
+}
+
+static struct ipaq_model_ops h3800_model_ops __initdata = {
+	generic_name : "3800",
+	control      : h3800_control_egpio,
+	read         : h3800_read_egpio,
+	pm_callback  : h3800_pm_callback
+};
+
+#define MAX_ASIC_ISR_LOOPS    20
+
+/* The order of these is important - see #include <asm/arch/irqs.h> */
+static u32 kpio_irq_mask[] = {
+	KPIO_KEY_ALL,
+	KPIO_SPI_INT,
+	KPIO_OWM_INT,
+	KPIO_ADC_INT,
+	KPIO_UART_0_INT,
+	KPIO_UART_1_INT,
+	KPIO_TIMER_0_INT,
+	KPIO_TIMER_1_INT,
+	KPIO_TIMER_2_INT
+};
+
+static u32 gpio_irq_mask[] = {
+	GPIO2_PEN_IRQ,
+	GPIO2_SD_DETECT,
+	GPIO2_EAR_IN_N,
+	GPIO2_USB_DETECT_N,
+	GPIO2_SD_CON_SLT,
+};
+
+static void h3800_IRQ_demux( int irq, void *dev_id, struct pt_regs *regs )
+{
+	int i;
+
+	if (0) printk(__FUNCTION__ ": interrupt received\n");
+
+	for ( i = 0 ; i < MAX_ASIC_ISR_LOOPS && (GPLR & GPIO_H3800_ASIC) ; i++ ) {
+		u32 irq;
+		int j;
+		
+		/* KPIO */
+		irq = H3800_ASIC2_KPIINTFLAG;
+		if (0) printk(__FUNCTION__" KPIO 0x%08X\n", irq );
+		for ( j = 0 ; j < H3800_KPIO_IRQ_COUNT ; j++ )
+			if ( irq & kpio_irq_mask[j] )
+				do_IRQ( j + H3800_KPIO_IRQ_START, regs );
+
+		/* GPIO2 */
+		irq = H3800_ASIC2_GPIINTFLAG;
+		if (0) printk(__FUNCTION__" GPIO 0x%08X\n", irq );
+		for ( j = 0 ; j < H3800_GPIO_IRQ_COUNT ; j++ )
+			if ( irq & gpio_irq_mask[j] )
+				do_IRQ( j + H3800_GPIO_IRQ_START, regs );
+	}
+
+	if ( i >= MAX_ASIC_ISR_LOOPS )
+		printk(__FUNCTION__ ": interrupt processing overrun\n");
+}
+
+static struct irqaction h3800_irq = {
+	name:     "h3800_asic",
+	handler:  h3800_IRQ_demux,
+	flags:    SA_INTERRUPT
+};
+
+u32 kpio_int_shadow = 0;
+
+/* mask_ack <- IRQ is first serviced.
+       mask <- IRQ is disabled.  
+     unmask <- IRQ is enabled 
+
+     The INTCLR registers are poorly documented.  I believe that writing
+     a "1" to the register clears the specific interrupt, but the documentation
+     indicates writing a "0" clears the interrupt.  In any case, they shouldn't
+     be read (that's the INTFLAG register)
+*/
+
+static void h3800_mask_ack_kpio_irq( unsigned int irq )
+{
+	u32 mask = kpio_irq_mask[irq - H3800_KPIO_IRQ_START];
+	kpio_int_shadow &= ~mask;
+	H3800_ASIC2_KPIINTSTAT = kpio_int_shadow;
+	H3800_ASIC2_KPIINTCLR  = mask;
+}
+
+static void h3800_mask_kpio_irq( unsigned int irq )
+{
+	u32 mask = kpio_irq_mask[irq - H3800_KPIO_IRQ_START];
+	kpio_int_shadow &= ~mask;
+	H3800_ASIC2_KPIINTSTAT = kpio_int_shadow;
+}
+
+static void h3800_unmask_kpio_irq( unsigned int irq )
+{
+	u32 mask = kpio_irq_mask[irq - H3800_KPIO_IRQ_START];
+	kpio_int_shadow |= mask;
+	H3800_ASIC2_KPIINTSTAT = kpio_int_shadow;
+}
+
+static void h3800_mask_ack_gpio_irq( unsigned int irq )
+{
+	u32 mask = gpio_irq_mask[irq - H3800_GPIO_IRQ_START];
+	H3800_ASIC2_GPIINTSTAT &= ~mask;
+	H3800_ASIC2_GPIINTCLR   = mask;
+}
+
+static void h3800_mask_gpio_irq( unsigned int irq )
+{
+	u32 mask = gpio_irq_mask[irq - H3800_GPIO_IRQ_START];
+	H3800_ASIC2_GPIINTSTAT &= ~mask;
+}
+
+static void h3800_unmask_gpio_irq( unsigned int irq )
+{
+	u32 mask = gpio_irq_mask[irq - H3800_GPIO_IRQ_START];
+	H3800_ASIC2_GPIINTSTAT |= mask;
+}
+
+static void __init h3800_init_irq( void )
+{
+	int i;
+
+	/* Initialize standard IRQs */
+	sa1100_init_irq();
+
+	/* Disable all IRQs and set up clock */
+	H3800_ASIC2_KPIINTSTAT     =  0;     /* Disable all interrupts */
+	H3800_ASIC2_GPIINTSTAT     =  0;
+
+	H3800_ASIC2_KPIINTCLR      =  0;     /* Clear all KPIO interrupts */
+	H3800_ASIC2_GPIINTCLR      =  0;     /* Clear all GPIO interrupts */
+
+//	H3800_ASIC2_KPIINTCLR      =  0xffff;     /* Clear all KPIO interrupts */
+//	H3800_ASIC2_GPIINTCLR      =  0xffff;     /* Clear all GPIO interrupts */
+
+	H3800_ASIC2_CLOCK_Enable       |= ASIC2_CLOCK_EX0;   /* 32 kHZ crystal on */
+	H3800_ASIC2_INTR_ClockPrescale |= ASIC2_INTCPS_SET;
+	H3800_ASIC2_INTR_ClockPrescale  = ASIC2_INTCPS_CPS(0x0e) | ASIC2_INTCPS_SET;
+	H3800_ASIC2_INTR_TimerSet       = 1;
+
+	for ( i = 0 ; i < H3800_KPIO_IRQ_COUNT ; i++ ) {
+		int irq = i + H3800_KPIO_IRQ_START;
+		irq_desc[irq].valid    = 1;
+		irq_desc[irq].probe_ok = 1;
+		irq_desc[irq].mask_ack = h3800_mask_ack_kpio_irq;
+		irq_desc[irq].mask     = h3800_mask_kpio_irq;
+		irq_desc[irq].unmask   = h3800_unmask_kpio_irq;
+	}
+
+	for ( i = 0 ; i < H3800_GPIO_IRQ_COUNT ; i++ ) {
+		int irq = i + H3800_GPIO_IRQ_START;
+		irq_desc[irq].valid    = 1;
+		irq_desc[irq].probe_ok = 1;
+		irq_desc[irq].mask_ack = h3800_mask_ack_gpio_irq;
+		irq_desc[irq].mask     = h3800_mask_gpio_irq;
+		irq_desc[irq].unmask   = h3800_unmask_gpio_irq;
+	}
+
+	set_GPIO_IRQ_edge( GPIO_H3800_ASIC, GPIO_RISING_EDGE );
+	setup_arm_irq( IRQ_GPIO_H3800_ASIC, &h3800_irq );
+}
+
+
+#define ASIC1_OUTPUTS    0x7fff   /* First 15 bits are used */
+
+static void __init h3800_map_io(void)
+{
+	h3xxx_map_io();
+
+	/* Add wakeup on AC plug/unplug */
+	PWER  |= PWER_GPIO12;
+
+	/* Initialize h3800-specific values here */
+	GPCR = 0x0fffffff;       /* All outputs are set low by default */
+	GAFR =  GPIO_H3800_CLK_OUT | 
+		GPIO_LDD15 | GPIO_LDD14 | GPIO_LDD13 | GPIO_LDD12 |
+		GPIO_LDD11 | GPIO_LDD10 | GPIO_LDD9  | GPIO_LDD8;
+	GPDR =  GPIO_H3800_CLK_OUT | 
+		GPIO_H3600_COM_RTS  | GPIO_H3600_L3_CLOCK |
+		GPIO_H3600_L3_MODE  | GPIO_H3600_L3_DATA  |
+		GPIO_LDD15 | GPIO_LDD14 | GPIO_LDD13 | GPIO_LDD12 |
+		GPIO_LDD11 | GPIO_LDD10 | GPIO_LDD9  | GPIO_LDD8;
+	TUCR =  TUCR_3_6864MHz;   /* Seems to be used only for the Bluetooth UART */
+
+	/* Fix the memory bus */
+	MSC2 = (MSC2 & 0x0000ffff) | 0xE4510000; 
+
+	/* Set up ASIC #1 */
+	H3800_ASIC1_GPIO_DIR            = ASIC1_OUTPUTS;            /* All outputs */
+	H3800_ASIC1_GPIO_MASK           = ASIC1_OUTPUTS;            /* No interrupts */
+	H3800_ASIC1_GPIO_SLEEP_MASK     = ASIC1_OUTPUTS;
+	H3800_ASIC1_GPIO_SLEEP_DIR      = ASIC1_OUTPUTS;
+	H3800_ASIC1_GPIO_SLEEP_OUT      = GPIO1_EAR_ON_N;
+	H3800_ASIC1_GPIO_BATT_FAULT_DIR = ASIC1_OUTPUTS;
+	H3800_ASIC1_GPIO_BATT_FAULT_OUT = GPIO1_EAR_ON_N;
+
+	H3800_ASIC1_GPIO_OUT = GPIO1_IR_ON_N 
+		                      | GPIO1_RS232_ON
+		                      | GPIO1_EAR_ON_N;
+	
+	/* Set up ASIC #2 */
+	H3800_ASIC2_GPIOPIOD    = GPIO2_IN_Y1_N | GPIO2_IN_X1_N;
+	H3800_ASIC2_GPOBFSTAT   = GPIO2_IN_Y1_N | GPIO2_IN_X1_N;
+
+	H3800_ASIC2_GPIODIR     = GPIO2_PEN_IRQ 
+                                      | GPIO2_SD_DETECT
+		                      | GPIO2_EAR_IN_N 
+		                      | GPIO2_USB_DETECT_N 
+		                      | GPIO2_SD_CON_SLT;
+
+	/* TODO : Set sleep states & battery fault states */
+
+	/* Clear VPP Enable */
+	H3800_ASIC2_FlashWP_VPP_ON = 0;
+	ipaq_model_ops = h3800_model_ops;
+}
+
 MACHINE_START(H3800, "Compaq iPAQ H3800")
 	BOOT_MEM(0xc0000000, 0x80000000, 0xf8000000)
 	BOOT_PARAMS(0xc0000100)
-	MAPIO(h3600_map_io)
-	INITIRQ(sa1100_init_irq)
+	MAPIO(h3800_map_io)
+	INITIRQ(h3800_init_irq)
 MACHINE_END
+ 
+#endif /* CONFIG_SA1100_H3800 */
+

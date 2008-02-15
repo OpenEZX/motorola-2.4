@@ -154,11 +154,6 @@ struct __xchg_dummy { unsigned long a[100]; };
  * to do an SIMD/3DNOW!/MMX/FPU 64-bit store here, but that
  * might have an implicit FPU-save as a cost, so it's not
  * clear which path to go.)
- *
- * chmxchg8b must be used with the lock prefix here to allow
- * the instruction to be executed atomically, see page 3-102
- * of the instruction set reference 24319102.pdf. We need
- * the reader side to see the coherent 64bit value.
  */
 static inline void __set_64bit (unsigned long long * ptr,
 		unsigned int low, unsigned int high)
@@ -167,7 +162,7 @@ static inline void __set_64bit (unsigned long long * ptr,
 		"\n1:\t"
 		"movl (%0), %%eax\n\t"
 		"movl 4(%0), %%edx\n\t"
-		"lock cmpxchg8b (%0)\n\t"
+		"cmpxchg8b (%0)\n\t"
 		"jnz 1b"
 		: /* no outputs */
 		:	"D"(ptr),
@@ -305,28 +300,50 @@ static inline unsigned long __cmpxchg(volatile void *ptr, unsigned long old,
 #define smp_mb()	mb()
 #define smp_rmb()	rmb()
 #define smp_wmb()	wmb()
+#define set_mb(var, value) do { xchg(&var, value); } while (0)
 #else
 #define smp_mb()	barrier()
 #define smp_rmb()	barrier()
 #define smp_wmb()	barrier()
+#define set_mb(var, value) do { var = value; barrier(); } while (0)
 #endif
 
-#define set_mb(var, value) do { xchg(&var, value); } while (0)
 #define set_wmb(var, value) do { var = value; wmb(); } while (0)
 
 /* interrupt control.. */
 #define __save_flags(x)		__asm__ __volatile__("pushfl ; popl %0":"=g" (x): /* no input */)
+#ifdef CONFIG_ILATENCY
+extern void intr_cli(const char *, unsigned);
+extern void intr_sti(const char *, unsigned, int);
+extern void intr_restore_flags(const char *, unsigned, unsigned);
+extern void intr_sync_flag(const char *, unsigned lineno); 
+
+#define __intr_cli()                    __asm__ __volatile__("cli": : :"memory")
+#define __intr_sti()                    __asm__ __volatile__("sti": : :"memory")
+#define __intr_restore_flags(x)         __asm__ __volatile__("pushl %0 ; popfl": /* no output */ :"g" (x):"memory")
+#define safe_halt()                     __sti()
+#define __cli() intr_cli(__BASE_FILE__, __LINE__)
+#define __sti() intr_sti(__BASE_FILE__, __LINE__,0)
+#define __restore_flags(x) intr_restore_flags(__BASE_FILE__, __LINE__, x)
+#else
 #define __restore_flags(x) 	__asm__ __volatile__("pushl %0 ; popfl": /* no output */ :"g" (x):"memory", "cc")
 #define __cli() 		__asm__ __volatile__("cli": : :"memory")
 #define __sti()			__asm__ __volatile__("sti": : :"memory")
 /* used in the idle loop; sti takes one instruction cycle to complete */
 #define safe_halt()		__asm__ __volatile__("sti; hlt": : :"memory")
-
+#endif /* CONFIG_ILATENCY */
 /* For spinlocks etc */
 #define local_irq_save(x)	__asm__ __volatile__("pushfl ; popl %0 ; cli":"=g" (x): /* no input */ :"memory")
 #define local_irq_restore(x)	__restore_flags(x)
 #define local_irq_disable()	__cli()
 #define local_irq_enable()	__sti()
+
+#define irqs_disabled()			\
+({					\
+	unsigned long flags;		\
+	__save_flags(flags);		\
+	!(flags & (1<<9));		\
+})
 
 #ifdef CONFIG_SMP
 

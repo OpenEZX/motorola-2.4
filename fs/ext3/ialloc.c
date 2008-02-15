@@ -392,7 +392,7 @@ repeat:
 
 	err = -ENOSPC;
 	if (!gdp)
-		goto out;
+		goto fail;
 
 	err = -EIO;
 	bitmap_nr = load_inode_bitmap (sb, i);
@@ -523,10 +523,9 @@ repeat:
 	return inode;
 
 fail:
-	ext3_std_error(sb, err);
-out:
 	unlock_super(sb);
 	iput(inode);
+	ext3_std_error(sb, err);
 	return ERR_PTR(err);
 }
 

@@ -12,18 +12,20 @@
 //Image structure definition
 #if !defined(DEFINED_EDGE_FIRMWARE_IMAGE_RECORD)
 #define DEFINED_EDGE_FIRMWARE_IMAGE_RECORD
-	struct edge_firmware_image_record {
+	typedef struct _EDGE_FIRMWARE_IMAGE_RECORD
+	{
 		unsigned short ExtAddr;
 		unsigned short Addr;
 		unsigned short Len;
 		unsigned char  Data[0];
-	};
+	} EDGE_FIRMWARE_IMAGE_RECORD, *PEDGE_FIRMWARE_IMAGE_RECORD;
 
-	struct edge_firmware_version_info {
+	typedef struct _EDGE_FIRMWARE_VERSION_INFO
+	{
 		unsigned char	 MajorVersion;
 		unsigned char  MinorVersion;
 		unsigned short BuildNumber;
-	};
+	} EDGE_FIRMWARE_VERSION_INFO, *PEDGE_FIRMWARE_VERSION_INFO;
 
 #endif
 
@@ -547,7 +549,7 @@ static unsigned char IMAGE_ARRAY_NAME[] = {
     0x7e, 0x74, 0x00, 0x01, 0x02, 0x08, 0xd6, 
 };
 
-static struct edge_firmware_version_info IMAGE_VERSION_NAME = {
+static EDGE_FIRMWARE_VERSION_INFO IMAGE_VERSION_NAME = {
 	1, 12, 2 };		// Major, Minor, Build
 
 #undef IMAGE_VERSION_NAME

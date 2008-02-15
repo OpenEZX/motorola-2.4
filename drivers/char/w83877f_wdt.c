@@ -13,10 +13,9 @@
  *	any of this software. This material is provided "AS-IS" in 
  *      the hope that it may be useful for others.
  *
- *	(c) Copyright 2001    Scott Jennings <linuxdrivers@oro.net>
+ *	(c) Copyright 2001    Scott Jennings <management@oro.net>
  *
  *           4/19 - 2001      [Initial revision]
- *           9/27 - 2001      Added spinlocking
  *
  *
  *  Theory of operation:
@@ -89,9 +88,8 @@
 static void wdt_timer_ping(unsigned long);
 static struct timer_list timer;
 static unsigned long next_heartbeat;
-static unsigned long wdt_is_open;
+static int wdt_is_open;
 static int wdt_expect_close;
-static spinlock_t wdt_spinlock;
 
 /*
  *	Whack the dog
@@ -104,18 +102,11 @@ static void wdt_timer_ping(unsigned long data)
 	 */
 	if(time_before(jiffies, next_heartbeat)) 
 	{
-		/* Ping the WDT */
-		spin_lock(&wdt_spinlock);
-
 		/* Ping the WDT by reading from WDT_PING */
 		inb_p(WDT_PING);
-
 		/* Re-set the timer interval */
 		timer.expires = jiffies + WDT_INTERVAL;
 		add_timer(&timer);
-
-		spin_unlock(&wdt_spinlock);
-
 	} else {
 		printk(OUR_NAME ": Heartbeat lost! Will not ping the watchdog\n");
 	}
@@ -127,24 +118,19 @@ static void wdt_timer_ping(unsigned long data)
 
 static void wdt_change(int writeval)
 {
-	unsigned long flags;
-	spin_lock_irqsave(&wdt_spinlock, flags);
-
 	/* buy some time */
 	inb_p(WDT_PING);
 
 	/* make W83877F available */
-	outb_p(ENABLE_W83877F,  ENABLE_W83877F_PORT);
-	outb_p(ENABLE_W83877F,  ENABLE_W83877F_PORT);
+	outb_p(ENABLE_W83877F,ENABLE_W83877F_PORT);
+	outb_p(ENABLE_W83877F,ENABLE_W83877F_PORT);
 
 	/* enable watchdog */
-	outb_p(WDT_REGISTER,    ENABLE_W83877F_PORT);
-	outb_p(writeval,        ENABLE_W83877F_PORT+1);
+	outb_p(WDT_REGISTER,ENABLE_W83877F_PORT);
+	outb_p(writeval,ENABLE_W83877F_PORT+1);
 
 	/* lock the W8387FF away */
-	outb_p(DISABLE_W83877F, ENABLE_W83877F_PORT);
-
-	spin_unlock_irqrestore(&wdt_spinlock, flags);
+	outb_p(DISABLE_W83877F,ENABLE_W83877F_PORT);
 }
 
 static void wdt_startup(void)
@@ -192,13 +178,8 @@ static ssize_t fop_write(struct file * file, const char * buf, size_t count, lof
 
 		/* now scan */
 		for(ofs = 0; ofs != count; ofs++)
-		{
-			char c;
-			if(get_user(c, buf + ofs))
-				return -EFAULT;
-			if(c == 'V')
+		  if(buf[ofs] == 'V')
 				wdt_expect_close = 1;
-		}
 
 		/* someone wrote to us, we should restart timer */
 		next_heartbeat = jiffies + WDT_HEARTBEAT;
@@ -219,11 +200,10 @@ static int fop_open(struct inode * inode, struct file * file)
 	{
 		case WATCHDOG_MINOR:
 			/* Just in case we're already talking to someone... */
-			if(test_and_set_bit(0, &wdt_is_open)) {
-				spin_unlock(&wdt_spinlock);
+			if(wdt_is_open)
 				return -EBUSY;
-			}
 			/* Good, fire up the show */
+			wdt_is_open = 1;
 			wdt_startup();
 			return 0;
 
@@ -234,6 +214,7 @@ static int fop_open(struct inode * inode, struct file * file)
 
 static int fop_close(struct inode * inode, struct file * file)
 {
+	lock_kernel();
 	if(MINOR(inode->i_rdev) == WATCHDOG_MINOR) 
 	{
 		if(wdt_expect_close)
@@ -243,15 +224,17 @@ static int fop_close(struct inode * inode, struct file * file)
 			printk(OUR_NAME ": device file closed unexpectedly. Will not stop the WDT!\n");
 		}
 	}
-	clear_bit(0, &wdt_is_open);
+	wdt_is_open = 0;
+	unlock_kernel();
 	return 0;
 }
 
-static int fop_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigned long arg)
+static int fop_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
+	unsigned long arg)
 {
 	static struct watchdog_info ident=
 	{
-		WDIOF_MAGICCLOSE,
+		0,
 		1,
 		"W83877F"
 	};
@@ -324,8 +307,6 @@ static int __init w83877f_wdt_init(void)
 {
 	int rc = -EBUSY;
 
-	spin_lock_init(&wdt_spinlock);
-
 	if (!request_region(ENABLE_W83877F_PORT, 2, "W83877F WDT"))
 		goto err_out;
 	if (!request_region(WDT_PING, 1, "W8387FF WDT"))
@@ -360,7 +341,4 @@ err_out:
 module_init(w83877f_wdt_init);
 module_exit(w83877f_wdt_unload);
 
-MODULE_AUTHOR("Scott and Bill Jennings");
-MODULE_DESCRIPTION("Driver for watchdog timer in w83877f chip");
 MODULE_LICENSE("GPL");
-EXPORT_NO_SYMBOLS;

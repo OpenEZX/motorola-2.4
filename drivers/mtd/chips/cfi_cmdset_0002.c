@@ -215,6 +215,7 @@ static struct mtd_info *cfi_amdstd_setup(struct map_info *map)
 	case 1:
 	case 2:
 	case 4:
+	case 8:
 #if 1
 		if (mtd->numeraseregions > 1)
 			mtd->erase = cfi_amdstd_erase_varsize;
@@ -331,6 +332,7 @@ static int do_write_oneword(struct map_info *map, struct flchip *chip, unsigned 
 	struct cfi_private *cfi = map->fldrv_priv;
 	DECLARE_WAITQUEUE(wait, current);
 	int ret = 0;
+	int base = chip->start;
 
  retry:
 	cfi_spin_lock(chip->mutex);
@@ -360,13 +362,27 @@ static int do_write_oneword(struct map_info *map, struct flchip *chip, unsigned 
 
 	adr += chip->start;
 	ENABLE_VPP(map);
+#ifdef CFIDEV_BUSWIDTH_8
+	if (CFIDEV_BUSWIDTH == 8) {
+		if(cfi->interleave > 1) {
+			/* special case for 64 bit flash on a 32 bit OS 
+			 * need to determine which chip set to send the 
+			 unlock commands to
+			 */
+			if(!((adr & 0x00000007) < 4) ) { 
+				base += 0x04;  /* upper pair */
+			}
+		}
+	}
+#endif
 	if (fast) { /* Unlock bypass */
 		cfi_send_gen_cmd(0xA0, 0, chip->start, map, cfi, cfi->device_type, NULL);
+
 	}
 	else {
-	        cfi_send_gen_cmd(0xAA, cfi->addr_unlock1, chip->start, map, cfi, CFI_DEVICETYPE_X8, NULL);
-	        cfi_send_gen_cmd(0x55, cfi->addr_unlock2, chip->start, map, cfi, CFI_DEVICETYPE_X8, NULL);
-	        cfi_send_gen_cmd(0xA0, cfi->addr_unlock1, chip->start, map, cfi, CFI_DEVICETYPE_X8, NULL);
+		cfi_send_gen_cmd(0xAA, cfi->addr_unlock1, chip->start, map, cfi, CFI_DEVICETYPE_X8, NULL);
+		cfi_send_gen_cmd(0x55, cfi->addr_unlock2, chip->start, map, cfi, CFI_DEVICETYPE_X8, NULL);
+		cfi_send_gen_cmd(0xA0, cfi->addr_unlock1, chip->start, map, cfi, CFI_DEVICETYPE_X8, NULL);
 	}
 
 	cfi_write(map, datum, adr);
@@ -410,6 +426,7 @@ static int cfi_amdstd_write (struct mtd_info *mtd, loff_t to , size_t len, size_
 	struct map_info *map = mtd->priv;
 	struct cfi_private *cfi = map->fldrv_priv;
 	int ret = 0;
+	int working_buswidth = CFIDEV_BUSWIDTH;
 	int chipnum;
 	unsigned long ofs, chipstart;
 
@@ -421,21 +438,24 @@ static int cfi_amdstd_write (struct mtd_info *mtd, loff_t to , size_t len, size_
 	ofs = to  - (chipnum << cfi->chipshift);
 	chipstart = cfi->chips[chipnum].start;
 
+	if (CFIDEV_BUSWIDTH == 8)
+		working_buswidth = CFIDEV_BUSWIDTH / 2;
+
 	/* If it's not bus-aligned, do the first byte write */
-	if (ofs & (CFIDEV_BUSWIDTH-1)) {
-		unsigned long bus_ofs = ofs & ~(CFIDEV_BUSWIDTH-1);
+	if (ofs & (working_buswidth-1)) {
+		unsigned long bus_ofs = ofs & ~(working_buswidth-1);
 		int i = ofs - bus_ofs;
 		int n = 0;
 		u_char tmp_buf[4];
 		__u32 datum;
 
-		map->copy_from(map, tmp_buf, bus_ofs + cfi->chips[chipnum].start, CFIDEV_BUSWIDTH);
-		while (len && i < CFIDEV_BUSWIDTH)
+		map->copy_from(map, tmp_buf, bus_ofs + cfi->chips[chipnum].start, working_buswidth);
+		while (len && i < working_buswidth)
 			tmp_buf[i++] = buf[n++], len--;
 
 		if (cfi_buswidth_is_2()) {
 			datum = *(__u16*)tmp_buf;
-		} else if (cfi_buswidth_is_4()) {
+		} else if (cfi_buswidth_is_4() || cfi_buswidth_is_8()) {
 			datum = *(__u32*)tmp_buf;
 		} else {
 			return -EINVAL;  /* should never happen, but be safe */
@@ -464,14 +484,14 @@ static int cfi_amdstd_write (struct mtd_info *mtd, loff_t to , size_t len, size_
 	cfi_send_gen_cmd(0x20, cfi->addr_unlock1, chipstart, map, cfi, CFI_DEVICETYPE_X8, NULL);
 
 	/* We are now aligned, write as much as possible */
-	while(len >= CFIDEV_BUSWIDTH) {
+	while(len >= working_buswidth) {
 		__u32 datum;
 
 		if (cfi_buswidth_is_1()) {
 			datum = *(__u8*)buf;
 		} else if (cfi_buswidth_is_2()) {
 			datum = *(__u16*)buf;
-		} else if (cfi_buswidth_is_4()) {
+		} else if (cfi_buswidth_is_4() || cfi_buswidth_is_8()) {
 			datum = *(__u32*)buf;
 		} else {
 			return -EINVAL;
@@ -487,10 +507,10 @@ static int cfi_amdstd_write (struct mtd_info *mtd, loff_t to , size_t len, size_
 			return ret;
 		}
 
-		ofs += CFIDEV_BUSWIDTH;
-		buf += CFIDEV_BUSWIDTH;
-		(*retlen) += CFIDEV_BUSWIDTH;
-		len -= CFIDEV_BUSWIDTH;
+		ofs += working_buswidth;
+		buf += working_buswidth;
+		(*retlen) += working_buswidth;
+		len -= working_buswidth;
 
 		if (ofs >> cfi->chipshift) {
 			if (cfi->fast_prog){
@@ -519,18 +539,18 @@ static int cfi_amdstd_write (struct mtd_info *mtd, loff_t to , size_t len, size_
 		cfi_send_gen_cmd(0x00, 0, chipstart, map, cfi, cfi->device_type, NULL);
 	}
 
-	if (len & (CFIDEV_BUSWIDTH-1)) {
+	if (len & (working_buswidth-1)) {
 		int i = 0, n = 0;
-		u_char tmp_buf[4];
+		u_char tmp_buf[CFIDEV_BUSWIDTH];
 		__u32 datum;
 
-		map->copy_from(map, tmp_buf, ofs + cfi->chips[chipnum].start, CFIDEV_BUSWIDTH);
+		map->copy_from(map, tmp_buf, ofs + cfi->chips[chipnum].start, working_buswidth);
 		while (len--)
 			tmp_buf[i++] = buf[n++];
 
 		if (cfi_buswidth_is_2()) {
 			datum = *(__u16*)tmp_buf;
-		} else if (cfi_buswidth_is_4()) {
+		} else if (cfi_buswidth_is_4() || cfi_buswidth_is_8()) {
 			datum = *(__u32*)tmp_buf;
 		} else {
 			return -EINVAL;  /* should never happen, but be safe */
@@ -585,7 +605,9 @@ static inline int do_erase_oneblock(struct map_info *map, struct flchip *chip, u
 	cfi_send_gen_cmd(0xAA, cfi->addr_unlock1, chip->start, map, cfi, CFI_DEVICETYPE_X8, NULL);
 	cfi_send_gen_cmd(0x55, cfi->addr_unlock2, chip->start, map, cfi, CFI_DEVICETYPE_X8, NULL);
 	cfi_write(map, CMD(0x30), adr);
-	
+	if (CFIDEV_BUSWIDTH == 8)
+		cfi_write(map, CMD(0x30), adr+0x04);
+
 	timeo = jiffies + (HZ*20);
 
 	cfi_spin_unlock(chip->mutex);

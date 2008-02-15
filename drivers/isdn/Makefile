@@ -2,7 +2,7 @@
 
 # The target object and module list name.
 
-O_TARGET	:= vmlinux-obj.o
+O_TARGET	:= isdn.a
 
 # Objects that export symbols.
 
@@ -32,9 +32,9 @@ obj-$(CONFIG_ISDN_PPP_BSDCOMP)		+= isdn_bsdcomp.o
 
 # Object files in subdirectories
 
-mod-subdirs				:= avmb1 eicon hisax
+mod-subdirs				:= avmb1 eicon
 subdir-$(CONFIG_ISDN_DIVERSION)		+= divert
-subdir-$(CONFIG_ISDN_HISAX)		+= hisax
+subdir-$(CONFIG_ISDN_DRV_HISAX)		+= hisax
 subdir-$(CONFIG_ISDN_DRV_ICN)		+= icn
 subdir-$(CONFIG_ISDN_DRV_PCBIT)		+= pcbit
 subdir-$(CONFIG_ISDN_DRV_SC)		+= sc

@@ -44,6 +44,7 @@ extern int panic_timeout;
 extern int C_A_D;
 extern int bdf_prm[], bdflush_min[], bdflush_max[];
 extern int sysctl_overcommit_memory;
+extern int sysctl_overcommit_ratio;
 extern int max_threads;
 extern atomic_t nr_queued_signals;
 extern int max_queued_signals;
@@ -88,8 +89,10 @@ extern int sysctl_userprocess_debug;
 
 #ifdef CONFIG_PPC32
 extern unsigned long zero_paged_on, powersave_nap;
+#ifdef CONFIG_6xx
 int proc_dol2crvec(ctl_table *table, int write, struct file *filp,
 		  void *buffer, size_t *lenp);
+#endif
 #endif
 
 #ifdef CONFIG_BSD_PROCESS_ACCT
@@ -190,8 +193,10 @@ static ctl_table kern_table[] = {
 	 0644, NULL, &proc_dointvec},
 	{KERN_PPC_POWERSAVE_NAP, "powersave-nap", &powersave_nap, sizeof(int),
 	 0644, NULL, &proc_dointvec},
+#ifdef CONFIG_6xx
 	{KERN_PPC_L2CR, "l2cr", NULL, 0,
 	 0644, NULL, &proc_dol2crvec},
+#endif
 #endif
 	{KERN_CTLALTDEL, "ctrl-alt-del", &C_A_D, sizeof(int),
 	 0644, NULL, &proc_dointvec},
@@ -265,6 +270,9 @@ static ctl_table vm_table[] = {
 	 &bdflush_min, &bdflush_max},
 	{VM_OVERCOMMIT_MEMORY, "overcommit_memory", &sysctl_overcommit_memory,
 	 sizeof(sysctl_overcommit_memory), 0644, NULL, &proc_dointvec},
+	{VM_OVERCOMMIT_RATIO, "overcommit_ratio",
+	 &sysctl_overcommit_ratio, sizeof(sysctl_overcommit_ratio), 0644,
+	 NULL, &proc_dointvec},
 	{VM_PAGERDAEMON, "kswapd",
 	 &pager_daemon, sizeof(pager_daemon_t), 0644, NULL, &proc_dointvec},
 	{VM_PGT_CACHE, "pagetable_cache", 
@@ -275,8 +283,6 @@ static ctl_table vm_table[] = {
 	&vm_min_readahead,sizeof(int), 0644, NULL, &proc_dointvec},
 	{VM_MAX_READAHEAD, "max-readahead",
 	&vm_max_readahead,sizeof(int), 0644, NULL, &proc_dointvec},
-	{VM_MAX_MAP_COUNT, "max_map_count",
-	 &max_map_count, sizeof(int), 0644, NULL, &proc_dointvec},
 	{0}
 };
 
@@ -485,11 +491,11 @@ int do_sysctl_strategy (ctl_table *table,
 }
 
 /**
- * register_sysctl_table - register a sysctl hierarchy
+ * register_sysctl_table - register a sysctl heirarchy
  * @table: the top-level table structure
  * @insert_at_head: whether the entry should be inserted in front or at the end
  *
- * Register a sysctl table hierarchy. @table should be a filled in ctl_table
+ * Register a sysctl table heirarchy. @table should be a filled in ctl_table
  * array. An entry with a ctl_name of 0 terminates the table. 
  *
  * The members of the &ctl_table structure are used as follows:
@@ -573,7 +579,7 @@ struct ctl_table_header *register_sysctl_table(ctl_table * table,
 }
 
 /**
- * unregister_sysctl_table - unregister a sysctl table hierarchy
+ * unregister_sysctl_table - unregister a sysctl table heirarchy
  * @header: the header returned from register_sysctl_table
  *
  * Unregisters the sysctl table and all children. proc entries may not
@@ -986,7 +992,7 @@ int proc_dointvec_minmax(ctl_table *table, int write, struct file *filp,
 	vleft = table->maxlen / sizeof(int);
 	left = *lenp;
 	
-	for (; left && vleft--; i++, min++, max++, first=0) {
+	for (; left && vleft--; i++, first=0) {
 		if (write) {
 			while (left) {
 				char c;
@@ -1022,7 +1028,9 @@ int proc_dointvec_minmax(ctl_table *table, int write, struct file *filp,
 			buffer += len;
 			left -= len;
 
-			if ((min && val < *min) || (max && val > *max))
+			if (min && val < *min++)
+				continue;
+			if (max && val > *max++)
 				continue;
 			*i = val;
 		} else {

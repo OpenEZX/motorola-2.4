@@ -1393,8 +1393,10 @@ cleanup_module(void)
 		/* First of all: check for active disciplines and hangup them.
 		 */
 		do {
-			if (busy)
-				yield();
+			if (busy) {
+				current->counter = 0;
+				schedule();
+			}
 
 			busy = 0;
 			local_bh_disable();

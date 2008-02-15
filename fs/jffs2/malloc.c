@@ -1,7 +1,7 @@
 /*
  * JFFS2 -- Journalling Flash File System, Version 2.
  *
- * Copyright (C) 2001 Red Hat, Inc.
+ * Copyright (C) 2001, 2002 Red Hat, Inc.
  *
  * Created by David Woodhouse <dwmw2@cambridge.redhat.com>
  *
@@ -31,7 +31,7 @@
  * provisions above, a recipient may use your version of this file
  * under either the RHEPL or the GPL.
  *
- * $Id: malloc.c,v 1.16 2001/03/15 15:38:24 dwmw2 Exp $
+ * $Id: malloc.c,v 1.18 2002/01/09 13:25:57 dwmw2 Exp $
  *
  */
 
@@ -56,29 +56,6 @@ static kmem_cache_t *tmp_dnode_info_slab;
 static kmem_cache_t *raw_node_ref_slab;
 static kmem_cache_t *node_frag_slab;
 static kmem_cache_t *inode_cache_slab;
-
-void jffs2_free_tmp_dnode_info_list(struct jffs2_tmp_dnode_info *tn)
-{
-	struct jffs2_tmp_dnode_info *next;
-
-	while (tn) {
-		next = tn;
-		tn = tn->next;
-		jffs2_free_full_dnode(next->fn);
-		jffs2_free_tmp_dnode_info(next);
-	}
-}
-
-void jffs2_free_full_dirent_list(struct jffs2_full_dirent *fd)
-{
-	struct jffs2_full_dirent *next;
-
-	while (fd) {
-		next = fd->next;
-		jffs2_free_full_dirent(fd);
-		fd = next;
-	}
-}
 
 int __init jffs2_create_slab_caches(void)
 {

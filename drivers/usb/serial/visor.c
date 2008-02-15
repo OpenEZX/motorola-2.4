@@ -2,7 +2,7 @@
  * USB HandSpring Visor, Palm m50x, and Sony Clie driver
  * (supports all of the Palm OS USB devices)
  *
- *	Copyright (C) 1999 - 2002
+ *	Copyright (C) 1999 - 2001
  *	    Greg Kroah-Hartman (greg@kroah.com)
  *
  *	This program is free software; you can redistribute it and/or modify
@@ -11,25 +11,7 @@
  *	(at your option) any later version.
  *
  * See Documentation/usb/usb-serial.txt for more information on using this driver
- *
- * (04/03/2002) gkh
- *	Added support for the Sony OS 4.1 devices.  Thanks to Hiroyuki ARAKI
- *	<hiro@zob.ne.jp> for the information.
- *
- * (03/23/2002) gkh
- *	Added support for the Palm i705 device, thanks to Thomas Riemer
- *	<tom@netmech.com> for the information.
- *
- * (03/21/2002) gkh
- *	Added support for the Palm m130 device, thanks to Udo Eisenbarth
- *	<udo.eisenbarth@web.de> for the information.
- *
- * (02/21/2002) SilaS
- *	Added support for the Palm m515 devices.
- *
- * (02/15/2002) gkh
- *	Added support for the Clie S-360 device.
- *
+ * 
  * (12/18/2001) gkh
  *	Added better Clie support for 3.5 devices.  Thanks to Geoffrey Levand
  *	for the patch.
@@ -123,15 +105,18 @@
 
 #include <linux/config.h>
 #include <linux/kernel.h>
+#include <linux/sched.h>
+#include <linux/signal.h>
 #include <linux/errno.h>
+#include <linux/poll.h>
 #include <linux/init.h>
 #include <linux/slab.h>
+#include <linux/fcntl.h>
 #include <linux/tty.h>
 #include <linux/tty_driver.h>
 #include <linux/tty_flip.h>
 #include <linux/module.h>
 #include <linux/spinlock.h>
-#include <asm/uaccess.h>
 #include <linux/usb.h>
 
 #ifdef CONFIG_USB_SERIAL_DEBUG
@@ -146,7 +131,7 @@
 /*
  * Version Information
  */
-#define DRIVER_VERSION "v1.6"
+#define DRIVER_VERSION "v1.5"
 #define DRIVER_AUTHOR "Greg Kroah-Hartman <greg@kroah.com>"
 #define DRIVER_DESC "USB HandSpring Visor, Palm m50x, Sony Clié driver"
 
@@ -167,18 +152,15 @@ static void visor_read_bulk_callback	(struct urb *urb);
 static int  clie_3_5_startup	(struct usb_serial *serial);
 
 
-static struct usb_device_id id_table [] = {
+static struct usb_device_id visor_id_table [] = {
+	{ USB_DEVICE(HANDSPRING_VENDOR_ID, HANDSPRING_VISOR_ID) },
+	{ }					/* Terminating entry */
+};
+
+static struct usb_device_id palm_4_0_id_table [] = {
 	{ USB_DEVICE(PALM_VENDOR_ID, PALM_M500_ID) },
 	{ USB_DEVICE(PALM_VENDOR_ID, PALM_M505_ID) },
-	{ USB_DEVICE(PALM_VENDOR_ID, PALM_M515_ID) },
-	{ USB_DEVICE(PALM_VENDOR_ID, PALM_I705_ID) },
 	{ USB_DEVICE(PALM_VENDOR_ID, PALM_M125_ID) },
-	{ USB_DEVICE(PALM_VENDOR_ID, PALM_M130_ID) },
-	{ USB_DEVICE(PALM_VENDOR_ID, PALM_ZIRE_ID) },
-	{ USB_DEVICE(HANDSPRING_VENDOR_ID, HANDSPRING_VISOR_ID) },
-	{ USB_DEVICE(SONY_VENDOR_ID, SONY_CLIE_4_0_ID) },
-	{ USB_DEVICE(SONY_VENDOR_ID, SONY_CLIE_S360_ID) },
-	{ USB_DEVICE(SONY_VENDOR_ID, SONY_CLIE_4_1_ID) },
 	{ }					/* Terminating entry */
 };
 
@@ -187,19 +169,18 @@ static struct usb_device_id clie_id_3_5_table [] = {
 	{ }					/* Terminating entry */
 };
 
+static struct usb_device_id clie_id_4_0_table [] = {
+	{ USB_DEVICE(SONY_VENDOR_ID, SONY_CLIE_4_0_ID) },
+	{ }					/* Terminating entry */
+};
+
 static __devinitdata struct usb_device_id id_table_combined [] = {
 	{ USB_DEVICE(HANDSPRING_VENDOR_ID, HANDSPRING_VISOR_ID) },
 	{ USB_DEVICE(PALM_VENDOR_ID, PALM_M500_ID) },
 	{ USB_DEVICE(PALM_VENDOR_ID, PALM_M505_ID) },
-	{ USB_DEVICE(PALM_VENDOR_ID, PALM_M515_ID) },
-	{ USB_DEVICE(PALM_VENDOR_ID, PALM_I705_ID) },
 	{ USB_DEVICE(PALM_VENDOR_ID, PALM_M125_ID) },
-	{ USB_DEVICE(PALM_VENDOR_ID, PALM_M130_ID) },
-	{ USB_DEVICE(PALM_VENDOR_ID, PALM_ZIRE_ID) },
 	{ USB_DEVICE(SONY_VENDOR_ID, SONY_CLIE_3_5_ID) },
 	{ USB_DEVICE(SONY_VENDOR_ID, SONY_CLIE_4_0_ID) },
-	{ USB_DEVICE(SONY_VENDOR_ID, SONY_CLIE_S360_ID) },
-	{ USB_DEVICE(SONY_VENDOR_ID, SONY_CLIE_4_1_ID) },
 	{ }					/* Terminating entry */
 };
 
@@ -207,53 +188,109 @@ MODULE_DEVICE_TABLE (usb, id_table_combined);
 
 
 
-/* All of the device info needed for the Handspring Visor, and Palm 4.0 devices */
+/* All of the device info needed for the Handspring Visor */
 static struct usb_serial_device_type handspring_device = {
-	.owner =		THIS_MODULE,
-	.name =			"Handspring Visor / Palm 4.0 / Clié 4.x",
-	.id_table =		id_table,
-	.num_interrupt_in =	0,
-	.num_bulk_in =		2,
-	.num_bulk_out =		2,
-	.num_ports =		2,
-	.open =			visor_open,
-	.close =		visor_close,
-	.throttle =		visor_throttle,
-	.unthrottle =		visor_unthrottle,
-	.startup =		visor_startup,
-	.shutdown =		visor_shutdown,
-	.ioctl =		visor_ioctl,
-	.set_termios =		visor_set_termios,
-	.write =		visor_write,
-	.write_room =		visor_write_room,
-	.chars_in_buffer =	visor_chars_in_buffer,
-	.write_bulk_callback =	visor_write_bulk_callback,
-	.read_bulk_callback =	visor_read_bulk_callback,
+	name:			"Handspring Visor",
+	id_table:		visor_id_table,
+	needs_interrupt_in:	MUST_HAVE_NOT,		/* this device must not have an interrupt in endpoint */
+	needs_bulk_in:		MUST_HAVE,		/* this device must have a bulk in endpoint */
+	needs_bulk_out:		MUST_HAVE,		/* this device must have a bulk out endpoint */
+	num_interrupt_in:	0,
+	num_bulk_in:		2,
+	num_bulk_out:		2,
+	num_ports:		2,
+	open:			visor_open,
+	close:			visor_close,
+	throttle:		visor_throttle,
+	unthrottle:		visor_unthrottle,
+	startup:		visor_startup,
+	shutdown:		visor_shutdown,
+	ioctl:			visor_ioctl,
+	set_termios:		visor_set_termios,
+	write:			visor_write,
+	write_room:		visor_write_room,
+	chars_in_buffer:	visor_chars_in_buffer,
+	write_bulk_callback:	visor_write_bulk_callback,
+	read_bulk_callback:	visor_read_bulk_callback,
 };
+
+/* device info for the Palm 4.0 devices */
+static struct usb_serial_device_type palm_4_0_device = {
+	name:			"Palm 4.0",
+	id_table:		palm_4_0_id_table,
+	needs_interrupt_in:	MUST_HAVE_NOT,		/* this device must not have an interrupt in endpoint */
+	needs_bulk_in:		MUST_HAVE,		/* this device must have a bulk in endpoint */
+	needs_bulk_out:		MUST_HAVE,		/* this device must have a bulk out endpoint */
+	num_interrupt_in:	0,
+	num_bulk_in:		2,
+	num_bulk_out:		2,
+	num_ports:		2,
+	open:			visor_open,
+	close:			visor_close,
+	throttle:		visor_throttle,
+	unthrottle:		visor_unthrottle,
+	startup:		visor_startup,
+	shutdown:		visor_shutdown,
+	ioctl:			visor_ioctl,
+	set_termios:		visor_set_termios,
+	write:			visor_write,
+	write_room:		visor_write_room,
+	chars_in_buffer:	visor_chars_in_buffer,
+	write_bulk_callback:	visor_write_bulk_callback,
+	read_bulk_callback:	visor_read_bulk_callback,
+};
+
 
 /* device info for the Sony Clie OS version 3.5 */
 static struct usb_serial_device_type clie_3_5_device = {
-	.owner =		THIS_MODULE,
-	.name =			"Sony Clié 3.5",
-	.id_table =		clie_id_3_5_table,
-	.num_interrupt_in =	0,
-	.num_bulk_in =		1,
-	.num_bulk_out =		1,
-	.num_ports =		1,
-	.open =			visor_open,
-	.close =		visor_close,
-	.throttle =		visor_throttle,
-	.unthrottle =		visor_unthrottle,
-	.startup =		clie_3_5_startup,
-	.ioctl =		visor_ioctl,
-	.set_termios =		visor_set_termios,
-	.write =		visor_write,
-	.write_room =		visor_write_room,
-	.chars_in_buffer =	visor_chars_in_buffer,
-	.write_bulk_callback =	visor_write_bulk_callback,
-	.read_bulk_callback =	visor_read_bulk_callback,
+	name:			"Sony Clié 3.5",
+	id_table:		clie_id_3_5_table,
+	needs_interrupt_in:	MUST_HAVE_NOT,		/* this device must not have an interrupt in endpoint */
+	needs_bulk_in:		MUST_HAVE,		/* this device must have a bulk in endpoint */
+	needs_bulk_out:		MUST_HAVE,		/* this device must have a bulk out endpoint */
+	num_interrupt_in:	0,
+	num_bulk_in:		1,
+	num_bulk_out:		1,
+	num_ports:		1,
+	open:			visor_open,
+	close:			visor_close,
+	throttle:		visor_throttle,
+	unthrottle:		visor_unthrottle,
+	startup:		clie_3_5_startup,
+	ioctl:			visor_ioctl,
+	set_termios:		visor_set_termios,
+	write:			visor_write,
+	write_room:		visor_write_room,
+	chars_in_buffer:	visor_chars_in_buffer,
+	write_bulk_callback:	visor_write_bulk_callback,
+	read_bulk_callback:	visor_read_bulk_callback,
 };
 
+/* device info for the Sony Clie OS version 4.0 */
+static struct usb_serial_device_type clie_4_0_device = {
+	name:			"Sony Clié 4.0",
+	id_table:		clie_id_4_0_table,
+	needs_interrupt_in:	MUST_HAVE_NOT,		/* this device must not have an interrupt in endpoint */
+	needs_bulk_in:		MUST_HAVE,		/* this device must have a bulk in endpoint */
+	needs_bulk_out:		MUST_HAVE,		/* this device must have a bulk out endpoint */
+	num_interrupt_in:	0,
+	num_bulk_in:		2,
+	num_bulk_out:		2,
+	num_ports:		2,
+	open:			visor_open,
+	close:			visor_close,
+	throttle:		visor_throttle,
+	unthrottle:		visor_unthrottle,
+	startup:		visor_startup,
+	shutdown:		visor_shutdown,
+	ioctl:			visor_ioctl,
+	set_termios:		visor_set_termios,
+	write:			visor_write,
+	write_room:		visor_write_room,
+	chars_in_buffer:	visor_chars_in_buffer,
+	write_bulk_callback:	visor_write_bulk_callback,
+	read_bulk_callback:	visor_read_bulk_callback,
+};
 
 #define NUM_URBS			24
 #define URB_TRANSFER_BUFFER_SIZE	768
@@ -277,32 +314,36 @@ static int visor_open (struct usb_serial_port *port, struct file *filp)
 	dbg("%s - port %d", __FUNCTION__, port->number);
 
 	if (!port->read_urb) {
-		/* this is needed for some brain dead Sony devices */
 		err ("Device lied about number of ports, please use a lower one.");
 		return -ENODEV;
 	}
 
-	bytes_in = 0;
-	bytes_out = 0;
+	down (&port->sem);
+	
+	++port->open_count;
+	MOD_INC_USE_COUNT;
+	
+	if (!port->active) {
+		port->active = 1;
+		bytes_in = 0;
+		bytes_out = 0;
 
-	/*
-	 * Force low_latency on so that our tty_push actually forces the data
-	 * through, otherwise it is scheduled, and with high data rates (like
-	 * with OHCI) data can get lost.
-	 */
-	if (port->tty)
+		/* force low_latency on so that our tty_push actually forces the data through, 
+		   otherwise it is scheduled, and with high data rates (like with OHCI) data
+		   can get lost. */
 		port->tty->low_latency = 1;
-
-	/* Start reading from the device */
-	usb_fill_bulk_urb (port->read_urb, serial->dev,
-			   usb_rcvbulkpipe (serial->dev, 
-					    port->bulk_in_endpointAddress),
-			   port->read_urb->transfer_buffer,
-			   port->read_urb->transfer_buffer_length,
-			   visor_read_bulk_callback, port);
-	result = usb_submit_urb(port->read_urb);
-	if (result)
-		err("%s - failed submitting read urb, error %d", __FUNCTION__, result);
+		
+		/* Start reading from the device */
+		FILL_BULK_URB(port->read_urb, serial->dev, 
+			      usb_rcvbulkpipe(serial->dev, port->bulk_in_endpointAddress),
+			      port->read_urb->transfer_buffer, port->read_urb->transfer_buffer_length,
+			      visor_read_bulk_callback, port);
+		result = usb_submit_urb(port->read_urb);
+		if (result)
+			err("%s - failed submitting read urb, error %d", __FUNCTION__, result);
+	}
+	
+	up (&port->sem);
 	
 	return result;
 }
@@ -322,26 +363,38 @@ static void visor_close (struct usb_serial_port *port, struct file * filp)
 	if (!serial)
 		return;
 	
-	if (serial->dev) {
-		/* only send a shutdown message if the 
-		 * device is still here */
-		transfer_buffer =  kmalloc (0x12, GFP_KERNEL);
-		if (!transfer_buffer) {
-			err("%s - kmalloc(%d) failed.", __FUNCTION__, 0x12);
-		} else {
-			/* send a shutdown message to the device */
-			usb_control_msg (serial->dev,
-					 usb_rcvctrlpipe(serial->dev, 0),
-					 VISOR_CLOSE_NOTIFICATION, 0xc2,
-					 0x0000, 0x0000, 
-					 transfer_buffer, 0x12, 300);
-			kfree (transfer_buffer);
+	down (&port->sem);
+
+	--port->open_count;
+
+	if (port->open_count <= 0) {
+		if (serial->dev) {
+			/* only send a shutdown message if the 
+			 * device is still here */
+			transfer_buffer =  kmalloc (0x12, GFP_KERNEL);
+			if (!transfer_buffer) {
+				err("%s - kmalloc(%d) failed.", __FUNCTION__, 0x12);
+			} else {
+				/* send a shutdown message to the device */
+				usb_control_msg (serial->dev,
+						 usb_rcvctrlpipe(serial->dev, 0),
+						 VISOR_CLOSE_NOTIFICATION, 0xc2,
+						 0x0000, 0x0000, 
+						 transfer_buffer, 0x12, 300);
+				kfree (transfer_buffer);
+			}
+			/* shutdown our bulk read */
+			usb_unlink_urb (port->read_urb);
 		}
-		/* shutdown our bulk read */
-		usb_unlink_urb (port->read_urb);
+		port->active = 0;
+		port->open_count = 0;
 	}
+	up (&port->sem);
+
 	/* Uncomment the following line if you want to see some statistics in your syslog */
 	/* info ("Bytes In = %d  Bytes Out = %d", bytes_in, bytes_out); */
+
+	MOD_DEC_USE_COUNT;
 }
 
 
@@ -479,7 +532,7 @@ static void visor_write_bulk_callback (struct urb *urb)
 
 	queue_task(&port->tqueue, &tq_immediate);
 	mark_bh(IMMEDIATE_BH);
-
+	
 	return;
 }
 
@@ -511,7 +564,7 @@ static void visor_read_bulk_callback (struct urb *urb)
 	usb_serial_debug_data (__FILE__, __FUNCTION__, urb->actual_length, data);
 
 	tty = port->tty;
-	if (tty && urb->actual_length) {
+	if (urb->actual_length) {
 		for (i = 0; i < urb->actual_length ; ++i) {
 			/* if we insert more than TTY_FLIPBUF_SIZE characters, we drop them. */
 			if(tty->flip.count >= TTY_FLIPBUF_SIZE) {
@@ -525,12 +578,10 @@ static void visor_read_bulk_callback (struct urb *urb)
 	}
 
 	/* Continue trying to always read  */
-	usb_fill_bulk_urb (port->read_urb, serial->dev,
-			   usb_rcvbulkpipe (serial->dev,
-					    port->bulk_in_endpointAddress),
-			   port->read_urb->transfer_buffer,
-			   port->read_urb->transfer_buffer_length,
-			   visor_read_bulk_callback, port);
+	FILL_BULK_URB(port->read_urb, serial->dev, 
+		      usb_rcvbulkpipe(serial->dev, port->bulk_in_endpointAddress),
+		      port->read_urb->transfer_buffer, port->read_urb->transfer_buffer_length,
+		      visor_read_bulk_callback, port);
 	result = usb_submit_urb(port->read_urb);
 	if (result)
 		err("%s - failed resubmitting read urb, error %d", __FUNCTION__, result);
@@ -540,8 +591,16 @@ static void visor_read_bulk_callback (struct urb *urb)
 
 static void visor_throttle (struct usb_serial_port *port)
 {
+
 	dbg("%s - port %d", __FUNCTION__, port->number);
+
+	down (&port->sem);
+
 	usb_unlink_urb (port->read_urb);
+
+	up (&port->sem);
+
+	return;
 }
 
 
@@ -551,13 +610,20 @@ static void visor_unthrottle (struct usb_serial_port *port)
 
 	dbg("%s - port %d", __FUNCTION__, port->number);
 
+	down (&port->sem);
+
 	port->read_urb->dev = port->serial->dev;
 	result = usb_submit_urb(port->read_urb);
 	if (result)
 		err("%s - failed submitting read urb, error %d", __FUNCTION__, result);
+
+	up (&port->sem);
+
+	return;
 }
 
-static int visor_startup (struct usb_serial *serial)
+
+static int  visor_startup (struct usb_serial *serial)
 {
 	int response;
 	int i;
@@ -605,14 +671,12 @@ static int visor_startup (struct usb_serial *serial)
 					string = "unknown";
 					break;	
 			}
-			info("%s: port %d, is for %s use and is bound to ttyUSB%d", serial->type->name,
-			     connection_info->connections[i].port, string, serial->minor + i);
+			info("%s: port %d, is for %s use and is bound to ttyUSB%d", serial->type->name, connection_info->connections[i].port, string, serial->minor + i);
 		}
 	}
 
 	if ((serial->dev->descriptor.idVendor == PALM_VENDOR_ID) ||
-	    ((serial->dev->descriptor.idVendor == SONY_VENDOR_ID) &&
-	     (serial->dev->descriptor.idProduct != SONY_CLIE_4_1_ID))) {
+	    (serial->dev->descriptor.idVendor == SONY_VENDOR_ID)) {
 		/* Palm OS 4.0 Hack */
 		response = usb_control_msg (serial->dev, usb_rcvctrlpipe(serial->dev, 0), 
 					    PALM_GET_SOME_UNKNOWN_INFORMATION,
@@ -690,8 +754,17 @@ static int clie_3_5_startup (struct usb_serial *serial)
 
 static void visor_shutdown (struct usb_serial *serial)
 {
+	int i;
+
 	dbg("%s", __FUNCTION__);
+
+	/* stop reads and writes on all ports */
+	for (i=0; i < serial->num_ports; ++i) {
+		serial->port[i].active = 0;
+		serial->port[i].open_count = 0;
+	}
 }
+
 
 static int visor_ioctl (struct usb_serial_port *port, struct file * file, unsigned int cmd, unsigned long arg)
 {
@@ -756,8 +829,7 @@ static void visor_set_termios (struct usb_serial_port *port, struct termios *old
 	
 	/* determine software flow control */
 	if (I_IXOFF(port->tty))
-		dbg("%s - XON/XOFF is enabled, XON = %2x, XOFF = %2x",
-		    __FUNCTION__, START_CHAR(port->tty), STOP_CHAR(port->tty));
+		dbg("%s - XON/XOFF is enabled, XON = %2x, XOFF = %2x", __FUNCTION__, START_CHAR(port->tty), STOP_CHAR(port->tty));
 	else
 		dbg("%s - XON/XOFF is disabled", __FUNCTION__);
 
@@ -774,7 +846,9 @@ static int __init visor_init (void)
 	int i;
 
 	usb_serial_register (&handspring_device);
+	usb_serial_register (&palm_4_0_device);
 	usb_serial_register (&clie_3_5_device);
+	usb_serial_register (&clie_4_0_device);
 	
 	/* create our write urb pool and transfer buffers */ 
 	spin_lock_init (&write_urb_pool_lock);
@@ -806,7 +880,9 @@ static void __exit visor_exit (void)
 	unsigned long flags;
 
 	usb_serial_deregister (&handspring_device);
+	usb_serial_deregister (&palm_4_0_device);
 	usb_serial_deregister (&clie_3_5_device);
+	usb_serial_deregister (&clie_4_0_device);
 
 	spin_lock_irqsave (&write_urb_pool_lock, flags);
 

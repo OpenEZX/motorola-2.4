@@ -234,7 +234,7 @@ static int fop_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 {
 	static struct watchdog_info ident=
 	{
-		WDIOF_MAGICCLOSE,
+		0,
 		1,
 		"SB60xx"
 	};
@@ -300,16 +300,15 @@ static void __exit sbc60xxwdt_unload(void)
 
 	unregister_reboot_notifier(&wdt_notifier);
 	release_region(WDT_START,1);
-//	release_region(WDT_STOP,1);
+	release_region(WDT_STOP,1);
 }
 
 static int __init sbc60xxwdt_init(void)
 {
 	int rc = -EBUSY;
 
-//	We cannot reserve 0x45 - the kernel already has!
-//	if (!request_region(WDT_STOP, 1, "SBC 60XX WDT"))
-//		goto err_out;
+	if (!request_region(WDT_STOP, 1, "SBC 60XX WDT"))
+		goto err_out;
 	if (!request_region(WDT_START, 1, "SBC 60XX WDT"))
 		goto err_out_region1;
 

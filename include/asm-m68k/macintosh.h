@@ -37,6 +37,9 @@ extern void print_booter(char *ptr);
  *	Macintosh Table
  */
  
+struct mac_model *macintosh_config;
+
+
 struct mac_model
 {
 	short ident;

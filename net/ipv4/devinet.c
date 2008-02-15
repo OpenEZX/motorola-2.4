@@ -503,15 +503,25 @@ int devinet_ioctl(unsigned int cmd, void *arg)
 		break;
 
 	case SIOCSIFFLAGS:
+                /*
+                 * skip permission conctl for CONCTL
+                 */
+                #if 0
 		if (!capable(CAP_NET_ADMIN))
 			return -EACCES;
+                #endif
 		break;
 	case SIOCSIFADDR:	/* Set interface address (and family) */
 	case SIOCSIFBRDADDR:	/* Set the broadcast address */
 	case SIOCSIFDSTADDR:	/* Set the destination address */
 	case SIOCSIFNETMASK: 	/* Set the netmask for the interface */
+                /*
+                 * skip permission conctl for CONCTL
+                 */
+                #if 0
 		if (!capable(CAP_NET_ADMIN))
 			return -EACCES;
+                #endif
 		if (sin->sin_family != AF_INET)
 			return -EINVAL;
 		break;
@@ -1032,7 +1042,7 @@ int devinet_sysctl_forward(ctl_table *ctl, int write, struct file * filp,
 static struct devinet_sysctl_table
 {
 	struct ctl_table_header *sysctl_header;
-	ctl_table devinet_vars[15];
+	ctl_table devinet_vars[14];
 	ctl_table devinet_dev[2];
 	ctl_table devinet_conf_dir[2];
 	ctl_table devinet_proto_dir[2];
@@ -1065,9 +1075,6 @@ static struct devinet_sysctl_table
          &proc_dointvec},
 	{NET_IPV4_CONF_PROXY_ARP, "proxy_arp",
          &ipv4_devconf.proxy_arp, sizeof(int), 0644, NULL,
-         &proc_dointvec},
-	{NET_IPV4_CONF_MEDIUM_ID, "medium_id",
-         &ipv4_devconf.medium_id, sizeof(int), 0644, NULL,
          &proc_dointvec},
 	{NET_IPV4_CONF_BOOTP_RELAY, "bootp_relay",
          &ipv4_devconf.bootp_relay, sizeof(int), 0644, NULL,

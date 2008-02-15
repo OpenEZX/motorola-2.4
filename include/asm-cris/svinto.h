@@ -58,7 +58,4 @@ typedef struct etrax_dma_descr {
  */
 #define WAIT_DMA( n ) WAIT_DMA_NUM( n )
 
-extern void prepare_rx_descriptor(struct etrax_dma_descr *desc);
-extern void flush_etrax_cache(void);
-
 #endif

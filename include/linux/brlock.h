@@ -19,7 +19,7 @@
  *
  *                 David S. Miller <davem@redhat.com>
  *
- * David has an implementation that doesn't use atomic operations in
+ * David has an implementation that doesnt use atomic operations in
  * the read branch via memory ordering tricks - i guess we need to
  * split this up into a per-arch thing? The atomicity issue is a
  * secondary item in profiles, at least on x86 platforms.
@@ -171,11 +171,11 @@ static inline void br_write_unlock (enum brlock_indices idx)
 }
 
 #else
-# define br_read_lock(idx)	((void)(idx))
-# define br_read_unlock(idx)	((void)(idx))
-# define br_write_lock(idx)	((void)(idx))
-# define br_write_unlock(idx)	((void)(idx))
-#endif
+# define br_read_lock(idx)	({ (void)(idx); preempt_disable(); })
+# define br_read_unlock(idx)	({ (void)(idx); preempt_enable(); })
+# define br_write_lock(idx)	({ (void)(idx); preempt_disable(); })
+# define br_write_unlock(idx)	({ (void)(idx); preempt_enable(); })
+#endif	/* CONFIG_SMP */
 
 /*
  * Now enumerate all of the possible sw/hw IRQ protected

@@ -33,6 +33,7 @@
  *		needed by SiS driver's memory management.
  */
 
+#define __NO_VERSION__
 #include "drmP.h"
 
 #if __HAVE_CTX_BITMAP

@@ -229,7 +229,7 @@ static int igmp_send_report(struct net_device *dev, u32 group, int type)
 	iph->version  = 4;
 	iph->ihl      = (sizeof(struct iphdr)+4)>>2;
 	iph->tos      = 0;
-	iph->frag_off = htons(IP_DF);
+	iph->frag_off = __constant_htons(IP_DF);
 	iph->ttl      = 1;
 	iph->daddr    = dst;
 	iph->saddr    = rt->rt_src;
@@ -530,8 +530,9 @@ out:
  *	A socket has left a multicast group on device dev
  */
 
-void ip_mc_dec_group(struct in_device *in_dev, u32 addr)
+int ip_mc_dec_group(struct in_device *in_dev, u32 addr)
 {
+	int err = -ESRCH;
 	struct ip_mc_list *i, **ip;
 	
 	ASSERT_RTNL();
@@ -548,11 +549,13 @@ void ip_mc_dec_group(struct in_device *in_dev, u32 addr)
 					ip_rt_multicast_event(in_dev);
 
 				ip_ma_put(i);
-				return;
+				return 0;
 			}
+			err = 0;
 			break;
 		}
 	}
+	return -ESRCH;
 }
 
 /* Device going down */

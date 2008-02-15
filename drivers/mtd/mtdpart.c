@@ -5,12 +5,8 @@
  *
  * This code is GPL
  *
- * $Id: mtdpart.c,v 1.27 2002/03/08 16:34:35 rkaiser Exp $
- * - with protection register access removed until that code is merged in 2.4.
- *
- * 	02-21-2002	Thomas Gleixner <gleixner@autronix.de>
- *			added support for read_oob, write_oob
- */	
+ * $Id: mtdpart.c,v 1.25 2001/11/27 14:55:11 cdavies Exp $
+ */
 
 #include <linux/module.h>
 #include <linux/types.h>
@@ -32,7 +28,6 @@ struct mtd_part {
 	u_int32_t offset;
 	int index;
 	struct list_head list;
-	int registered;
 };
 
 /*
@@ -59,18 +54,6 @@ static int part_read (struct mtd_info *mtd, loff_t from, size_t len,
 					len, retlen, buf);
 }
 
-static int part_read_oob (struct mtd_info *mtd, loff_t from, size_t len, 
-			size_t *retlen, u_char *buf)
-{
-	struct mtd_part *part = PART(mtd);
-	if (from >= mtd->size)
-		len = 0;
-	else if (from + len > mtd->size)
-		len = mtd->size - from;
-	return part->master->read_oob (part->master, from + part->offset, 
-					len, retlen, buf);
-}
-
 static int part_write (struct mtd_info *mtd, loff_t to, size_t len,
 			size_t *retlen, const u_char *buf)
 {
@@ -82,20 +65,6 @@ static int part_write (struct mtd_info *mtd, loff_t to, size_t len,
 	else if (to + len > mtd->size)
 		len = mtd->size - to;
 	return part->master->write (part->master, to + part->offset, 
-					len, retlen, buf);
-}
-
-static int part_write_oob (struct mtd_info *mtd, loff_t to, size_t len,
-			size_t *retlen, const u_char *buf)
-{
-	struct mtd_part *part = PART(mtd);
-	if (!(mtd->flags & MTD_WRITEABLE))
-		return -EROFS;
-	if (to >= mtd->size)
-		len = 0;
-	else if (to + len > mtd->size)
-		len = mtd->size - to;
-	return part->master->write_oob (part->master, to + part->offset, 
 					len, retlen, buf);
 }
 
@@ -179,8 +148,7 @@ int del_mtd_partitions(struct mtd_info *master)
 		if (slave->master == master) {
 			struct list_head *prev = node->prev;
 			__list_del(prev, node->next);
-			if(slave->registered)
-				del_mtd_device(&slave->mtd);
+			del_mtd_device(&slave->mtd);
 			kfree(slave);
 			node = prev;
 		}
@@ -227,24 +195,24 @@ int add_mtd_partitions(struct mtd_info *master,
 		slave->mtd.oobsize = master->oobsize;
 		slave->mtd.ecctype = master->ecctype;
 		slave->mtd.eccsize = master->eccsize;
+		slave->mtd.read_user_prot_reg = master->read_user_prot_reg;
+		slave->mtd.read_fact_prot_reg = master->read_fact_prot_reg;
+		slave->mtd.write_user_prot_reg = master->write_user_prot_reg;
 
 		slave->mtd.name = parts[i].name;
 		slave->mtd.bank_size = master->bank_size;
+
 		slave->mtd.module = master->module;
 
 		slave->mtd.read = part_read;
 		slave->mtd.write = part_write;
-
-		if (master->read_oob)
-			slave->mtd.read_oob = part_read_oob;
-		if (master->write_oob)
-			slave->mtd.write_oob = part_write_oob;
 		if (master->sync)
 			slave->mtd.sync = part_sync;
 		if (!i && master->suspend && master->resume) {
 				slave->mtd.suspend = part_suspend;
 				slave->mtd.resume = part_resume;
 		}
+
 		if (master->writev)
 			slave->mtd.writev = part_writev;
 		if (master->readv)
@@ -323,17 +291,8 @@ int add_mtd_partitions(struct mtd_info *master,
 				parts[i].name);
 		}
 
-		if(parts[i].mtdp)
-		{	/* store the object pointer (caller may or may not register it */
-			*parts[i].mtdp = &slave->mtd;
-			slave->registered = 0;
-		}
-		else
-		{
-			/* register our partition */
-			add_mtd_device(&slave->mtd);
-			slave->registered = 1;
-		}
+		/* register our partition */
+		add_mtd_device(&slave->mtd);
 	}
 
 	return 0;

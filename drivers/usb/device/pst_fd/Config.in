@@ -1,0 +1,17 @@
+#
+# PST device layer for USB Device subsystem.
+#
+# Copyright (C) 2001 Lineo, Inc.
+# Copyright (C) 2001 Hewlett-Packard Co.
+# Copyright (C) 2003 RTSoft.
+# Copyright (C) 2003 Motorola.
+
+mainmenu_option next_comment
+comment "Motorola PST USB Function"
+
+dep_tristate '  Motorola PST USB Function' CONFIG_USBD_PST $CONFIG_USBD
+if [ "$CONFIG_USBD_PST" = "y" -o "$CONFIG_USBD_PST" = "m" ]; then
+   hex     ' Overide VendorID (hex value)' CONFIG_USBD_PST_VENDORID "0000"
+   hex     ' Overide ProductID (hex value)' CONFIG_USBD_PST_PRODUCTID "0000"
+fi
+endmenu

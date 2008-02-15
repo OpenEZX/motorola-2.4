@@ -1,5 +1,5 @@
 /*
- * BK Id: SCCS/s.time.h 1.17 10/23/01 08:09:35 trini
+ * BK Id: SCCS/s.time.h 1.21 11/04/01 23:02:41 paulus
  */
 /*
  * Common time prototypes and such for all ppc machines.
@@ -69,13 +69,21 @@ extern __inline__ int const __USE_RTC(void) {
 
 extern __inline__ unsigned long get_tbl(void) {
 	unsigned long tbl;
+#if defined(CONFIG_403GCX)
+	asm volatile("mfspr %0, 0x3dd" : "=r" (tbl));
+#else
 	asm volatile("mftb %0" : "=r" (tbl));
+#endif
 	return tbl;
 }
 
 extern __inline__ unsigned long get_tbu(void) {
 	unsigned long tbl;
+#if defined(CONFIG_403GCX)
+	asm volatile("mfspr %0, 0x3dc" : "=r" (tbl));
+#else
 	asm volatile("mftbu %0" : "=r" (tbl));
+#endif
 	return tbl;
 }
 

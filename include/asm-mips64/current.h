@@ -8,11 +8,10 @@
 #ifndef _ASM_CURRENT_H
 #define _ASM_CURRENT_H
 
-#ifndef __ASSEMBLY__
+#ifdef _LANGUAGE_C
 
 /* MIPS rules... */
 register struct task_struct *current asm("$28");
 
-#endif /* !__ASSEMBLY__ */
-
+#endif /* _LANGUAGE_C */
 #endif /* _ASM_CURRENT_H */

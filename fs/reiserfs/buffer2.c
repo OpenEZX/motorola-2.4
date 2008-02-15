@@ -1,5 +1,5 @@
 /*
- *  Copyright 2000-2002 by Hans Reiser, licensing governed by reiserfs/README  
+ *  Copyright 2000 by Hans Reiser, licensing governed by reiserfs/README  
  */
 
 #include <linux/config.h>
@@ -33,7 +33,8 @@ void wait_buffer_until_released (const struct buffer_head * bh)
 			buffer_journal_dirty(bh) ? ' ' : '!');
     }
     run_task_queue(&tq_disk);
-    yield();
+    current->policy |= SCHED_YIELD;
+    schedule();
   }
   if (repeat_counter > 30000000) {
     reiserfs_warning("vs-3051: done waiting, ignore vs-3050 messages for (%b)\n", bh) ;
@@ -54,6 +55,8 @@ struct buffer_head  * reiserfs_bread (struct super_block *super, int n_block, in
     PROC_EXP( unsigned int ctx_switches = kstat.context_swtch );
 
     result = bread (super -> s_dev, n_block, n_size);
+    debug_lock_break(1);
+    conditional_schedule();
     PROC_INFO_INC( super, breads );
     PROC_EXP( if( kstat.context_swtch != ctx_switches ) 
 	      PROC_INFO_INC( super, bread_miss ) );

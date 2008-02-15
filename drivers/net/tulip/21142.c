@@ -167,9 +167,8 @@ void t21142_lnk_change(struct net_device *dev, int csr5)
 			int i;
 			for (i = 0; i < tp->mtable->leafcount; i++)
 				if (tp->mtable->mleaf[i].media == dev->if_port) {
-					int startup = ! ((tp->chip_id == DC21143 && tp->revision == 65));
 					tp->cur_index = i;
-					tulip_select_media(dev, startup);
+					tulip_select_media(dev, 1);
 					setup_done = 1;
 					break;
 				}

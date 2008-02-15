@@ -5,7 +5,7 @@
  *
  *		The User Datagram Protocol (UDP).
  *
- * Version:	$Id: udp.c,v 1.100.2.4 2002/03/05 12:47:34 davem Exp $
+ * Version:	$Id: udp.c,v 1.100.2.1 2002/01/12 07:39:23 davem Exp $
  *
  * Authors:	Ross Biro, <bir7@leland.Stanford.Edu>
  *		Fred N. van Kempen, <waltje@uWalt.NL.Mugnet.ORG>
@@ -712,8 +712,6 @@ int udp_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 {
 	struct sockaddr_in *usin = (struct sockaddr_in *) uaddr;
 	struct rtable *rt;
-	u32 saddr;
-	int oif;
 	int err;
 
 	
@@ -725,16 +723,8 @@ int udp_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 
 	sk_dst_reset(sk);
 
-	oif = sk->bound_dev_if;
-	saddr = sk->saddr;
-	if (MULTICAST(usin->sin_addr.s_addr)) {
-		if (!oif)
-			oif = sk->protinfo.af_inet.mc_index;
-		if (!saddr)
-			saddr = sk->protinfo.af_inet.mc_addr;
-	}
-	err = ip_route_connect(&rt, usin->sin_addr.s_addr, saddr,
-			       RT_CONN_FLAGS(sk), oif);
+	err = ip_route_connect(&rt, usin->sin_addr.s_addr, sk->saddr,
+			       RT_CONN_FLAGS(sk), sk->bound_dev_if);
 	if (err)
 		return err;
 	if ((rt->rt_flags&RTCF_BROADCAST) && !sk->broadcast) {
@@ -899,15 +889,15 @@ int udp_rcv(struct sk_buff *skb)
 	if (!pskb_may_pull(skb, sizeof(struct udphdr)))
 		goto no_header;
 
-  	uh = skb->h.uh;
-
-	ulen = ntohs(uh->len);
+	ulen = ntohs(skb->h.uh->len);
 
 	if (ulen > len || ulen < sizeof(*uh))
 		goto short_packet;
 
 	if (pskb_trim(skb, ulen))
 		goto short_packet;
+
+  	uh = skb->h.uh;
 
 	if (udp_checksum_init(skb, uh, ulen, saddr, daddr) < 0)
 		goto csum_error;
@@ -938,14 +928,7 @@ int udp_rcv(struct sk_buff *skb)
 	return(0);
 
 short_packet:
-	NETDEBUG(if (net_ratelimit())
-		 printk(KERN_DEBUG "UDP: short packet: %u.%u.%u.%u:%u %d/%d to %u.%u.%u.%u:%u\n",
-			NIPQUAD(saddr),
-			ntohs(uh->source),
-			ulen,
-			len,
-			NIPQUAD(daddr),
-			ntohs(uh->dest)));
+	NETDEBUG(if (net_ratelimit()) printk(KERN_DEBUG "UDP: short packet: %d/%d\n", ulen, len));
 no_header:
 	UDP_INC_STATS_BH(UdpInErrors);
 	kfree_skb(skb);
@@ -978,7 +961,7 @@ static void get_udp_sock(struct sock *sp, char *tmpbuf, int i)
 	destp = ntohs(sp->dport);
 	srcp  = ntohs(sp->sport);
 	sprintf(tmpbuf, "%4d: %08X:%04X %08X:%04X"
-		" %02X %08X:%08X %02X:%08lX %08X %5d %8d %lu %d %p",
+		" %02X %08X:%08X %02X:%08lX %08X %5d %8d %ld %d %p",
 		i, src, srcp, dest, destp, sp->state, 
 		atomic_read(&sp->wmem_alloc), atomic_read(&sp->rmem_alloc),
 		0, 0L, 0,

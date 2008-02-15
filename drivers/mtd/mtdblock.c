@@ -432,7 +432,7 @@ static void handle_mtdblock_request(void)
 		res = 0;
 
 		if (MINOR(req->rq_dev) >= MAX_MTD_DEVICES)
-			panic(__FUNCTION__": minor out of bound");
+			panic("handle_mtdblock_request: minor out of bound");
 
 		if ((req->sector + req->current_nr_sectors) > (mtdblk->mtd->size >> 9))
 			goto end_req;

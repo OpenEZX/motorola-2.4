@@ -20,7 +20,6 @@
 */
 
 #include <linux/rbtree.h>
-#include <linux/module.h>
 
 static void __rb_rotate_left(rb_node_t * node, rb_root_t * root)
 {
@@ -126,7 +125,6 @@ void rb_insert_color(rb_node_t * node, rb_root_t * root)
 
 	root->rb_node->rb_color = RB_BLACK;
 }
-EXPORT_SYMBOL(rb_insert_color);
 
 static void __rb_erase_color(rb_node_t * node, rb_node_t * parent,
 			     rb_root_t * root)
@@ -293,4 +291,3 @@ void rb_erase(rb_node_t * node, rb_root_t * root)
 	if (color == RB_BLACK)
 		__rb_erase_color(child, parent, root);
 }
-EXPORT_SYMBOL(rb_erase);

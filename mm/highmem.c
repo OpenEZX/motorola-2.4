@@ -32,8 +32,7 @@
  */
 static int pkmap_count[LAST_PKMAP];
 static unsigned int last_pkmap_nr;
-static spinlock_cacheline_t kmap_lock_cacheline = {SPIN_LOCK_UNLOCKED};
-#define kmap_lock  kmap_lock_cacheline.lock
+static spinlock_t kmap_lock __cacheline_aligned_in_smp = SPIN_LOCK_UNLOCKED;
 
 pte_t * pkmap_page_table;
 
@@ -332,7 +331,7 @@ struct page *alloc_bounce_page (void)
 	if (page)
 		return page;
 	/*
-	 * No luck. First, kick the VM so it doesn't idle around while
+	 * No luck. First, kick the VM so it doesnt idle around while
 	 * we are using up our emergency rations.
 	 */
 	wakeup_bdflush();
@@ -355,7 +354,9 @@ repeat_alloc:
 	/* we need to wait I/O completion */
 	run_task_queue(&tq_disk);
 
-	yield();
+	current->policy |= SCHED_YIELD;
+	__set_current_state(TASK_RUNNING);
+	schedule();
 	goto repeat_alloc;
 }
 
@@ -368,7 +369,7 @@ struct buffer_head *alloc_bounce_bh (void)
 	if (bh)
 		return bh;
 	/*
-	 * No luck. First, kick the VM so it doesn't idle around while
+	 * No luck. First, kick the VM so it doesnt idle around while
 	 * we are using up our emergency rations.
 	 */
 	wakeup_bdflush();
@@ -391,7 +392,9 @@ repeat_alloc:
 	/* we need to wait I/O completion */
 	run_task_queue(&tq_disk);
 
-	yield();
+	current->policy |= SCHED_YIELD;
+	__set_current_state(TASK_RUNNING);
+	schedule();
 	goto repeat_alloc;
 }
 

@@ -41,7 +41,9 @@
 #include <asm/io.h>
 #include <asm/system.h>
 
+
 extern int parse_afs_partitions(struct mtd_info *, struct mtd_partition **);
+extern int parse_redboot_partitions(struct mtd_info *, struct mtd_partition **);
 
 // board specific stuff - sorry, it should be in arch/arm/mach-*.
 #ifdef CONFIG_ARCH_INTEGRATOR
@@ -207,11 +209,40 @@ static struct map_info armflash_map =
 	set_vpp:	armflash_set_vpp,
 };
 
+
+/*
+ * Default static MTD partition definition.
+ *
+ * See include/linux/mtd/partitions.h for definition of the mtd_partition
+ * structure.
+ */
+
+static struct mtd_partition integrator_partitions[] = {
+	{
+		name:		"zImage",
+		size:		0x000c0000,
+		offset:		0,
+	}, {
+		name:		"User Filesystem",
+		size:		0x01f00000,
+		offset:		MTDPART_OFS_APPEND,
+	}, {
+		name:		"ARM Boot Monitor SIB",
+		size:		0x00040000,
+		offset:		MTDPART_OFS_APPEND,
+		mask_flags:	MTD_WRITEABLE,  /* force read-only */
+	}
+};
+
 static struct mtd_info *mtd;
 static struct mtd_partition *parts;
 
 static int __init armflash_cfi_init(void *base, u_int size)
 {
+	struct mtd_partition *parsed_parts;
+	int nb_parts = 0;
+	int parsed_nr_parts = 0;
+	const char *part_type;
 	int ret;
 
 	armflash_flash_init();
@@ -225,9 +256,15 @@ static int __init armflash_cfi_init(void *base, u_int size)
 	armflash_map.map_priv_2 = (unsigned long) base;
 
 	/*
-	 * Also, the CFI layer automatically works out what size
-	 * of chips we have, and does the necessary identification
-	 * for us automatically.
+	 * Default static MTD partition definition:
+	 */
+	part_type = "static";
+	parts = integrator_partitions;
+	nb_parts = ARRAY_SIZE(integrator_partitions);
+
+	/*
+	 * The CFI layer automatically works out what size chips we have,
+	 * and does the necessary identification for us automatically.
 	 */
 	mtd = do_map_probe("cfi_probe", &armflash_map);
 	if (!mtd)
@@ -235,13 +272,48 @@ static int __init armflash_cfi_init(void *base, u_int size)
 
 	mtd->module = THIS_MODULE;
 
-	ret = parse_afs_partitions(mtd, &parts);
-	if (ret > 0) {
-		ret = add_mtd_partitions(mtd, parts, ret);
-		if (ret)
-			printk(KERN_ERR "mtd partition registration "
-				"failed: %d\n", ret);
+	/*
+	 * Dynamic partition selection (may override the static definition)
+	 */
+#ifdef CONFIG_MTD_AFS_PARTS
+	if (parsed_nr_parts == 0) {
+		ret = parse_afs_partitions(mtd, &parsed_parts);
+
+		if (ret > 0) {
+			part_type = "ARM AFS";
+			parsed_nr_parts = ret;
+		}
 	}
+#endif
+#ifdef CONFIG_MTD_REDBOOT_PARTS
+	if (parsed_nr_parts == 0) {
+		ret = parse_redboot_partitions(mtd, &parsed_parts);
+
+		if (ret > 0) {
+			part_type = "RedBoot";
+			parsed_nr_parts = ret;
+		}
+	}
+#endif
+
+	if (parsed_nr_parts > 0) {
+		parts = parsed_parts;
+		nb_parts = parsed_nr_parts;
+	}
+
+	if (nb_parts == 0) {
+		printk(KERN_NOTICE "ARM Integrator flash: no partition info "
+			"available, registering whole flash at once\n");
+		ret = add_mtd_device(mtd);
+	} else {
+		printk(KERN_NOTICE "Using %s partition definition\n",
+			part_type);
+		ret = add_mtd_partitions(mtd, parts, nb_parts);
+	}
+
+	if (ret)
+		printk(KERN_ERR "mtd partition registration failed: %d\n",
+			ret);
 
 	/*
 	 * If we got an error, free all resources.

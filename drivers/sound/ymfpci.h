@@ -227,7 +227,6 @@ struct ymf_voice {
 	char use, pcm, synth, midi;	// bool
 	ymfpci_playback_bank_t *bank;
 	struct ymf_pcm *ypcm;
-	dma_addr_t bank_ba;
 };
 
 struct ymf_capture {
@@ -240,17 +239,19 @@ struct ymf_capture {
 struct ymf_unit {
 	u8 rev;				/* PCI revision */
 	void *reg_area_virt;
-	void *dma_area_va;
-	dma_addr_t dma_area_ba;
-	unsigned int dma_area_size;
+	void *work_ptr;
 
-	dma_addr_t bank_base_capture;
-	dma_addr_t bank_base_effect;
-	dma_addr_t work_base;
+	unsigned int bank_size_playback;
+	unsigned int bank_size_capture;
+	unsigned int bank_size_effect;
 	unsigned int work_size;
 
+	void *bank_base_playback;
+	void *bank_base_capture;
+	void *bank_base_effect;
+	void *work_base;
+
 	u32 *ctrl_playback;
-	dma_addr_t ctrl_playback_ba;
 	ymfpci_playback_bank_t *bank_playback[YDSXG_PLAYBACK_VOICES][2];
 	ymfpci_capture_bank_t *bank_capture[YDSXG_CAPTURE_VOICES][2];
 	ymfpci_effect_bank_t *bank_effect[YDSXG_EFFECT_VOICES][2];
@@ -285,11 +286,10 @@ struct ymf_unit {
 };
 
 struct ymf_dmabuf {
-	dma_addr_t dma_addr;
-	void *rawbuf;
-	unsigned buforder;
 
 	/* OSS buffer management stuff */
+	void *rawbuf;
+	unsigned buforder;
 	unsigned numfrag;
 	unsigned fragshift;
 

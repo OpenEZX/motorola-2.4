@@ -19,8 +19,11 @@
  * GNU General Public License for more details.
  *
  */
+
 #ifndef WD33C93_H
 #define WD33C93_H
+
+#include <linux/config.h>
 
 #define PROC_INTERFACE     /* add code for /proc/scsi/wd33c93/xxx interface */
 #ifdef  PROC_INTERFACE

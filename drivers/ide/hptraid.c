@@ -123,8 +123,13 @@ static int hptraid_ioctl(struct inode *inode, struct file *file, unsigned int cm
 			return 0;
 		}
 			
-		default:
+		case BLKROSET:
+		case BLKROGET:
+		case BLKSSZGET:
 			return blk_ioctl(inode->i_rdev, cmd, arg);
+
+		default:
+			return -EINVAL;
 	};
 
 	return 0;
@@ -361,11 +366,7 @@ static __init int hptraid_init_one(int device)
 	probedisk(IDE2_MAJOR, 64, device);
 	probedisk(IDE3_MAJOR,  0, device);
 	probedisk(IDE3_MAJOR, 64, device);
-	probedisk(IDE4_MAJOR,  0, device);
-	probedisk(IDE4_MAJOR, 64, device);
-	probedisk(IDE5_MAJOR,  0, device);
-	probedisk(IDE5_MAJOR, 64, device);
-
+                                                                	
 	fill_cutoff(device);
 	
 	/* Initialize the gendisk structure */

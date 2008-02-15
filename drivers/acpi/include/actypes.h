@@ -48,11 +48,8 @@
  * UCHAR        Character. 1 byte unsigned value.
  */
 
-#ifndef BITS_PER_LONG
-#error "define BITS_PER_LONG"
-#endif
 
-#if BITS_PER_LONG == 64
+#ifdef _IA64
 /*
  * 64-bit type definitions
  */
@@ -65,7 +62,7 @@ typedef unsigned int                    UINT32;
 typedef COMPILER_DEPENDENT_UINT64       UINT64;
 
 typedef UINT64                          NATIVE_UINT;
-typedef long long                          NATIVE_INT;
+typedef INT64                           NATIVE_INT;
 
 typedef NATIVE_UINT                     ACPI_TBLPTR;
 typedef UINT64                          ACPI_IO_ADDRESS;
@@ -75,7 +72,7 @@ typedef UINT64                          ACPI_PHYSICAL_ADDRESS;
 #define ACPI_USE_NATIVE_DIVIDE                          /* Native 64-bit integer support */
 
 
-#elif BITS_PER_LONG == 16
+#elif _IA16
 /*
  * 16-bit type definitions
  */
@@ -112,7 +109,7 @@ typedef char                            *ACPI_PHYSICAL_ADDRESS;
 #define ACPI_NO_INTEGER64_SUPPORT
 
 
-#elif BITS_PER_LONG == 32
+#else
 /*
  * 32-bit type definitions (default)
  */
@@ -133,9 +130,6 @@ typedef UINT64                          ACPI_PHYSICAL_ADDRESS;
 
 #define ALIGNED_ADDRESS_BOUNDARY        0x00000004
 #define _HW_ALIGNMENT_SUPPORT
-
-#else
-#error "unknown BITS_PER_LONG"
 #endif
 
 

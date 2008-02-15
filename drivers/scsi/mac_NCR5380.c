@@ -662,7 +662,10 @@ __inline__ void NCR5380_print_phase(struct Scsi_Host *instance) { };
 
 static volatile int main_running = 0;
 static struct tq_struct NCR5380_tqueue = {
-    routine:	(void (*)(void*))NCR5380_main	/* must have (void *) arg... */
+    NULL,		/* next */
+    0,			/* sync */
+    (void (*)(void*))NCR5380_main,  /* routine, must have (void *) arg... */
+    NULL		/* data */
 };
 
 static __inline__ void queue_main(void)

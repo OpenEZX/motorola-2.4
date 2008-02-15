@@ -8,7 +8,7 @@
  *  License. See the file COPYING in the main directory of this archive for
  *  more details.
  *
- *  $Header: /cvsroot/linux/drivers/video/pm3fb.h,v 1.1 2002/02/25 19:11:06 marcelo Exp $
+ *  $Header: /home/pm3fb/pm3fb/pm3fb.h,v 1.30 2001/08/22 09:13:46 dolbeau Exp $
  *
  */
 
@@ -92,7 +92,6 @@
 #define PM3MemBypassWriteMask					0x1008
 #define PM3MemScratch						0x1010
 #define PM3LocalMemCaps						0x1018
-        #define PM3LocalMemCaps_NoWriteMask                     (1 << 28)
 #define PM3LocalMemTimings					0x1020
 #define PM3LocalMemControl					0x1028
 #define PM3LocalMemRefresh					0x1030
@@ -1121,10 +1120,6 @@
 
 /* kernel -specific definitions */
 /* what kernel is this ? */
-#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0)))
-#define KERNEL_2_5
-#endif
-
 #if ((LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,0)) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)))
 #define KERNEL_2_4
 #endif
@@ -1138,18 +1133,13 @@
 #endif
 #endif
 
-#if (!defined(KERNEL_2_2)) && (!defined(KERNEL_2_4)) && (!defined(KERNEL_2_5))
-#error "Only kernel 2.2.x, kernel 2.4.y and kernel 2.5.z might work"
+#if (!defined(KERNEL_2_2)) && (!defined(KERNEL_2_4))
+#error "Only kernel 2.2.x and kernel 2.4.y might work"
 #endif
 
 /* not sure if/why it's needed. doesn't work without on my PowerMac... */
 #ifdef __BIG_ENDIAN
 #define MUST_BYTESWAP
-#endif
-
-/* for compatibility between 2.5, 2.4 and 2.2 */
-#ifndef B_FREE
-#define B_FREE   -1
 #endif
 
 /* permedia3 -specific definitions */
@@ -1219,10 +1209,10 @@
 #define PM3_READ_REG(r) readl((l_fb_info->vIOBase + r))
 #endif /* MUST_BYTESWAP */
 #endif /* KERNEL_2_2 */
-#if (defined KERNEL_2_4) || (defined KERNEL_2_5) /* native-endian access */
+#ifdef KERNEL_2_4 /* native-endian access */
 #define PM3_WRITE_REG(r, v) fb_writel(v, (l_fb_info->vIOBase + r))
 #define PM3_READ_REG(r) fb_readl((l_fb_info->vIOBase + r))
-#endif /* KERNEL_2_4 or KERNEL_2_5 */
+#endif /* KERNEL_2_4 */
 
 
 #define depth2bpp(d) ((d + 7L) & ~7L)
@@ -1283,4 +1273,4 @@ do { \
     } \
 } while (0)
 
-#endif /* PM3FB_H */
+#endif PM3FB_H

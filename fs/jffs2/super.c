@@ -1,7 +1,7 @@
 /*
  * JFFS2 -- Journalling Flash File System, Version 2.
  *
- * Copyright (C) 2001 Red Hat, Inc.
+ * Copyright (C) 2001, 2002 Red Hat, Inc.
  *
  * Created by David Woodhouse <dwmw2@cambridge.redhat.com>
  *
@@ -31,7 +31,7 @@
  * provisions above, a recipient may use your version of this file
  * under either the RHEPL or the GPL.
  *
- * $Id: super.c,v 1.48.2.3 2002/10/11 09:04:44 dwmw2 Exp $
+ * $Id: super.c,v 1.50 2002/01/09 13:25:58 dwmw2 Exp $
  *
  */
 
@@ -195,7 +195,6 @@ static struct super_block *jffs2_read_super(struct super_block *sb, void *data, 
 {
 	struct jffs2_sb_info *c;
 	struct inode *root_i;
-	int i;
 
 	D1(printk(KERN_DEBUG "jffs2: read_super for device %s\n", kdevname(sb->s_dev)));
 
@@ -214,41 +213,10 @@ static struct super_block *jffs2_read_super(struct super_block *sb, void *data, 
 		return NULL;
 	}
 	c->sector_size = c->mtd->erasesize;
-	c->free_size = c->flash_size = c->mtd->size;
-	c->nr_blocks = c->mtd->size / c->mtd->erasesize;
-	c->blocks = kmalloc(sizeof(struct jffs2_eraseblock) * c->nr_blocks, GFP_KERNEL);
-	if (!c->blocks)
+	c->flash_size = c->mtd->size;
+
+	if (jffs2_do_mount_fs(c))
 		goto out_mtd;
-	for (i=0; i<c->nr_blocks; i++) {
-		INIT_LIST_HEAD(&c->blocks[i].list);
-		c->blocks[i].offset = i * c->sector_size;
-		c->blocks[i].free_size = c->sector_size;
-		c->blocks[i].dirty_size = 0;
-		c->blocks[i].used_size = 0;
-		c->blocks[i].first_node = NULL;
-		c->blocks[i].last_node = NULL;
-	}
-		
-	spin_lock_init(&c->nodelist_lock);
-	init_MUTEX(&c->alloc_sem);
-	init_waitqueue_head(&c->erase_wait);
-	spin_lock_init(&c->erase_completion_lock);
-	spin_lock_init(&c->inocache_lock);
-
-	INIT_LIST_HEAD(&c->clean_list);
-	INIT_LIST_HEAD(&c->dirty_list);
-	INIT_LIST_HEAD(&c->erasing_list);
-	INIT_LIST_HEAD(&c->erase_pending_list);
-	INIT_LIST_HEAD(&c->erase_complete_list);
-	INIT_LIST_HEAD(&c->free_list);
-	INIT_LIST_HEAD(&c->bad_list);
-	INIT_LIST_HEAD(&c->bad_used_list);
-	c->highest_ino = 1;
-
-	if (jffs2_build_filesystem(c)) {
-		D1(printk(KERN_DEBUG "build_fs failed\n"));
-		goto out_nodes;
-	}
 
 	sb->s_op = &jffs2_super_operations;
 
@@ -344,7 +312,7 @@ static int __init init_jffs2_fs(void)
 {
 	int ret;
 
-	printk(KERN_NOTICE "JFFS2 version 2.1. (C) 2001 Red Hat, Inc., designed by Axis Communications AB.\n");
+	printk(KERN_NOTICE "JFFS2 version 2.1. (C) 2001, 2002 Red Hat, Inc., designed by Axis Communications AB.\n");
 
 #ifdef JFFS2_OUT_OF_KERNEL
 	/* sanity checks. Could we do these at compile time? */
@@ -361,35 +329,22 @@ static int __init init_jffs2_fs(void)
 	}
 #endif
 
-	ret = jffs2_zlib_init();
-	if (ret) {
-		printk(KERN_ERR "JFFS2 error: Failed to initialise zlib workspaces\n");
-		goto out;
-	}
 	ret = jffs2_create_slab_caches();
 	if (ret) {
 		printk(KERN_ERR "JFFS2 error: Failed to initialise slab caches\n");
-		goto out_zlib;
+		return ret;
 	}
 	ret = register_filesystem(&jffs2_fs_type);
 	if (ret) {
 		printk(KERN_ERR "JFFS2 error: Failed to register filesystem\n");
-		goto out_slab;
+		jffs2_destroy_slab_caches();
 	}
-	return 0;
-
- out_slab:
-	jffs2_destroy_slab_caches();
- out_zlib:
-	jffs2_zlib_exit();
- out:
 	return ret;
 }
 
 static void __exit exit_jffs2_fs(void)
 {
 	jffs2_destroy_slab_caches();
-	jffs2_zlib_exit();
 	unregister_filesystem(&jffs2_fs_type);
 }
 

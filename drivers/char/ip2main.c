@@ -1001,10 +1001,12 @@ ip2_init_board( int boardnum )
 	printk(KERN_INFO "IP2: Board %d: addr=0x%x irq=%d\n", boardnum + 1,
 	       ip2config.addr[boardnum], ip2config.irq[boardnum] );
 
-	if (!request_region( ip2config.addr[boardnum], 8, pcName )) {
-		printk(KERN_ERR "IP2: bad addr=0x%x\n", ip2config.addr[boardnum]);
+	if (0 != ( rc = check_region( ip2config.addr[boardnum], 8))) {
+		printk(KERN_ERR "IP2: bad addr=0x%x rc = %d\n",
+				ip2config.addr[boardnum], rc );
 		goto err_initialize;
 	}
+	request_region( ip2config.addr[boardnum], 8, pcName );
 
 	if ( iiDownloadAll ( pB, (loadHdrStrPtr)Fip_firmware, 1, Fip_firmware_size )
 	    != II_DOWN_GOOD ) {

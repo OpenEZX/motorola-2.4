@@ -22,8 +22,15 @@
  *  59 Temple Place - Suite 330, Boston MA 02111-1307, USA.
  *
  * ########################################################################
+ *
+ * 
  */
-#include <linux/config.h>
+
+#ifndef __mips__
+#error This driver only works with MIPS architectures!
+#endif
+
+
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/sched.h>
@@ -170,11 +177,6 @@ int bcm_5201_init(struct net_device *dev, int phy_addr)
 	data = mdio_read(dev, phy_addr, MII_CONTROL);
 	data |= MII_CNTL_RST_AUTO | MII_CNTL_AUTO;
 	mdio_write(dev, phy_addr, MII_CONTROL, data);
-
-	/* Enable TX LED instead of FDX */
-	data = mdio_read(dev, phy_addr, MII_INT);
-	data &= ~MII_FDX_LED;
-	mdio_write(dev, phy_addr, MII_INT, data);
 
 	if (au1000_debug > 4) dump_mii(dev, phy_addr);
 	return 0;
@@ -369,7 +371,6 @@ static struct mii_chip_info {
 	{"Broadcom BCM5201 10/100 BaseT PHY",  0x0040, 0x6212, &bcm_5201_ops },
 	{"AMD 79C901 HomePNA PHY",  0x0000, 0x35c8, &am79c901_ops },
 	{"LSI 80227 10/100 BaseT PHY", 0x0016, 0xf840, &lsi_80227_ops },
-	{"Broadcom BCM5221 10/100 BaseT PHY",  0x0040, 0x61e4, &bcm_5201_ops },
 	{0,},
 };
 
@@ -649,10 +650,10 @@ static int __init au1000_init_module(void)
 		}
 		// check for valid entries, au1100 only has one entry
 		if (base_addr && irq) {
-		if (au1000_probe1(NULL, base_addr, irq, i) != 0) {
-			return -ENODEV;
+			if (au1000_probe1(NULL, base_addr, irq, i) != 0) {
+				return -ENODEV;
+			}
 		}
-	}
 	}
 	return 0;
 }
@@ -828,9 +829,9 @@ free_region:
 				MAX_BUF_SIZE * (NUM_TX_BUFFS+NUM_RX_BUFFS));
 	if (dev->priv != NULL)
 		kfree(dev->priv);
+	kfree(dev);
 	printk(KERN_ERR "%s: au1000_probe1 failed.  Returns %d\n",
 	       dev->name, retval);
-	kfree(dev);
 	return retval;
 }
 
@@ -1250,6 +1251,8 @@ static void au1000_tx_timeout(struct net_device *dev)
 	printk(KERN_ERR "%s: au1000_tx_timeout: dev=%p\n", dev->name, dev);
 	reset_mac(dev);
 	au1000_init(dev);
+	dev->trans_start = jiffies;
+	netif_wake_queue(dev);
 }
 
 
@@ -1308,24 +1311,16 @@ static int au1000_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 	u16 *data = (u16 *)&rq->ifr_data;
 
 	/* fixme */
-	switch (cmd) { 
-	case SIOCGMIIPHY:		/* Get the address of the PHY in use. */
-	case SIOCDEVPRIVATE:		/* binary compat, remove in 2.5 */
+	switch(cmd) { 
+		case SIOCDEVPRIVATE:	/* Get the address of the PHY in use. */
 		data[0] = PHY_ADDRESS;
-
-	case SIOCGMIIREG:		/* Read the specified MII register. */
-	case SIOCDEVPRIVATE+1:		/* binary compat, remove in 2.5 */
+		case SIOCDEVPRIVATE+1:	/* Read the specified MII register. */
 		//data[3] = mdio_read(ioaddr, data[0], data[1]); 
 		return 0;
-
-	case SIOCSMIIREG:		/* Write the specified MII register */
-	case SIOCDEVPRIVATE+2:		/* binary compat, remove in 2.5 */
-		if (!capable(CAP_NET_ADMIN))
-			return -EPERM;
+		case SIOCDEVPRIVATE+2:	/* Write the specified MII register */
 		//mdio_write(ioaddr, data[0], data[1], data[2]);
 		return 0;
-
-	default:
+		default:
 		return -EOPNOTSUPP;
 	}
 }
@@ -1389,7 +1384,6 @@ static int au1000_set_config(struct net_device *dev, struct ifmap *map)
 			/* set Speed to 100Mbps, Half Duplex */
 			/* disable auto negotiation and enable 100MBit Mode */
 			control = mdio_read(dev, aup->phy_addr, MII_CONTROL);
-			printk("read control %x\n", control);
 			control &= ~(MII_CNTL_AUTO | MII_CNTL_FDX);
 			control |= MII_CNTL_F100;
 			mdio_write(dev, aup->phy_addr, MII_CONTROL, control);

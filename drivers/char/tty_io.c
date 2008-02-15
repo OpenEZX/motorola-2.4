@@ -90,6 +90,10 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/smp_lock.h>
+#if defined(CONFIG_SH_KGDB_CONSOLE) || \
+    defined(__arm__) && defined(CONFIG_KGDB_CONSOLE)
+#include <asm/kgdb.h>
+#endif
 
 #include <asm/uaccess.h>
 #include <asm/system.h>
@@ -102,11 +106,43 @@
 
 #include <linux/kmod.h>
 
+/*-----------------------------------------
+ * added by jordan just for dereference BTUART
+ * -------------------------------------------*/
+#include <linux/serial.h>
+#include <linux/serialP.h>
+#include <linux/serial_reg.h>
+#include <asm/serial.h>
+#include <asm/system.h>
+#include <asm/io.h>
+#include <asm/irq.h>
+#include <asm/bitops.h>
+#include <asm/dma.h>
+
+/*--------------------------------------------
+ *end by jordan
+ ---------------------------------------------*/
+	
 #ifdef CONFIG_VT
 extern void con_init_devfs (void);
 #endif
 
-extern void disable_early_printk(void);
+/*----------------------------------------------
+ * added by jordan for debug BTUART flow contror
+ * 03/09/12
+ *----------------------------------------------*/
+#ifndef BTUART_FLOW_CONTROL_DEBUG
+#define BTUART_FLOW_CONTROL_DEBUG
+#endif
+#if 0
+#ifdef BTUART_FLOW_CONTROL_DEBUG
+#undef BTUART_FLOW_CONTROL_DEBUG
+#endif
+#endif
+
+/*-----------------------------------------------
+ * end of jordan
+ *----------------------------------------------- */
 
 #define CONSOLE_DEV MKDEV(TTY_MAJOR,0)
 #define TTY_DEV MKDEV(TTYAUX_MAJOR,0)
@@ -156,14 +192,19 @@ extern void con3215_init(void);
 extern void tty3215_init(void);
 extern void tub3270_con_init(void);
 extern void tub3270_init(void);
-extern void rs285_console_init(void);
-extern void sa1100_rs_console_init(void);
+extern void uart_console_init(void);
 extern void sgi_serial_console_init(void);
 extern void sci_console_init(void);
 extern void tx3912_console_init(void);
 extern void tx3912_rs_init(void);
+extern void tx4925_sio_console_init(void);
+extern void tx4925_sio_init(void);
+extern void tx4927_sio_console_init(void);
+extern void tx4927_sio_init(void);
 extern void txx927_console_init(void);
 extern void sb1250_serial_console_init(void);
+extern void gt64260_mpsc_console_init(void);
+extern void sicc_console_init(void);
 
 #ifndef MIN
 #define MIN(a,b)	((a) < (b) ? (a) : (b))
@@ -605,6 +646,12 @@ void disassociate_ctty(int on_exit)
 	read_unlock(&tasklist_lock);
 }
 
+void wait_for_keypress(void)
+{
+        struct console *c = console_drivers;
+        if (c) c->wait_key(c);
+}
+
 void stop_tty(struct tty_struct *tty)
 {
 	if (tty->stopped)
@@ -725,6 +772,7 @@ static inline ssize_t do_tty_write(
 			ret = -ERESTARTSYS;
 			if (signal_pending(current))
 				break;
+			debug_lock_break(551);
 			if (current->need_resched)
 				schedule();
 		}
@@ -1661,21 +1709,6 @@ static int send_break(struct tty_struct *tty, int duration)
 	return 0;
 }
 
-static int tty_generic_brk(struct tty_struct *tty, struct file *file, unsigned int cmd, unsigned long arg)
-{
-	if (cmd == TCSBRK && arg) 
-	{
-		/* tcdrain case */
-		int retval = tty_check_change(tty);
-		if (retval)
-			return retval;
-		tty_wait_until_sent(tty, 0);
-		if (signal_pending(current))
-			return -EINTR;
-	}
-	return 0;
-}
-
 /*
  * Split this up, as gcc can choke on it otherwise..
  */
@@ -1709,12 +1742,11 @@ int tty_ioctl(struct inode * inode, struct file * file,
 		/* the driver doesn't support them. */
 		case TCSBRK:
 		case TCSBRKP:
-			retval = -ENOIOCTLCMD;
-			if (tty->driver.ioctl)
-				retval = tty->driver.ioctl(tty, file, cmd, arg);
-			/* Not driver handled */
+			if (!tty->driver.ioctl)
+				return 0;
+			retval = tty->driver.ioctl(tty, file, cmd, arg);
 			if (retval == -ENOIOCTLCMD)
-				retval = tty_generic_brk(tty, file, cmd, arg);
+				retval = 0;
 			return retval;
 		}
 	}
@@ -1914,6 +1946,27 @@ static void flush_to_ldisc(void *private_)
 		queue_task(&tty->flip.tqueue, &tq_timer);
 		return;
 	}
+
+	/*--------------------------------------------------------------
+	 * added by jordan for btuart flip flow control
+	 * the forth condition is to ensure that no data lost when copying 
+	 * flip buffer to ldisc buffer and ensure n_tty throttle not function
+	 *--------------------------------------------------------------*/
+	if(tty &&
+	   tty->driver.btuart &&
+//	   ((N_TTY_BUF_SIZE - tty->read_cnt - 2)< (tty->flip.count + 128)))
+	   ((N_TTY_BUF_SIZE - tty->read_cnt - 2)< (512 + 128)))
+	{
+	#ifdef BTUART_FLOW_CONTROL_DEBUG
+	//	printk("w20535[s3]: ldisc buffer is not big enough.\n");
+	#endif
+		queue_task(&tty->flip.tqueue, &tq_timer);
+		return;
+	}
+	/*------------------------------------------------------------------
+	 *end by jordan    :03/09/12
+	 *------------------------------------------------------------------*/	
+
 	if (tty->flip.buf_num) {
 		cp = tty->flip.char_buf + TTY_FLIPBUF_SIZE;
 		fp = tty->flip.flag_buf + TTY_FLIPBUF_SIZE;
@@ -2194,23 +2247,34 @@ void __init console_init(void)
 	memcpy(tty_std_termios.c_cc, INIT_C_CC, NCCS);
 	tty_std_termios.c_iflag = ICRNL | IXON;
 	tty_std_termios.c_oflag = OPOST | ONLCR;
+	tty_std_termios.c_cflag = B38400 | CS8 | CREAD | HUPCL | CRTSCTS;
+/*
 	tty_std_termios.c_cflag = B38400 | CS8 | CREAD | HUPCL;
+*/
+	tty_std_termios.c_lflag = ISIG | ICANON | ECHOE | ECHOK |
+		ECHOCTL | ECHOKE | IEXTEN;
+/*
 	tty_std_termios.c_lflag = ISIG | ICANON | ECHO | ECHOE | ECHOK |
 		ECHOCTL | ECHOKE | IEXTEN;
-
+*/
 	/*
 	 * set up the console device so that later boot sequences can 
 	 * inform about problems etc..
 	 */
-#ifdef CONFIG_EARLY_PRINTK
-	disable_early_printk(); 
-#endif
 #ifdef CONFIG_VT
 	con_init();
+#endif
+#if defined(CONFIG_SH_KGDB_CONSOLE) || \
+    defined(__arm__) && defined(CONFIG_KGDB_CONSOLE)
+	kgdb_console_init();
 #endif
 #ifdef CONFIG_AU1000_SERIAL_CONSOLE
 	au1000_serial_console_init();
 #endif
+#ifdef CONFIG_SERIAL_SICC_CONSOLE
+	sicc_console_init();
+#endif
+
 #ifdef CONFIG_SERIAL_CONSOLE
 #if (defined(CONFIG_8xx) || defined(CONFIG_8260))
 	console_8xx_init();
@@ -2223,6 +2287,8 @@ void __init console_init(void)
  	mac_scc_console_init();
 #elif defined(CONFIG_PARISC)
 	pdc_console_init();
+#elif defined(CONFIG_GT64260_CONSOLE)
+	gt64260_mpsc_console_init();
 #elif defined(CONFIG_SERIAL)
 	serial_console_init();
 #endif /* CONFIG_8xx */
@@ -2251,17 +2317,11 @@ void __init console_init(void)
 #ifdef CONFIG_STDIO_CONSOLE
 	stdio_console_init();
 #endif
-#ifdef CONFIG_SERIAL_21285_CONSOLE
-	rs285_console_init();
-#endif
-#ifdef CONFIG_SERIAL_SA1100_CONSOLE
-	sa1100_rs_console_init();
+#ifdef CONFIG_SERIAL_CORE_CONSOLE
+	uart_console_init();
 #endif
 #ifdef CONFIG_ARC_CONSOLE
 	arc_console_init();
-#endif
-#ifdef CONFIG_SERIAL_AMBA_CONSOLE
-	ambauart_console_init();
 #endif
 #ifdef CONFIG_SERIAL_TX3912_CONSOLE
 	tx3912_console_init();
@@ -2272,6 +2332,13 @@ void __init console_init(void)
 #ifdef CONFIG_SIBYTE_SB1250_DUART_CONSOLE
 	sb1250_serial_console_init();
 #endif
+#ifdef CONFIG_TX4925_SIO_CONSOLE
+	tx4925_sio_console_init();
+#endif
+#ifdef CONFIG_TX4927_SIO_CONSOLE
+	tx4927_sio_console_init();
+#endif
+
 }
 
 static struct tty_driver dev_tty_driver, dev_syscons_driver;
@@ -2362,6 +2429,12 @@ void __init tty_init(void)
 #ifdef CONFIG_SERIAL_TX3912
 	tx3912_rs_init();
 #endif
+#ifdef CONFIG_TX4925_SIO
+	tx4925_sio_init();
+#endif
+#ifdef CONFIG_TX4927_SIO
+	tx4927_sio_init();
+#endif
 #ifdef CONFIG_ROCKETPORT
 	rp_init();
 #endif
@@ -2412,3 +2485,5 @@ void __init tty_init(void)
 	a2232board_init();
 #endif
 }
+
+

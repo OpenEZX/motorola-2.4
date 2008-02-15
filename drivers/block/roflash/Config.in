@@ -1,0 +1,8 @@
+#
+# Emualting Flash Chip driver configuration
+#
+mainmenu_option next_comment
+comment 'ROFLASH device'
+# tristate 'Debug for ROFLASH device?'  ROFLASH_DEBUG_ERR
+tristate 'ROFLASH Device?' CONFIG_ROFLASH
+endmenu

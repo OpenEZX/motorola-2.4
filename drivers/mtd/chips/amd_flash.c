@@ -3,7 +3,7 @@
  *
  * Author: Jonas Holmberg <jonas.holmberg@axis.com>
  *
- * $Id: amd_flash.c,v 1.17 2002/03/05 17:00:37 jonashg Exp $
+ * $Id: amd_flash.c,v 1.1 2001/11/30 20:00:25 jsimmons Exp $
  *
  * Copyright (c) 2001 Axis Communications AB
  *
@@ -52,13 +52,13 @@
 
 /* Manufacturers */
 #define MANUFACTURER_AMD	0x0001
-#define MANUFACTURER_ATMEL	0x001F
 #define MANUFACTURER_FUJITSU	0x0004
 #define MANUFACTURER_ST		0x0020
 #define MANUFACTURER_SST	0x00BF
 #define MANUFACTURER_TOSHIBA	0x0098
 
 /* AMD */
+#define AM29F040B	0x00a4
 #define AM29F800BB	0x2258
 #define AM29F800BT	0x22D6
 #define AM29LV800BB	0x225B
@@ -68,9 +68,6 @@
 #define AM29BDS323D     0x22D1
 #define AM29BDS643D	0x227E
 
-/* Atmel */
-#define AT49xV16x	0x00C0
-#define AT49xV16xT	0x00C2
 
 /* Fujitsu */
 #define MBM29LV160TE	0x22C4
@@ -429,6 +426,18 @@ static struct mtd_info *amd_flash_probe(struct map_info *map)
 	const struct amd_flash_info table[] = {
 	{
 		mfr_id: MANUFACTURER_AMD,
+		dev_id: AM29F040B,
+		name: "AMD AM29F040B",
+		size: 0x00080000,
+		numeraseregions: 4,
+		regions: {
+			{ offset: 0x000000, erasesize: 0x04000, numblocks:  1 },
+			{ offset: 0x004000, erasesize: 0x02000, numblocks:  2 },
+			{ offset: 0x008000, erasesize: 0x08000, numblocks:  1 },
+			{ offset: 0x010000, erasesize: 0x10000, numblocks:  7 }
+		}
+	}, {
+		mfr_id: MANUFACTURER_AMD,
 		dev_id: AM29LV160DT,
 		name: "AMD AM29LV160DT",
 		size: 0x00200000,
@@ -616,26 +625,6 @@ static struct mtd_info *amd_flash_probe(struct map_info *map)
 			{ offset: 0x000000, erasesize: 0x10000, numblocks: 96 },
 			{ offset: 0x600000, erasesize: 0x10000, numblocks: 31 },
 			{ offset: 0x7f0000, erasesize: 0x02000, numblocks:  8 },
-		}
-	}, {
-		mfr_id: MANUFACTURER_ATMEL,
-		dev_id: AT49xV16x,
-		name: "Atmel AT49xV16x",
-		size: 0x00200000,
-		numeraseregions: 2,
-		regions: {
-			{ offset: 0x000000, erasesize: 0x02000, numblocks:  8 },
-			{ offset: 0x010000, erasesize: 0x10000, numblocks: 31 }
-		}
-	}, {
-		mfr_id: MANUFACTURER_ATMEL,
-		dev_id: AT49xV16xT,
-		name: "Atmel AT49xV16xT",
-		size: 0x00200000,
-		numeraseregions: 2,
-		regions: {
-			{ offset: 0x000000, erasesize: 0x10000, numblocks: 31 },
-			{ offset: 0x1F0000, erasesize: 0x02000, numblocks:  8 }
 		}
 	} 
 	};

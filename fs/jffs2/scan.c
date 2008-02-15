@@ -1,7 +1,7 @@
 /*
  * JFFS2 -- Journalling Flash File System, Version 2.
  *
- * Copyright (C) 2001 Red Hat, Inc.
+ * Copyright (C) 2001, 2002 Red Hat, Inc.
  *
  * Created by David Woodhouse <dwmw2@cambridge.redhat.com>
  *
@@ -31,12 +31,11 @@
  * provisions above, a recipient may use your version of this file
  * under either the RHEPL or the GPL.
  *
- * $Id: scan.c,v 1.51.2.3 2002/07/25 20:49:06 dwmw2 Exp $
+ * $Id: scan.c,v 1.57 2002/01/09 13:25:58 dwmw2 Exp $
  *
  */
 #include <linux/kernel.h>
 #include <linux/slab.h>
-#include <linux/jffs2.h>
 #include <linux/mtd/mtd.h>
 #include <linux/pagemap.h>
 #include "nodelist.h"
@@ -62,24 +61,21 @@
 	} \
 } while(0)
 
-static uint32_t pseudo_random;
-static void jffs2_rotate_lists(struct jffs2_sb_info *c);
-
 static int jffs2_scan_eraseblock (struct jffs2_sb_info *c, struct jffs2_eraseblock *jeb);
 
 /* These helper functions _must_ increase ofs and also do the dirty/used space accounting. 
  * Returning an error will abort the mount - bad checksums etc. should just mark the space
  * as dirty.
  */
-static int jffs2_scan_empty(struct jffs2_sb_info *c, struct jffs2_eraseblock *jeb, __u32 *ofs, int *noise);
-static int jffs2_scan_inode_node(struct jffs2_sb_info *c, struct jffs2_eraseblock *jeb, __u32 *ofs);
-static int jffs2_scan_dirent_node(struct jffs2_sb_info *c, struct jffs2_eraseblock *jeb, __u32 *ofs);
+static int jffs2_scan_empty(struct jffs2_sb_info *c, struct jffs2_eraseblock *jeb, uint32_t *ofs, int *noise);
+static int jffs2_scan_inode_node(struct jffs2_sb_info *c, struct jffs2_eraseblock *jeb, uint32_t *ofs);
+static int jffs2_scan_dirent_node(struct jffs2_sb_info *c, struct jffs2_eraseblock *jeb, uint32_t *ofs);
 
 
 int jffs2_scan_medium(struct jffs2_sb_info *c)
 {
 	int i, ret;
-	__u32 empty_blocks = 0;
+	uint32_t empty_blocks = 0;
 
 	if (!c->blocks) {
 		printk(KERN_WARNING "EEEK! c->blocks is NULL!\n");
@@ -145,9 +141,6 @@ int jffs2_scan_medium(struct jffs2_sb_info *c)
 			c->nr_erasing_blocks++;
 		}
 	}
-	/* Rotate the lists by some number to ensure wear levelling */
-	jffs2_rotate_lists(c);
-
 	if (c->nr_erasing_blocks) {
 		if (!c->used_size && empty_blocks != c->nr_blocks) {
 			printk(KERN_NOTICE "Cowardly refusing to erase blocks on filesystem with no valid JFFS2 nodes\n");
@@ -160,8 +153,8 @@ int jffs2_scan_medium(struct jffs2_sb_info *c)
 
 static int jffs2_scan_eraseblock (struct jffs2_sb_info *c, struct jffs2_eraseblock *jeb) {
 	struct jffs2_unknown_node node;
-	__u32 ofs, prevofs;
-	__u32 hdr_crc, nodetype;
+	uint32_t ofs, prevofs;
+	uint32_t hdr_crc, nodetype;
 	int err;
 	int noise = 0;
 
@@ -180,7 +173,7 @@ static int jffs2_scan_eraseblock (struct jffs2_sb_info *c, struct jffs2_eraseblo
 	noise = 10;
 
 	while(ofs < jeb->offset + c->sector_size) {
-		ssize_t retlen;
+		size_t retlen;
 		ACCT_PARANOIA_CHECK(jeb);
 		
 		if (ofs & 3) {
@@ -202,7 +195,7 @@ static int jffs2_scan_eraseblock (struct jffs2_sb_info *c, struct jffs2_eraseblo
 			break;
 		}
 
-		err = c->mtd->read(c->mtd, ofs, sizeof(node), &retlen, (char *)&node);
+		err = jffs2_flash_read(c, ofs, sizeof(node), &retlen, (char *)&node);
 		
 		if (err) {
 			D1(printk(KERN_WARNING "mtd->read(0x%x bytes from 0x%x) returned %d\n", sizeof(node), ofs, err));
@@ -242,8 +235,8 @@ static int jffs2_scan_eraseblock (struct jffs2_sb_info *c, struct jffs2_eraseblo
 			continue;
 		}
 		if (node.magic != JFFS2_MAGIC_BITMASK) {
-			/* OK. We're out of possibilities. Whinge and move on */
-			noisy_printk(&noise, "jffs2_scan_eraseblock(): Magic bitmask 0x%04x not found at 0x%08x: 0x%04x instead\n", JFFS2_MAGIC_BITMASK, ofs, node.magic);
+			/* OK. We're out of possibilities. Whinge and move on */ /* Susan comment the noisy printk */
+// Susan			noisy_printk(&noise, "jffs2_scan_eraseblock(): Magic bitmask 0x%04x not found at 0x%08x: 0x%04x instead\n", JFFS2_MAGIC_BITMASK, ofs, node.magic);
 			DIRTY_SPACE(4);
 			ofs += 4;
 			continue;
@@ -256,16 +249,6 @@ static int jffs2_scan_eraseblock (struct jffs2_sb_info *c, struct jffs2_eraseblo
 		if (hdr_crc != node.hdr_crc) {
 			noisy_printk(&noise, "jffs2_scan_eraseblock(): Node at 0x%08x {0x%04x, 0x%04x, 0x%08x) has invalid CRC 0x%08x (calculated 0x%08x)\n",
 				     ofs, node.magic, node.nodetype, node.totlen, node.hdr_crc, hdr_crc);
-			DIRTY_SPACE(4);
-			ofs += 4;
-			continue;
-		}
-
-		if (ofs + node.totlen > jeb->offset + c->sector_size) {
-			/* Eep. Node goes over the end of the erase block. */
-			printk(KERN_WARNING "Node at 0x%08x with length 0x%08x would run over the end of the erase block\n",
-			       ofs, node.totlen);
-			printk(KERN_WARNING "Perhaps the file system was created with the wrong erase size?\n");
 			DIRTY_SPACE(4);
 			ofs += 4;
 			continue;
@@ -314,7 +297,7 @@ static int jffs2_scan_eraseblock (struct jffs2_sb_info *c, struct jffs2_eraseblo
 			case JFFS2_FEATURE_ROCOMPAT:
 				printk(KERN_NOTICE "Read-only compatible feature node (0x%04x) found at offset 0x%08x\n", node.nodetype, ofs);
 			        c->flags |= JFFS2_SB_FLAG_RO;
-				if (!(OFNI_BS_2SFFJ(c)->s_flags & MS_RDONLY))
+				if (!(jffs2_is_readonly(c)))
 					return -EROFS;
 				DIRTY_SPACE(PAD(node.totlen));
 				ofs += PAD(node.totlen);
@@ -344,24 +327,24 @@ static int jffs2_scan_eraseblock (struct jffs2_sb_info *c, struct jffs2_eraseblo
 }
 
 /* We're pointing at the first empty word on the flash. Scan and account for the whole dirty region */
-static int jffs2_scan_empty(struct jffs2_sb_info *c, struct jffs2_eraseblock *jeb, __u32 *startofs, int *noise)
+static int jffs2_scan_empty(struct jffs2_sb_info *c, struct jffs2_eraseblock *jeb, uint32_t *startofs, int *noise)
 {
-	__u32 *buf;
-	__u32 scanlen = (jeb->offset + c->sector_size) - *startofs;
-	__u32 curofs = *startofs;
+	uint32_t *buf;
+	uint32_t scanlen = (jeb->offset + c->sector_size) - *startofs;
+	uint32_t curofs = *startofs;
 	
-	buf = kmalloc(min((__u32)PAGE_SIZE, scanlen), GFP_KERNEL);
+	buf = kmalloc(min((uint32_t)PAGE_SIZE, scanlen), GFP_KERNEL);
 	if (!buf) {
 		printk(KERN_WARNING "Scan buffer allocation failed\n");
 		return -ENOMEM;
 	}
 	while(scanlen) {
-		ssize_t retlen;
+		size_t retlen;
 		int ret, i;
 		
-		ret = c->mtd->read(c->mtd, curofs, min((__u32)PAGE_SIZE, scanlen), &retlen, (char *)buf);
+		ret = jffs2_flash_read(c, curofs, min((uint32_t)PAGE_SIZE, scanlen), &retlen, (char *)buf);
 		if(ret) {
-			D1(printk(KERN_WARNING "jffs2_scan_empty(): Read 0x%x bytes at 0x%08x returned %d\n", min((__u32)PAGE_SIZE, scanlen), curofs, ret));
+			D1(printk(KERN_WARNING "jffs2_scan_empty(): Read 0x%x bytes at 0x%08x returned %d\n", min((uint32_t)PAGE_SIZE, scanlen), curofs, ret));
 			kfree(buf);
 			return ret;
 		}
@@ -391,7 +374,7 @@ static int jffs2_scan_empty(struct jffs2_sb_info *c, struct jffs2_eraseblock *je
 	return 0;
 }
 
-static struct jffs2_inode_cache *jffs2_scan_make_ino_cache(struct jffs2_sb_info *c, __u32 ino)
+static struct jffs2_inode_cache *jffs2_scan_make_ino_cache(struct jffs2_sb_info *c, uint32_t ino)
 {
 	struct jffs2_inode_cache *ic;
 
@@ -420,21 +403,21 @@ static struct jffs2_inode_cache *jffs2_scan_make_ino_cache(struct jffs2_sb_info 
 	return ic;
 }
 
-static int jffs2_scan_inode_node(struct jffs2_sb_info *c, struct jffs2_eraseblock *jeb, __u32 *ofs)
+static int jffs2_scan_inode_node(struct jffs2_sb_info *c, struct jffs2_eraseblock *jeb, uint32_t *ofs)
 {
 	struct jffs2_raw_node_ref *raw;
 	struct jffs2_full_dnode *fn;
 	struct jffs2_tmp_dnode_info *tn, **tn_list;
 	struct jffs2_inode_cache *ic;
 	struct jffs2_raw_inode ri;
-	__u32 crc;
-	__u16 oldnodetype;
+	uint32_t crc;
+	uint16_t oldnodetype;
 	int ret;
-	ssize_t retlen;
+	size_t retlen;
 
 	D1(printk(KERN_DEBUG "jffs2_scan_inode_node(): Node at 0x%08x\n", *ofs));
 
-	ret = c->mtd->read(c->mtd, *ofs, sizeof(ri), &retlen, (char *)&ri);
+	ret = jffs2_flash_read(c, *ofs, sizeof(ri), &retlen, (char *)&ri);
 	if (ret) {
 		printk(KERN_NOTICE "jffs2_scan_inode_node(): Read error at 0x%08x: %d\n", *ofs, ret);
 		return ret;
@@ -460,24 +443,18 @@ static int jffs2_scan_inode_node(struct jffs2_sb_info *c, struct jffs2_erasebloc
 		*ofs += 4;
 		return 0;
 	}
-	/* There was a bug where we wrote hole nodes out with csize/dsize
-	   swapped. Deal with it */
-	if (ri.compr == JFFS2_COMPR_ZERO && !ri.dsize && ri.csize) {
-		ri.dsize = ri.csize;
-		ri.csize = 0;
-	}
 
 	if (ri.csize) {
 		/* Check data CRC too */
 		unsigned char *dbuf;
-		__u32 crc;
+		uint32_t crc;
 
 		dbuf = kmalloc(PAGE_CACHE_SIZE, GFP_KERNEL);
 		if (!dbuf) {
 			printk(KERN_NOTICE "jffs2_scan_inode_node(): allocation of temporary data buffer for CRC check failed\n");
 			return -ENOMEM;
 		}
-		ret = c->mtd->read(c->mtd, *ofs+sizeof(ri), ri.csize, &retlen, dbuf);
+		ret = jffs2_flash_read(c, *ofs+sizeof(ri), ri.csize, &retlen, dbuf);
 		if (ret) {
 			printk(KERN_NOTICE "jffs2_scan_inode_node(): Read error at 0x%08x: %d\n", *ofs+sizeof(ri), ret);
 			kfree(dbuf);
@@ -496,7 +473,7 @@ static int jffs2_scan_inode_node(struct jffs2_sb_info *c, struct jffs2_erasebloc
 			       *ofs, ri.data_crc, crc);
 			DIRTY_SPACE(PAD(ri.totlen));
 			*ofs += PAD(ri.totlen);
-			return 0;
+			return -0;
 		}
 	}
 
@@ -539,8 +516,6 @@ static int jffs2_scan_inode_node(struct jffs2_sb_info *c, struct jffs2_erasebloc
 
 	D1(printk(KERN_DEBUG "Node is ino #%u, version %d. Range 0x%x-0x%x\n", 
 		  ri.ino, ri.version, ri.offset, ri.offset+ri.dsize));
-
-	pseudo_random += ri.version;
 
 	for (tn_list = &ic->scan->tmpnodes; *tn_list; tn_list = &((*tn_list)->next)) {
 		if ((*tn_list)->version < ri.version)
@@ -597,20 +572,20 @@ static int jffs2_scan_inode_node(struct jffs2_sb_info *c, struct jffs2_erasebloc
 	return 0;
 }
 
-static int jffs2_scan_dirent_node(struct jffs2_sb_info *c, struct jffs2_eraseblock *jeb, __u32 *ofs)
+static int jffs2_scan_dirent_node(struct jffs2_sb_info *c, struct jffs2_eraseblock *jeb, uint32_t *ofs)
 {
 	struct jffs2_raw_node_ref *raw;
 	struct jffs2_full_dirent *fd;
 	struct jffs2_inode_cache *ic;
 	struct jffs2_raw_dirent rd;
-	__u16 oldnodetype;
+	uint16_t oldnodetype;
 	int ret;
-	__u32 crc;
-	ssize_t retlen;
+	uint32_t crc;
+	size_t retlen;
 
 	D1(printk(KERN_DEBUG "jffs2_scan_dirent_node(): Node at 0x%08x\n", *ofs));
 
-	ret = c->mtd->read(c->mtd, *ofs, sizeof(rd), &retlen, (char *)&rd);
+	ret = jffs2_flash_read(c, *ofs, sizeof(rd), &retlen, (char *)&rd);
 	if (ret) {
 		printk(KERN_NOTICE "jffs2_scan_dirent_node(): Read error at 0x%08x: %d\n", *ofs, ret);
 		return ret;
@@ -637,13 +612,11 @@ static int jffs2_scan_dirent_node(struct jffs2_sb_info *c, struct jffs2_eraseblo
 		return 0;
 	}
 
-	pseudo_random += rd.version;
-
 	fd = jffs2_alloc_full_dirent(rd.nsize+1);
 	if (!fd) {
 		return -ENOMEM;
 }
-	ret = c->mtd->read(c->mtd, *ofs + sizeof(rd), rd.nsize, &retlen, &fd->name[0]);
+	ret = jffs2_flash_read(c, *ofs + sizeof(rd), rd.nsize, &retlen, &fd->name[0]);
 	if (ret) {
 		jffs2_free_full_dirent(fd);
 		printk(KERN_NOTICE "jffs2_scan_dirent_node(): Read error at 0x%08x: %d\n", 
@@ -711,46 +684,4 @@ static int jffs2_scan_dirent_node(struct jffs2_sb_info *c, struct jffs2_eraseblo
 	} 
 	*ofs += PAD(rd.totlen);
 	return 0;
-}
-
-static int count_list(struct list_head *l)
-{
-	uint32_t count = 0;
-	struct list_head *tmp;
-
-	list_for_each(tmp, l) {
-		count++;
-	}
-	return count;
-}
-
-/* Note: This breaks if list_empty(head). I don't care. You
-   might, if you copy this code and use it elsewhere :) */
-static void rotate_list(struct list_head *head, uint32_t count)
-{
-	struct list_head *n = head->next;
-
-	list_del(head);
-	while(count--)
-		n = n->next;
-	list_add(head, n);
-}
-
-static void jffs2_rotate_lists(struct jffs2_sb_info *c)
-{
-	uint32_t x;
-
-	x = count_list(&c->clean_list);
-	if (x)
-		rotate_list((&c->clean_list), pseudo_random % x);
-
-	x = count_list(&c->dirty_list);
-	if (x)
-		rotate_list((&c->dirty_list), pseudo_random % x);
-
-	if (c->nr_erasing_blocks)
-		rotate_list((&c->erase_pending_list), pseudo_random % c->nr_erasing_blocks);
-
-	if (c->nr_free_blocks) /* Not that it should ever be zero */
-		rotate_list((&c->free_list), pseudo_random % c->nr_free_blocks);
 }

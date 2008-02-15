@@ -44,9 +44,9 @@ static inline int qry_present(struct map_info *map, __u32 base,
 
 	if (cfi_read(map,base+osf*0x10)==cfi_build_cmd('Q',map,cfi) &&
 	    cfi_read(map,base+osf*0x11)==cfi_build_cmd('R',map,cfi) &&
-	    cfi_read(map,base+osf*0x12)==cfi_build_cmd('Y',map,cfi))
-		return 1;	// ok !
-
+	    cfi_read(map,base+osf*0x12)==cfi_build_cmd('Y',map,cfi)) {
+		return 1;       // ok !
+	}
 	return 0; 	// nothing found
 }
 
@@ -55,7 +55,7 @@ static int cfi_probe_chip(struct map_info *map, __u32 base,
 {
 	int i;
 	
-	cfi_send_gen_cmd(0xF0, 0, base, map, cfi, cfi->device_type, NULL);
+	cfi_send_gen_cmd(0xFF, 0, base, map, cfi, cfi->device_type, NULL);
 	cfi_send_gen_cmd(0x98, 0x55, base, map, cfi, cfi->device_type, NULL);
 
 	if (!qry_present(map,base,cfi))
@@ -74,7 +74,7 @@ static int cfi_probe_chip(struct map_info *map, __u32 base,
 		if (qry_present(map,chips[i].start,cfi)) {
 			/* Eep. This chip also had the QRY marker. 
 			 * Is it an alias for the new one? */
-			cfi_send_gen_cmd(0xF0, 0, chips[i].start, map, cfi, cfi->device_type, NULL);
+			cfi_send_gen_cmd(0xFF, 0, chips[i].start, map, cfi, cfi->device_type, NULL);
 
 			/* If the QRY marker goes away, it's an alias */
 			if (!qry_present(map, chips[i].start, cfi)) {
@@ -86,7 +86,7 @@ static int cfi_probe_chip(struct map_info *map, __u32 base,
 			 * unfortunate. Stick the new chip in read mode
 			 * too and if it's the same, assume it's an alias. */
 			/* FIXME: Use other modes to do a proper check */
-			cfi_send_gen_cmd(0xF0, 0, base, map, cfi, cfi->device_type, NULL);
+			cfi_send_gen_cmd(0xFF, 0, base, map, cfi, cfi->device_type, NULL);
 			
 			if (qry_present(map, base, cfi)) {
 				printk(KERN_DEBUG "%s: Found an alias at 0x%x for the chip at 0x%lx\n",
@@ -108,7 +108,7 @@ static int cfi_probe_chip(struct map_info *map, __u32 base,
 	cfi->numchips++;
 	
 	/* Put it back into Read Mode */
-	cfi_send_gen_cmd(0xF0, 0, base, map, cfi, cfi->device_type, NULL);
+	cfi_send_gen_cmd(0xFF, 0, base, map, cfi, cfi->device_type, NULL);
 
 	printk(KERN_INFO "%s: Found %d x%d devices at 0x%x in %d-bit mode\n",
 	       map->name, cfi->interleave, cfi->device_type*8, base,
@@ -171,7 +171,7 @@ static int cfi_chip_setup(struct map_info *map,
 #endif
 	}
 	/* Put it back into Read Mode */
-	cfi_send_gen_cmd(0xF0, 0, base, map, cfi, cfi->device_type, NULL);
+	cfi_send_gen_cmd(0xFF, 0, base, map, cfi, cfi->device_type, NULL);
 
 	return 1;
 }

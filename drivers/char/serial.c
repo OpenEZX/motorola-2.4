@@ -57,11 +57,11 @@
  * 10/00: add in optional software flow control for serial console.
  *	  Kanoj Sarcar <kanoj@sgi.com>  (Modified by Theodore Ts'o)
  *
- * 02/02: Fix for AMD Elan bug in transmit irq routine, by
- *        Christer Weinigel <wingel@hog.ctrl-c.liu.se>,
- *        Robert Schwebel <robert@schwebel.de>,
- *        Juergen Beisert <jbeisert@eurodsn.de>,
- *        Theodore Ts'o <tytso@mit.edu>
+ * 10/00: Added suport for MIPS Atlas board.
+ * 11/00: Hooks for serial kernel debug port support added.
+ *        Kevin D. Kissell, kevink@mips.com and Carsten Langgaard,
+ *        carstenl@mips.com
+ *        Copyright (C) 2000 MIPS Technologies, Inc.  All rights reserved.
  */
 
 static char *serial_version = "5.05c";
@@ -131,6 +131,16 @@ static char *serial_revdate = "2001-07-08";
 #ifndef ENABLE_SERIAL_PNP
 #define ENABLE_SERIAL_PNP
 #endif
+#endif
+
+#ifdef CONFIG_ARCH_PXA
+#define pxa_port(x) ((x) == PORT_PXA)
+#define pxa_buggy_port(x) ({ \
+	int cpu_ver; asm("mrc%? p15, 0, %0, c0, c0" : "=r" (cpu_ver)); \
+	((x) == PORT_PXA && (cpu_ver & ~1) == 0x69052100); })
+#else
+#define pxa_port(x) (0)
+#define pxa_buggy_port(x) (0)
 #endif
 
 /* Set of debugging defines */
@@ -222,7 +232,12 @@ static char *serial_revdate = "2001-07-08";
 #ifdef CONFIG_MAGIC_SYSRQ
 #include <linux/sysrq.h>
 #endif
-
+#ifdef CONFIG_PM
+#include <linux/pm.h>
+#include <linux/apm_bios.h>
+#define ICL_EVENT_INTERVAL	(HZ)
+static unsigned long last_jiff = 0;
+#endif
 /*
  * All of the compatibilty code so we can compile serial.c against
  * older kernels is hidden in serial_compat.h
@@ -235,6 +250,46 @@ static char *serial_revdate = "2001-07-08";
 #include <asm/io.h>
 #include <asm/irq.h>
 #include <asm/bitops.h>
+#include <asm/dma.h>
+
+/* add  for BlueTooth by maddy */
+#include "../sound/ezx-audio.h"
+
+#include "ezx-button.h"
+
+#define BT_ON 0
+	
+/*
+ * added by jordan for debug btuart flow control function: 03/09/12 w20535@motorola.com
+ */
+#ifndef  BTUART_FLOW_CONTROL_DEBUG
+#define  BTUART_FLOW_CONTROL_DEBUG
+#endif
+#if 0
+#ifdef BTUART_FLOW_CONTROL_DEBUG
+#undef BTUART_FLOW_CONTROL_DEBUG
+#endif
+#endif
+
+/*-----------------------------------------------------------------------------------------------------------
+ * added by jordan: 03/09/12
+ * note: this flag only can be changed by flip_throttle() and flip_unthrottle()
+ * warning: Due to urgent, so use this global flag. If having chance, will add a flag in tty->driver structure
+ * to replace it. So don't change this value except author. :)
+ *  it's declaration can be retrived in n_tty.c. 
+ *------------------------------------------------------------------------------------------------------------*/
+int btuart_flip_flow_ctl = 0;
+static void rs_flip_throttle(struct tty_struct *tty);
+/*-------------------------------------------------------------------------------------------------------------
+ * end by jordan
+ * ------------------------------------------------------------------------------------------------------------*/
+
+static unsigned int bt_hostwake_state = 1;
+static int bt_hostwake_change = 0;
+static wait_queue_head_t bt_hostwake_wait;
+
+static unsigned int ffuart_cts_state = 1;
+static unsigned int ffuart_dtr_state = 1;
 
 #if defined(CONFIG_MAC_SERIAL)
 #define SERIAL_DEV_OFFSET	((_machine == _MACH_prep || _machine == _MACH_chrp) ? 0 : 2)
@@ -247,15 +302,76 @@ static char *serial_revdate = "2001-07-08";
 #else
 #define _INLINE_
 #endif
+/* Add by lilij for handshake, begin */
+#define HANDSHAKE_DEBUG2 1 
+#define GPIO0_BP_RDY      0x00000001
+#define GPIO14_BP_WDI2    0x00004000
+#define GPIO33_MCU_INT_SW 0x00000002
+extern void pm_do_poweroff();
+/* Add by lilij for handshake, end */
 
+#define MCU_INT_SW_PULSE_WIDTH       (20*HZ/1000)      /* 10~20 ms */
+#define MCU_INT_SW_PULSE_INTERVAL    (10000*HZ/1000)     /*10,000 ms */
+#define MCU_INT_SW_PULSE_TIMES       20            
 static char *serial_name = "Serial driver";
 
 static DECLARE_TASK_QUEUE(tq_serial);
+
+/********************************************  
+ *  By Liu Changhui
+*********************************************/
+static int serial_mux_guard = 0;
+/********************************************  
+ *  By Liu Changhui
+*********************************************/
 
 static struct tty_driver serial_driver, callout_driver;
 static int serial_refcount;
 
 static struct timer_list serial_timer;
+
+/* add a timer to limit dalhart send waiting time for hwuart*/
+static struct timer_list tx_timer;
+static int cnt_tx_timeout = 0;	
+static int start_int = 1;
+
+#define TX_TIMER_PERIOD		(10*HZ/1000)	/* 10ms */
+
+
+
+/********************************************  
+ *  By Liu Xin
+*********************************************/
+#ifdef _DEBUG_BOARD
+#define TTY_NO_FOR_MUX  0
+#else
+#define TTY_NO_FOR_MUX  0
+#endif
+
+struct tty_driver *serial_for_mux_driver = NULL;
+struct tty_struct *serial_for_mux_tty = NULL;
+void (*serial_mux_dispatcher)(struct tty_struct *tty) = NULL;
+void (*serial_mux_sender)(void) = NULL;
+struct list_head *tq_serial_for_mux = NULL;
+
+EXPORT_SYMBOL(serial_for_mux_driver);
+EXPORT_SYMBOL(serial_for_mux_tty);
+EXPORT_SYMBOL(serial_mux_dispatcher);
+EXPORT_SYMBOL(serial_mux_sender);
+EXPORT_SYMBOL(tq_serial_for_mux);
+
+/********************************************  
+ *  By Liu Xin
+*********************************************/
+#ifdef CONFIG_ARCH_PXA
+#define SERIAL_IRQ0_VALID
+#endif	
+
+#ifdef SERIAL_IRQ0_VALID
+#define IRQ_VALID(irq) ((irq >= 0) && (irq < NR_IRQS))
+#else
+#define IRQ_VALID(irq) ((irq >  0) && (irq < NR_IRQS))
+#endif
 
 /* serial subtype definitions */
 #ifndef SERIAL_TYPE_NORMAL
@@ -311,6 +427,7 @@ static struct serial_uart_config uart_config[] = {
 	{ "XR16850", 128, UART_CLEAR_FIFO | UART_USE_FIFO |
 		  UART_STARTECH },
 	{ "RSA", 2048, UART_CLEAR_FIFO | UART_USE_FIFO }, 
+	{ "PXA UART", 64, UART_CLEAR_FIFO | UART_USE_FIFO },
 	{ 0, 0}
 };
 
@@ -326,12 +443,11 @@ MODULE_PARM(force_rsa, "1-" __MODULE_STRING(PORT_RSA_MAX) "i");
 MODULE_PARM_DESC(force_rsa, "Force I/O ports for RSA");
 #endif /* CONFIG_SERIAL_RSA  */
 
-struct serial_state rs_table[RS_TABLE_SIZE] = {
+static struct serial_state rs_table[RS_TABLE_SIZE] = {
 	SERIAL_PORT_DFNS	/* Defined in serial.h */
 };
 
 #define NR_PORTS	(sizeof(rs_table)/sizeof(struct serial_state))
-int serial_nr_ports = NR_PORTS;
 
 #if (defined(ENABLE_SERIAL_PCI) || defined(ENABLE_SERIAL_PNP))
 #define NR_PCI_BOARDS	8
@@ -390,6 +506,95 @@ static DECLARE_MUTEX(tmp_buf_sem);
 #else
 static struct semaphore tmp_buf_sem = MUTEX;
 #endif
+/* add by linwq  */
+
+static u16 cebus_ffuart_port_init = 0;
+
+struct async_struct* ffuart_get_info(void)
+{
+    struct serial_state *sstate;
+    sstate = rs_table;
+    while(sstate&&(sstate->iomem_base != (u8 *)&FFUART))
+    {
+        sstate++;
+    }
+    if(sstate)
+    {
+        return (sstate->info);
+    }
+    return NULL;
+}
+
+void ffuart_gpio_config(u16 device)
+{
+    switch(device)
+    {
+       case CEBUS_RS232_4_WIRES:
+             GPSR1 = 0x00000280;     //set RTS and TXD high
+             set_GPIO_mode(GPIO34_FFRXD_MD);
+             set_GPIO_mode(GPIO9_FFCTS_MD);
+             set_GPIO_mode(GPIO39_FFTXD_MD);
+             set_GPIO_mode(GPIO41_FFRTS_MD); 
+             break;
+        case CEBUS_RS232_8_WIRES:
+        default:
+             /* default we think it should be 8-wires cable */
+             GPSR1 = 0x00000280;     //set RTS and TXD high
+             set_GPIO_mode(GPIO34_FFRXD_MD);
+             set_GPIO_mode(GPIO9_FFCTS_MD);
+             set_GPIO_mode(GPIO36_FFDCD_MD);
+             set_GPIO_mode(GPIO37_FFDSR_MD);
+             set_GPIO_mode(GPIO38_FFRI_MD);
+             set_GPIO_mode(GPIO39_FFTXD_MD);
+             set_GPIO_mode(GPIO8_FFDTR_MD);
+             set_GPIO_mode(GPIO41_FFRTS_MD); 
+/* modify by WUL for ezx */
+	     /* set GPIO 36/37/38 high  */
+	     GPSR1 = 0x00000070;
+             break;
+    }
+    return;
+}
+
+void cebus_stop_ffuart(u16 device)
+{
+    struct async_struct *info;
+    if(cebus_ffuart_port_init)
+    {
+        /* send a hangup signal */
+        info = ffuart_get_info();  
+        if(info&&info->tty)
+        {
+            tty_hangup(info->tty);
+        }
+    }
+    /* do FFUART register un-config */
+    return;
+}
+
+void cebus_start_ffuart(u16 device)
+{
+    struct async_struct *info;
+    if(cebus_ffuart_port_init)
+    {
+        /* send a wakeup open_wait signal */
+        info = ffuart_get_info();  
+        if(info)
+        {
+            wake_up_interruptible(&info->open_wait);
+        }
+    }
+    /* do FFUART register config */
+    ffuart_gpio_config(device);
+    return;
+}
+
+u16 check_ffuart_cable_attached(void)
+{
+    return ((CEBUS_DUMB_SMART_AUDIO_DEVICE == get_current_cebus_status())||(CEBUS_RS232_8_WIRES == get_current_cebus_status())||(CEBUS_RS232_4_WIRES == get_current_cebus_status()));
+}
+
+/*  end by linwq */
 
 
 static inline int serial_paranoia_check(struct async_struct *info,
@@ -413,6 +618,22 @@ static inline int serial_paranoia_check(struct async_struct *info,
 	return 0;
 }
 
+#ifdef CONFIG_MIPS_ATLAS 
+extern unsigned int atlas_serial_in(struct async_struct *info, int offset);
+extern void atlas_serial_out(struct async_struct *info, int offset, int value);
+
+static _INLINE_ unsigned int serial_in(struct async_struct *info, int offset)
+{
+        return (atlas_serial_in(info, offset) & 0xff);   
+}
+
+static _INLINE_ void serial_out(struct async_struct *info, int offset, int value)
+{
+        atlas_serial_out(info, offset, value);
+}
+
+#else
+
 static _INLINE_ unsigned int serial_in(struct async_struct *info, int offset)
 {
 	switch (info->io_type) {
@@ -422,8 +643,16 @@ static _INLINE_ unsigned int serial_in(struct async_struct *info, int offset)
 		return inb(info->port+1);
 #endif
 	case SERIAL_IO_MEM:
-		return readb((unsigned long) info->iomem_base +
+		if (pxa_port(info->state->type))
+			return readl((unsigned long) info->iomem_base +
+		      		(offset<<info->iomem_reg_shift));
+		else
+			return readb((unsigned long) info->iomem_base +
 			     (offset<<info->iomem_reg_shift));
+#ifdef CONFIG_SERIAL_GSC
+	case SERIAL_IO_GSC:
+		return gsc_readb(info->iomem_base + offset);
+#endif
 	default:
 		return inb(info->port + offset);
 	}
@@ -440,13 +669,24 @@ static _INLINE_ void serial_out(struct async_struct *info, int offset,
 		break;
 #endif
 	case SERIAL_IO_MEM:
-		writeb(value, (unsigned long) info->iomem_base +
-			      (offset<<info->iomem_reg_shift));
+		if (pxa_port(info->state->type)) 
+			writel(value, (unsigned long) info->iomem_base +
+				       	(offset<<info->iomem_reg_shift));
+		else 
+			writeb(value, (unsigned long) info->iomem_base +
+			 		(offset<<info->iomem_reg_shift));
 		break;
+#ifdef CONFIG_SERIAL_GSC
+	case SERIAL_IO_GSC:
+		gsc_writeb(value, info->iomem_base + offset);
+		break;
+#endif
 	default:
 		outb(value, info->port+offset);
 	}
 }
+#endif
+
 
 /*
  * We used to support using pause I/O for certain machines.  We
@@ -477,6 +717,206 @@ unsigned int serial_icr_read(struct async_struct *info, int offset)
 	serial_icr_write(info, UART_ACR, info->ACR);
 	return value;
 }
+
+/***ffuart gpio configure***/
+void ffuart_gpio_init(void)
+{
+        CKEN |= CKEN6_FFUART;
+
+//        GPSR0 = 0x00000100;     //set DTR high
+        GPSR1 = 0x00000280;     //set RTS and TXD high
+
+//      GPDR0 |= 0x00000100;    //set gpio8(DTR) as output
+//      GPDR0 &= 0xfffffdff;    //set gpio9 as(CTS) input
+//      GPDR1 |= 0x00000280;    //set gpio39(TXD) and gpio41(RTS) as output
+//      GPDR1 &= 0xffffff8b;    //set gpio34(RXD), gpio36(DCD), gpio37(DSR), gpio38(RI) as input
+
+        set_GPIO_mode(GPIO34_FFRXD_MD);
+        set_GPIO_mode(GPIO9_FFCTS_MD);
+        set_GPIO_mode(GPIO36_FFDCD_MD);
+        set_GPIO_mode(GPIO37_FFDSR_MD);
+        set_GPIO_mode(GPIO38_FFRI_MD);
+        set_GPIO_mode(GPIO39_FFTXD_MD);
+        set_GPIO_mode(GPIO8_FFDTR_MD);
+        set_GPIO_mode(GPIO41_FFRTS_MD);
+	GPSR1 = 0x00000070;     //set 36/37/38 GPIO high
+}
+
+int stop_ffuart(void)
+{
+  return 0;
+}
+
+/* To reset DC module and enable its tri status, 
+The DC chipset is always powered on for user can use IRDA by default, 
+so that the power consume is larger than disable it*/
+int dc_disable(void)
+{
+	int ret;
+	if(dc_state == DC_DISABLE)
+		ret = 0;
+	else if(dc_state == DC_ENABLE) {
+#ifdef A768
+		//  disable IO of DC
+		// change from GPIO20 to GPIO53
+		GPCR1 = 0x00200000;
+#else
+		//  disable IO of DC
+                GPCR0 = 0x00100000;
+#endif		
+		// turn off 3.6M clock
+		set_GPIO_mode(GPIO11_INPUT_MD);
+			
+		// turn off STUART
+		disable_irq(IRQ_STUART);
+		CKEN &= ~CKEN5_STUART;
+		set_GPIO_mode(GPIO46_INPUT_MD);
+		set_GPIO_mode(GPIO47_INPUT_MD);	
+		
+		// disable DC; GPIO35 as low output
+		GPCR1 = 0x00000008;
+		
+		dc_state = DC_DISABLE;
+		ret = 0;
+	} else if(dc_state == DC_STANDBY){
+		// disable IRDA
+		GPSR0 = 0x00200000;
+		
+		// turn off STUART
+		disable_irq(IRQ_STUART);
+		CKEN &= ~CKEN5_STUART;
+		set_GPIO_mode(GPIO46_INPUT_MD);
+		set_GPIO_mode(GPIO47_INPUT_MD);	
+		
+		// disable DC; GPIO35 as low output
+		GPCR1 = 0x00000008;
+		
+		// delay 600ms
+                set_current_state(TASK_UNINTERRUPTIBLE);
+                schedule_timeout(6*HZ/10 );
+
+		dc_state = DC_DISABLE;
+		ret = 0;
+	} else	
+		ret = 1;	
+	return(ret);	
+}
+
+int dc_enable(void)
+{
+	int ret;
+	if(dc_state == DC_ENABLE)
+		ret = 0;
+	else if(dc_state == DC_DISABLE){
+		// enable DC; GPIO35 as high output
+		GPSR1 = 0x00000008;
+
+		// delay 200ms
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		schedule_timeout(HZ/5);
+		//mdelay(200);
+		
+		// turn on 3.6M clock
+		GPCR0 = 0x00000800;
+		set_GPIO_mode(GPIO11_3_6MHz_MD);
+			
+		// turn on STUART
+		STISR = 0;
+		set_GPIO_mode(GPIO46_STRXD_MD);
+		set_GPIO_mode(GPIO47_STTXD_MD);	
+	 	CKEN |= CKEN5_STUART;
+		
+#ifdef A768
+		// enable IO of DC
+		// change from GPIO20 to GPIO53
+		GPSR1 = 0x00200000;
+#else
+		// enable IO of DC
+                GPSR0 = 0x00100000;
+#endif
+		enable_irq(IRQ_STUART);
+		
+		dc_state = DC_ENABLE;
+		ret = 0;
+	} else if(dc_state == DC_STANDBY){
+		// disable IRDA
+		GPSR0 = 0x00200000;
+		disable_irq(IRQ_STUART);
+		CKEN &= ~CKEN5_STUART;
+
+		// turn on 3.6M clock
+		GPCR0 = 0x00000800;
+		set_GPIO_mode(GPIO11_3_6MHz_MD);
+			
+		// turn on STUART
+		STISR = 0;
+		set_GPIO_mode(GPIO46_STRXD_MD);
+		set_GPIO_mode(GPIO47_STTXD_MD);	
+	 	CKEN |= CKEN5_STUART;
+
+#ifdef A768
+		// enable IO of DC
+		// change from GPIO20 to GPIO53
+		GPSR1 = 0x00200000;
+#else
+		// enable IO of DC
+                GPSR0 = 0x00100000;
+#endif	
+		enable_irq(IRQ_STUART);
+		
+		dc_state = DC_ENABLE;
+		ret = 0;
+	} else
+		ret = 1;	
+	return(ret);
+}
+
+int dc_standby(void)
+{	
+	int ret;
+	if(dc_state == DC_STANDBY)
+		ret = 0;
+	else if(dc_state == DC_DISABLE){
+		// enable DC; GPIO35 as high output
+		GPSR1 = 0x00000008;
+
+		// delay 200ms
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		schedule_timeout(HZ/5);
+		//mdelay(200);
+	
+#ifdef A768	
+		// disable IO of DC
+		// change from GPIO20 to GPIO53
+		GPCR1 = 0x00200000;
+#else
+		// disable IO of DC
+                GPCR0 = 0x00100000;
+#endif
+		// turn off 3.6M clock
+		set_GPIO_mode(GPIO11_INPUT_MD);	
+
+		dc_state = DC_STANDBY;
+		ret = 0;
+	} else if(dc_state == DC_ENABLE) {
+#ifdef A768
+		//  disable IO of DC
+		// change from GPIO20 to GPIO53
+		GPCR1 = 0x00200000;
+#else
+		//  disable IO of DC
+                GPCR0 = 0x00100000;
+#endif		
+		// turn off 3.6M clock
+		set_GPIO_mode(GPIO11_INPUT_MD);
+			
+		dc_state = DC_STANDBY;
+		ret = 0;
+	} else
+		ret = 1;
+	return(ret);
+}
+	
 
 /*
  * ------------------------------------------------------------
@@ -570,11 +1010,49 @@ static _INLINE_ void receive_chars(struct async_struct *info,
 	int	max_count = 256;
 
 	icount = &info->state->icount;
+        /* add by linwq 2003-07-24. if HW UART and flip.count is 0 then enable REC interrupt. it's drived by serial timer */
+        if( (serial_mux_dispatcher && tty == serial_for_mux_tty)&&(!(info->IER&UART_IER_RDI))&&(tty->flip.count == 0))
+        {
+            info->IER |= UART_IER_RDI;
+            serial_outp(info,UART_IER,info->IER);
+        }
+        /* end by linwq */
 	do {
 		if (tty->flip.count >= TTY_FLIPBUF_SIZE) {
-			tty->flip.tqueue.routine((void *) tty);
-			if (tty->flip.count >= TTY_FLIPBUF_SIZE)
+/********************************************  
+ *  By Liu Xin
+*********************************************/
+//			tty->flip.tqueue.routine((void *) tty);
+			if(serial_mux_dispatcher && tty == serial_for_mux_tty)
+                    {
+				serial_mux_dispatcher(tty);
+                        /*add by linwq 2003-07-24. disable HWUART REC interrupt and return */
+                        info->IER &= ~UART_IER_RDI;
+                        serial_outp(info,UART_IER,info->IER);
+                        return;
+                        /* end by linwq */
+                    }
+			else
+				tty->flip.tqueue.routine((void *) tty);
+
+/********************************************  
+ *  By Liu Xin
+*********************************************/
+			
+			if (tty->flip.count >= TTY_FLIPBUF_SIZE){
+				/*--------------------------------------------------------
+				 * added by Jordan to support BTUART flip flow control: 03/09/12
+				 * -------------------------------------------------------*/
+				  if ((tty->driver.btuart)) 
+				  {
+					rs_flip_throttle(tty);
+					return;
+				  }
+				/*-----------------------------------------------------------
+				 * end by jordan
+				 * ---------------------------------------------------------*/
 				return;		// if TTY_DONT_FLIP is set
+			}
 		}
 		ch = serial_inp(info, UART_RX);
 		*tty->flip.char_buf_ptr = ch;
@@ -672,12 +1150,71 @@ static _INLINE_ void receive_chars(struct async_struct *info,
 		*status = serial_inp(info, UART_LSR);
 	} while ((*status & UART_LSR_DR) && (max_count-- > 0));
 #if (LINUX_VERSION_CODE > 131394) /* 2.1.66 */
-	tty_flip_buffer_push(tty);
+/********************************************
+ *  By Liu Xin
+*********************************************/
+//	tty_flip_buffer_push(tty);
+	if(serial_mux_dispatcher && tty == serial_for_mux_tty)
+		serial_mux_dispatcher(tty);
+	else
+		tty_flip_buffer_push(tty);
+/********************************************
+ *  By Liu Xin
+*********************************************/
 #else
 	queue_task_irq_off(&tty->flip.tqueue, &tq_timer);
 #endif	
 }
 
+/*
+ *the tx_timeout is only the HWUART handler.
+ *if HWUART 's CTS is inactive (HIGH) and AP wants to send data to BP,Ap will insert pulses 
+ *which width is 2 jeffies (10~20ms) and interval is 10 jeffies.the behavior will last 2 
+ *seconds (20times) or until BP is active. when cnt_tx_timeout is old, it will finished pluse. 
+ *when it is even, it will start a pluse or stop.
+ *modify by lwq 2003-08-07  
+ */
+extern int ret_MCU_INT_SW(void);
+static void tx_timeout( void)
+{
+       unsigned long flags;
+       save_flags(flags); 
+       cli();
+       if(!(cnt_tx_timeout%2))
+       {           
+           if(ret_MCU_INT_SW())
+           {
+               GPSR1 = GPIO33_MCU_INT_SW; 
+           }
+           else
+           {
+               GPCR1 = GPIO33_MCU_INT_SW; 
+           }
+           if(cnt_tx_timeout >= 2*MCU_INT_SW_PULSE_TIMES)
+           {
+               cnt_tx_timeout = 0;
+               restore_flags(flags);
+               return;
+           }
+           mod_timer(&tx_timer, jiffies + MCU_INT_SW_PULSE_INTERVAL);
+       }
+       else
+       {   
+           if(ret_MCU_INT_SW()) 
+           {
+               GPCR1 = GPIO33_MCU_INT_SW; 
+           }
+           else
+           {
+               GPSR1 = GPIO33_MCU_INT_SW; 
+           }          
+           mod_timer(&tx_timer, jiffies + MCU_INT_SW_PULSE_WIDTH);
+       }
+       cnt_tx_timeout++;
+       restore_flags(flags);
+       return;
+}
+	
 static _INLINE_ void transmit_chars(struct async_struct *info, int *intr_done)
 {
 	int count;
@@ -690,7 +1227,46 @@ static _INLINE_ void transmit_chars(struct async_struct *info, int *intr_done)
 			*intr_done = 0;
 		return;
 	}
-	if (info->xmit.head == info->xmit.tail
+#if 0	
+	if (info->state->iomem_base == (u8 *)&FFUART) {
+		if(info->tty->hw_stopped)
+			printk("stop\n");
+		else
+			printk("start\n");
+	}
+#endif
+	if (info->state->iomem_base == (u8 *)&HWUART) {
+#if 0		
+		GPDR1 |= 0x00000002;
+#endif	
+		if (info->xmit.head == info->xmit.tail
+		    || info->tty->stopped) {
+			info->IER &= ~UART_IER_THRI;
+			serial_out(info, UART_IER, info->IER);
+			return;
+		}
+		else if (info->tty->hw_stopped) {
+			if (!cnt_tx_timeout) {   
+                       /*                
+                        if(ret_MCU_INT_SW()) 
+                        {
+                            GPCR1 = GPIO33_MCU_INT_SW; 
+                        }
+                        else
+                        {
+                            GPSR1 = GPIO33_MCU_INT_SW; 
+                        }
+                        */  
+                        cnt_tx_timeout = 1;       
+				tx_timer.expires = jiffies + MCU_INT_SW_PULSE_WIDTH;	
+				add_timer(&tx_timer);
+			}
+			info->IER &= ~UART_IER_THRI;
+			serial_out(info, UART_IER, info->IER);
+			return;
+		}
+	}
+	else if (info->xmit.head == info->xmit.tail
 	    || info->tty->stopped
 	    || info->tty->hw_stopped) {
 		info->IER &= ~UART_IER_THRI;
@@ -698,7 +1274,11 @@ static _INLINE_ void transmit_chars(struct async_struct *info, int *intr_done)
 		return;
 	}
 	
-	count = info->xmit_fifo_size;
+	if (pxa_port(info->state->type))	
+		count = info->xmit_fifo_size / 2;
+	else 
+		count = info->xmit_fifo_size;
+	
 	do {
 		serial_out(info, UART_TX, info->xmit.buf[info->xmit.tail]);
 		info->xmit.tail = (info->xmit.tail + 1) & (SERIAL_XMIT_SIZE-1);
@@ -706,6 +1286,16 @@ static _INLINE_ void transmit_chars(struct async_struct *info, int *intr_done)
 		if (info->xmit.head == info->xmit.tail)
 			break;
 	} while (--count > 0);
+
+/********************************************  
+ *  By Liu Changhui
+*********************************************/
+	if(serial_mux_sender && info->tty == serial_for_mux_tty)
+		serial_mux_sender();
+		
+/********************************************  
+ *  By Liu Changhui
+*********************************************/	
 	
 	if (CIRC_CNT(info->xmit.head,
 		     info->xmit.tail,
@@ -773,6 +1363,18 @@ static _INLINE_ void check_modem_status(struct async_struct *info)
 #if (defined(SERIAL_DEBUG_INTR) || defined(SERIAL_DEBUG_FLOW))
 				printk("CTS tx start...");
 #endif
+				if(cnt_tx_timeout&& (info->state->iomem_base == (u8 *)&HWUART)) {
+					del_timer(&tx_timer);
+                            if(ret_MCU_INT_SW())
+                            {
+                                GPSR1 = GPIO33_MCU_INT_SW; 
+                            }
+                            else
+                            {
+                                GPCR1 = GPIO33_MCU_INT_SW; 
+                            } 
+					cnt_tx_timeout = 0;
+				}
 				info->tty->hw_stopped = 0;
 				info->IER |= UART_IER_THRI;
 				serial_out(info, UART_IER, info->IER);
@@ -798,7 +1400,7 @@ static _INLINE_ void check_modem_status(struct async_struct *info)
  */
 static void rs_interrupt(int irq, void *dev_id, struct pt_regs * regs)
 {
-	int status, iir;
+	int status;
 	struct async_struct * info;
 	int pass_counter = 0;
 	struct async_struct *end_mark = 0;
@@ -823,7 +1425,7 @@ static void rs_interrupt(int irq, void *dev_id, struct pt_regs * regs)
 
 	do {
 		if (!info->tty ||
-		    ((iir=serial_in(info, UART_IIR)) & UART_IIR_NO_INT)) {
+		    (serial_in(info, UART_IIR) & UART_IIR_NO_INT)) {
 			if (!end_mark)
 				end_mark = info;
 			goto next;
@@ -842,9 +1444,7 @@ static void rs_interrupt(int irq, void *dev_id, struct pt_regs * regs)
 		if (status & UART_LSR_DR)
 			receive_chars(info, &status, regs);
 		check_modem_status(info);
-		if ((status & UART_LSR_THRE) ||
-			/* for buggy ELAN processors */
-			((iir & UART_IIR_ID) == UART_IIR_THRI))
+		if (status & UART_LSR_THRE)
 			transmit_chars(info, 0);
 
 	next:
@@ -878,14 +1478,17 @@ static void rs_interrupt(int irq, void *dev_id, struct pt_regs * regs)
  */
 static void rs_interrupt_single(int irq, void *dev_id, struct pt_regs * regs)
 {
-	int status, iir;
+	int status;
 	int pass_counter = 0;
 	struct async_struct * info;
 #ifdef CONFIG_SERIAL_MULTIPORT	
 	int first_multi = 0;
 	struct rs_multiport_struct *multi;
 #endif
-	
+/* just for test */
+#if 0
+	unsigned long flags;
+#endif	
 #ifdef SERIAL_DEBUG_INTR
 	printk("rs_interrupt_single(%d)...", irq);
 #endif
@@ -900,30 +1503,43 @@ static void rs_interrupt_single(int irq, void *dev_id, struct pt_regs * regs)
 		first_multi = inb(multi->port_monitor);
 #endif
 
-	iir = serial_in(info, UART_IIR);
 	do {
+/* just for test */
+#if 0
+		info->MCR &= ~UART_MCR_RTS;
+		save_flags(flags); cli();
+		serial_out(info, UART_MCR, info->MCR);
+		restore_flags(flags);
+#endif	
 		status = serial_inp(info, UART_LSR);
 #ifdef SERIAL_DEBUG_INTR
 		printk("status = %x...", status);
 #endif
-		if (status & UART_LSR_DR)
+		if (status & UART_LSR_DR) {
+#ifdef CONFIG_PM
+			if (info->state->iomem_base == (u8 *)&HWUART) {
+				if (jiffies - last_jiff > ICL_EVENT_INTERVAL) {
+					last_jiff = jiffies;
+					queue_apm_event(KRNL_ICL, NULL);
+				}
+			}
+#endif
 			receive_chars(info, &status, regs);
-		check_modem_status(info);
-		if ((status & UART_LSR_THRE) ||
-		    /* For buggy ELAN processors */
-		    ((iir & UART_IIR_ID) == UART_IIR_THRI))
+		}
+		if ((info->state->iomem_base == (u8 *)&HWUART) || (info->state->iomem_base == (u8 *)&BTUART))
+			check_modem_status(info);
+		if (status & UART_LSR_THRE)
 			transmit_chars(info, 0);
 		if (pass_counter++ > RS_ISR_PASS_LIMIT) {
-#if SERIAL_DEBUG_INTR
+#if 0
 			printk("rs_single loop break.\n");
 #endif
 			break;
 		}
-		iir = serial_in(info, UART_IIR);
 #ifdef SERIAL_DEBUG_INTR
-		printk("IIR = %x...", iir);
+		printk("IIR = %x...", serial_in(info, UART_IIR));
 #endif
-	} while ((iir & UART_IIR_NO_INT) == 0);
+	} while (!(serial_in(info, UART_IIR) & UART_IIR_NO_INT));
 	info->last_active = jiffies;
 #ifdef CONFIG_SERIAL_MULTIPORT	
 	if (multi->port_monitor)
@@ -934,6 +1550,129 @@ static void rs_interrupt_single(int irq, void *dev_id, struct pt_regs * regs)
 #ifdef SERIAL_DEBUG_INTR
 	printk("end.\n");
 #endif
+}
+
+/* interrupt routine for ffuart_cts  */
+static void ffuart_cts_interrupt_routine( int irq, void *dev_id, struct pt_regs * regs)
+{	
+	struct async_struct * info;
+	struct async_icount *icount;
+ 
+	info = (struct async_struct *)dev_id;
+	if (!info || !info->tty)
+		return;
+
+	icount = &info->state->icount;
+	icount->cts++;
+	wake_up_interruptible(&info->delta_msr_wait);
+	
+/* GPIO9 */
+	if((GPLR0 & 0x200) == 0x200) {
+		ffuart_cts_state = 1;	/* FFUART_CTS is high */
+		if (info->flags & ASYNC_CTS_FLOW) {
+#if 0
+			printk("CTS tx stop...\n");
+#endif		
+			info->tty->hw_stopped = 1;
+			info->IER &= ~UART_IER_THRI;
+			serial_out(info, UART_IER, info->IER);
+		}
+	}
+	else {
+		ffuart_cts_state = 0;	/* FFUART_CTS is low */
+		if (info->flags & ASYNC_CTS_FLOW) {
+#if 0
+			printk("CTS tx start...\n");
+#endif	
+			info->tty->hw_stopped = 0;
+			info->IER |= UART_IER_THRI;
+			serial_out(info, UART_IER, info->IER);
+			rs_sched_event(info, RS_EVENT_WRITE_WAKEUP);
+		}
+
+	}
+	return;	
+}	
+
+/* interrupt routine for ffuart_dtr  */
+static void ffuart_dtr_interrupt_routine( int irq, void *dev_id, struct pt_regs * regs)
+{	
+	struct async_struct * info;
+	struct async_icount *icount;
+ 
+	info = (struct async_struct *)dev_id;
+	if (!info || !info->tty)
+		return;
+	
+	icount = &info->state->icount;
+	icount->dtr++;
+	wake_up_interruptible(&info->delta_msr_wait);
+	
+	/* GPIO8 */
+	if ((GPLR0 & 0x100) == 0x100) {
+		ffuart_dtr_state = 1;
+#if 0
+		printk("DTR is high.\n");
+#endif
+	} 
+	else {
+		ffuart_dtr_state = 0;
+#if 0
+		printk("DTR is low.\n");
+#endif
+	}
+
+	return;	
+}	
+/* interrupt routine for BT_HOSTWAKE  */
+static void bt_hostwake_interrupt_routine( int irq, void *dev_id, struct pt_regs * regs)
+{	
+	/* GPIO13 */
+	if((GPLR0 & 0x2000) == 0x2000)
+		bt_hostwake_state = 0;	/* BT_HOSTWAKE is low */
+	else
+		bt_hostwake_state = 1;	/* BT_HOSTWAKE is high */
+	
+	bt_hostwake_change = 1;
+	wake_up_interruptible(&bt_hostwake_wait);
+}
+
+static int bt_hostwake_read(unsigned int *value)
+{
+	DECLARE_WAITQUEUE(wait, current);
+	
+	enable_irq(BT_HOSTWAKE);
+//	current->state = TASK_INTERRUPTIBLE;
+	add_wait_queue(&bt_hostwake_wait, &wait);
+	
+	while(!bt_hostwake_change) {
+		if(signal_pending(current)) {
+			remove_wait_queue(&bt_hostwake_wait, &wait);
+			current->state = TASK_RUNNING;
+			disable_irq(BT_HOSTWAKE);
+#if BT_ON	
+			printk("signal pending\n");
+#endif			
+			return -ERESTARTSYS;
+		}
+		schedule();
+		current->state = TASK_INTERRUPTIBLE;
+	}
+	
+	remove_wait_queue(&bt_hostwake_wait, &wait);
+	current->state = TASK_RUNNING;
+	
+	bt_hostwake_change = 0;
+	disable_irq(BT_HOSTWAKE);
+	
+	if(copy_to_user(value, &bt_hostwake_state, sizeof(int)))
+	{
+#if BT_ON
+		printk("copy_to_user error.host state is %d\n", bt_hostwake_state);
+#endif
+		return -EFAULT;
+	}
+	return 0;
 }
 
 #ifdef CONFIG_SERIAL_MULTIPORT	
@@ -1296,6 +2035,17 @@ static int startup(struct async_struct * info)
 	}
 #endif
 
+#ifdef CONFIG_ARCH_PXA
+	if (state->type == PORT_PXA) {
+		switch ((long)state->iomem_base) {
+			case (long)&HWUART: CKEN |= CKEN4_HWUART; break;
+			case (long)&FFUART: CKEN |= CKEN6_FFUART; break;
+			case (long)&BTUART: CKEN |= CKEN7_BTUART; break;
+			case (long)&STUART: CKEN |= CKEN5_STUART; break;
+		}
+	}
+#endif
+
 	/*
 	 * Clear the FIFO buffers and disable them
 	 * (they will be reenabled in change_speed())
@@ -1335,7 +2085,7 @@ static int startup(struct async_struct * info)
 	/*
 	 * Allocate the IRQ if necessary
 	 */
-	if (state->irq && (!IRQ_ports[state->irq] ||
+	if (IRQ_VALID(state->irq) && (!IRQ_ports[state->irq] ||
 			  !IRQ_ports[state->irq]->next_port)) {
 		if (IRQ_ports[state->irq]) {
 #ifdef CONFIG_SERIAL_SHARE_IRQ
@@ -1382,8 +2132,16 @@ static int startup(struct async_struct * info)
 	serial_outp(info, UART_LCR, UART_LCR_WLEN8);	/* reset DLAB */
 
 	info->MCR = 0;
-	if (info->tty->termios->c_cflag & CBAUD)
-		info->MCR = UART_MCR_DTR | UART_MCR_RTS;
+	info->MSR = 0;
+	if (info->tty->termios->c_cflag & CBAUD) {
+		if( info->state->iomem_base == (u8 *)&FFUART ) {
+			info->MCR = UART_MCR_RTS;
+			info->MSR = UART_MSR_DSR | UART_MSR_DCD | UART_MSR_RI;
+		}
+		else {
+			info->MCR = UART_MCR_DTR | UART_MCR_RTS;
+                }
+	}
 #ifdef CONFIG_SERIAL_MANY_PORTS
 	if (info->flags & ASYNC_FOURPORT) {
 		if (state->irq == 0)
@@ -1391,16 +2149,45 @@ static int startup(struct async_struct * info)
 	} else
 #endif
 	{
+
 		if (state->irq != 0)
 			info->MCR |= UART_MCR_OUT2;
+/* for pxa irq0 is valid */
+		if (pxa_port(state->type))
+			info->MCR |= UART_MCR_OUT2;
+		if (pxa_buggy_port(state->type) && state->irq != 0)
+			info->MCR &= ~UART_MCR_OUT2;
 	}
 	info->MCR |= ALPHA_KLUDGE_MCR; 		/* Don't ask */
-	serial_outp(info, UART_MCR, info->MCR);
+        /* restore HWUART auto-flow control  by linwq */
+        if( info->state->iomem_base == (u8 *)&HWUART )
+        {
+            info->MCR |= UART_MCR_AFE;
+        }
+        /* end by linwq   2003-05-14 */
+	if( info->state->iomem_base == (u8 *)&FFUART ){
+		serial_outp(info, UART_MCR, info->MCR);
+		if( info->MSR & UART_MSR_DSR)
+			GPCR1 = 0x00000020;     //set DSR low
+		else
+			GPSR1 = 0x00000020;     //set DSR high
+		if( info->MSR & UART_MSR_DCD)
+			GPCR1 = 0x00000010;     //set DCD low
+		else
+			GPSR1 = 0x00000010;     //set DCD high
+		if( info->MSR & UART_MSR_RI)
+			GPCR1 = 0x00000040;     //set RI low
+		else
+			GPSR1 = 0x00000040;     //set RI high	
+	} else
+		serial_outp(info, UART_MCR, info->MCR);
 	
 	/*
 	 * Finally, enable interrupts
 	 */
 	info->IER = UART_IER_MSI | UART_IER_RLSI | UART_IER_RDI;
+	if (pxa_port(state->type))
+		info->IER |= UART_IER_UUE | UART_IER_RTOIE;
 	serial_outp(info, UART_IER, info->IER);	/* enable interrupts */
 	
 #ifdef CONFIG_SERIAL_MANY_PORTS
@@ -1411,6 +2198,23 @@ static int startup(struct async_struct * info)
 		(void) inb_p(ICP);
 	}
 #endif
+
+	if( info->state->iomem_base == (u8 *)&FFUART ){
+		set_GPIO_mode(GPIO9_FFCTS_MD);
+		set_GPIO_IRQ_edge(GPIO9_FFCTS, GPIO_BOTH_EDGES);
+		retval = request_irq(IRQ_GPIO(9), ffuart_cts_interrupt_routine, SA_INTERRUPT, "ffuart_cts", info);
+		if (retval){
+			printk("FFUART: Couldn't request GPIO9_FFCTS IRQ. Error is %d.\n", retval);
+			goto errout;
+		}
+		set_GPIO_mode(GPIO8_FFDTR_MD);
+		set_GPIO_IRQ_edge(GPIO8_FFDTR, GPIO_BOTH_EDGES);
+		retval = request_irq(IRQ_GPIO(8), ffuart_dtr_interrupt_routine, SA_INTERRUPT, "ffuart_dtr", info);
+		if (retval){
+			printk("FFUART: Couldn't request GPIO8_FFDTR IRQ. Error is %d.\n", retval);
+			goto errout;
+		}
+	}
 
 	/*
 	 * And clear the interrupt registers again for luck.
@@ -1449,6 +2253,16 @@ static int startup(struct async_struct * info)
 	 * and set the speed of the serial port
 	 */
 	change_speed(info, 0);
+	
+	if( info->state->iomem_base == (u8 *)&BTUART ){
+		set_GPIO_mode(GPIO13_BT_HOSTWAKE | GPIO_IN);
+		set_GPIO_IRQ_edge(GPIO13_BT_HOSTWAKE, GPIO_BOTH_EDGES);
+		retval = request_irq(BT_HOSTWAKE, bt_hostwake_interrupt_routine, SA_INTERRUPT, "btuart", NULL);
+		if (retval){
+			printk("Couldn't reacquire BT_HOSTWAKE IRQ error is %d.\n", retval);
+			goto errout;
+		}
+	}
 
 	info->flags |= ASYNC_INITIALIZED;
 	restore_flags(flags);
@@ -1480,7 +2294,9 @@ static void shutdown(struct async_struct * info)
 #endif
 	
 	save_flags(flags); cli(); /* Disable interrupts */
-
+	if( info->state->iomem_base == (u8 *)&BTUART )
+		free_irq(BT_HOSTWAKE, NULL);
+	
 	/*
 	 * clear delta_msr_wait queue to avoid mem leaks: we may free the irq
 	 * here so the queue might never be waken up
@@ -1501,7 +2317,7 @@ static void shutdown(struct async_struct * info)
 	/*
 	 * Free the IRQ, if necessary
 	 */
-	if (state->irq && (!IRQ_ports[state->irq] ||
+	if (IRQ_VALID(state->irq) && (!IRQ_ports[state->irq] ||
 			  !IRQ_ports[state->irq]->next_port)) {
 		if (IRQ_ports[state->irq]) {
 			free_irq(state->irq, &IRQ_ports[state->irq]);
@@ -1516,6 +2332,10 @@ static void shutdown(struct async_struct * info)
 			free_irq(state->irq, &IRQ_ports[state->irq]);
 	}
 
+	if( info->state->iomem_base == (u8 *)&FFUART ) {
+		free_irq(IRQ_GPIO(9), info);
+		free_irq(IRQ_GPIO(8), info);
+	}
 	if (info->xmit.buf) {
 		unsigned long pg = (unsigned long) info->xmit.buf;
 		info->xmit.buf = 0;
@@ -1532,14 +2352,44 @@ static void shutdown(struct async_struct * info)
 	} else
 #endif
 		info->MCR &= ~UART_MCR_OUT2;
+		if (pxa_buggy_port(state->type))
+			info->MCR |= UART_MCR_OUT2;
 	info->MCR |= ALPHA_KLUDGE_MCR; 		/* Don't ask */
 	
 	/* disable break condition */
 	serial_out(info, UART_LCR, serial_inp(info, UART_LCR) & ~UART_LCR_SBC);
 	
-	if (!info->tty || (info->tty->termios->c_cflag & HUPCL))
-		info->MCR &= ~(UART_MCR_DTR|UART_MCR_RTS);
-	serial_outp(info, UART_MCR, info->MCR);
+	if (!info->tty || (info->tty->termios->c_cflag & HUPCL)) {	
+		if( info->state->iomem_base == (u8 *)&FFUART ){
+			info->MCR &= ~UART_MCR_RTS;
+			info->MSR &= ~(UART_MSR_DSR | UART_MSR_DCD | UART_MSR_RI);
+		} 
+		else {	
+			info->MCR &= ~(UART_MCR_DTR|UART_MCR_RTS);
+		}
+	}
+        /* close the auto-flow-control of HWUART by linwq */
+	if( info->state->iomem_base == (u8 *)&HWUART )
+        {
+             info->MCR &= ~UART_MCR_AFE;
+ 	} 
+        /* end by linwq 2003-05-14  */
+	if( info->state->iomem_base == (u8 *)&FFUART ){
+		serial_outp(info, UART_MCR, info->MCR);
+		if( info->MSR & UART_MSR_DSR)
+			GPCR1 = 0x00000020;     //set DSTR low
+		else
+			GPSR1 = 0x00000020;     //set DSR high
+		if( info->MSR & UART_MSR_DCD)
+			GPCR1 = 0x00000010;     //set DCD low
+		else
+			GPSR1 = 0x00000010;     //set DCD high
+		if( info->MSR & UART_MSR_RI)
+			GPCR1 = 0x00000040;     //set RI low
+		else
+			GPSR1 = 0x00000040;     //set RI high	
+	} else
+		serial_outp(info, UART_MCR, info->MCR);
 
 	/* disable FIFO's */	
 	serial_outp(info, UART_FCR, (UART_FCR_ENABLE_FIFO |
@@ -1557,6 +2407,17 @@ static void shutdown(struct async_struct * info)
 		state->baud_base = SERIAL_RSA_BAUD_BASE_LO;
 #endif
 	
+#ifdef CONFIG_ARCH_PXA
+	if (state->type == PORT_PXA) {
+		switch ((long)state->iomem_base) {
+			case (long)&HWUART: CKEN &= ~CKEN4_HWUART; break;
+			case (long)&FFUART: CKEN &= ~CKEN6_FFUART; break;
+			case (long)&BTUART: CKEN &= ~CKEN7_BTUART; break;
+			case (long)&STUART: CKEN &= ~CKEN5_STUART; break;
+		}
+	}
+#endif
+
 
 	(void)serial_in(info, UART_RX);    /* read data port to reset things */
 	
@@ -1580,6 +2441,15 @@ static void shutdown(struct async_struct * info)
 	info->flags &= ~ASYNC_INITIALIZED;
 	restore_flags(flags);
 }
+#ifdef CONFIG_KGDB
+void shutdown_for_kgdb(struct async_struct * info)
+{
+        int irq = info->state->irq;
+        while(IRQ_ports[irq]){
+                shutdown(IRQ_ports[irq]) ;
+        }
+}
+#endif
 
 #if (LINUX_VERSION_CODE < 131394) /* Linux 2.1.66 */
 static int baud_table[] = {
@@ -1623,6 +2493,9 @@ static void change_speed(struct async_struct *info,
 	unsigned cflag, cval, fcr = 0;
 	int	bits;
 	unsigned long	flags;
+#ifndef	_DEBUG_BOARD	
+	unsigned char save_mcr;
+#endif
 
 	if (!info->tty || !info->tty->termios)
 		return;
@@ -1730,24 +2603,50 @@ static void change_speed(struct async_struct *info,
 			fcr = UART_FCR_ENABLE_FIFO | UART_FCR_TRIGGER_14;
 #endif
 		else
-			fcr = UART_FCR_ENABLE_FIFO | UART_FCR_TRIGGER_8;
+			fcr = UART_FCR_ENABLE_FIFO | UART_FCR_TRIGGER_14; 	/* _8:16Byte, _14:32byte */
 	}
+
 	if (info->state->type == PORT_16750)
 		fcr |= UART_FCR7_64BYTE;
 	
 	/* CTS flow control flag and modem status interrupts */
+	if( info->state->iomem_base == (u8 *)&FFUART ) {
+		disable_irq(IRQ_GPIO(9));
+		disable_irq(IRQ_GPIO(8));
+	}
 	info->IER &= ~UART_IER_MSI;
 	if (info->flags & ASYNC_HARDPPS_CD)
 		info->IER |= UART_IER_MSI;
-	if (cflag & CRTSCTS) {
-		info->flags |= ASYNC_CTS_FLOW;
-		info->IER |= UART_IER_MSI;
-	} else
-		info->flags &= ~ASYNC_CTS_FLOW;
+	if( info->state->iomem_base == (u8 *)&BTUART )
+	{
+		if (cflag & CRTSCTS) {
+			info->flags |= ASYNC_CTS_FLOW;
+			info->IER |= UART_IER_MSI;
+		} else
+			info->flags &= ~ASYNC_CTS_FLOW;
+	}
+	else if( info->state->iomem_base == (u8 *)&FFUART )
+	{
+		if (cflag & CRTSCTS) {
+			info->flags |= ASYNC_CTS_FLOW;
+			info->IER |= UART_IER_MSI;
+			enable_irq(IRQ_GPIO(9));
+		} else
+			info->flags &= ~ASYNC_CTS_FLOW;
+	}
 	if (cflag & CLOCAL)
 		info->flags &= ~ASYNC_CHECK_CD;
 	else {
 		info->flags |= ASYNC_CHECK_CD;
+		info->IER |= UART_IER_MSI;
+		if( info->state->iomem_base == (u8 *)&FFUART ) {
+			enable_irq(IRQ_GPIO(9));
+			enable_irq(IRQ_GPIO(8));
+		}
+	}
+	/* enable hwuart modem interrupt to deal with CTS status*/
+	if (info->state->iomem_base == (u8 *)&HWUART){
+		info->flags |= ASYNC_CTS_FLOW;
 		info->IER |= UART_IER_MSI;
 	}
 	serial_out(info, UART_IER, info->IER);
@@ -1790,8 +2689,15 @@ static void change_speed(struct async_struct *info,
 			    (cflag & CRTSCTS) ? UART_EFR_CTS : 0);
 	}
 	serial_outp(info, UART_LCR, cval | UART_LCR_DLAB);	/* set DLAB */
-	serial_outp(info, UART_DLL, quot & 0xff);	/* LS of divisor */
-	serial_outp(info, UART_DLM, quot >> 8);		/* MS of divisor */
+	if (info->state->iomem_base == (u8 *)&HWUART) 
+	{	
+		serial_outp(info, UART_DLL, 0x02);  /* 460800 */
+		serial_outp(info, UART_DLM, 0x00);  
+	}
+	else {
+		serial_outp(info, UART_DLL, quot & 0xff);	/* LS of divisor */
+		serial_outp(info, UART_DLM, quot >> 8);		/* MS of divisor */
+	}
 	if (info->state->type == PORT_16750)
 		serial_outp(info, UART_FCR, fcr); 	/* set fcr */
 	serial_outp(info, UART_LCR, cval);		/* reset DLAB */
@@ -1803,6 +2709,15 @@ static void change_speed(struct async_struct *info,
  		}
 		serial_outp(info, UART_FCR, fcr); 	/* set fcr */
 	}
+#ifndef	_DEBUG_BOARD	
+/* add HWUART autoflow control. After enable fifo, enable autoflow control */
+	save_mcr = serial_in(info, UART_MCR);
+	if (info->state->iomem_base == (u8 *)&HWUART) 
+		serial_outp(info, UART_MCR, save_mcr | UART_MCR_AFE | UART_MCR_RTS);
+/*	else	
+		serial_outp(info, UART_MCR, save_mcr);
+*/
+#endif		
 	restore_flags(flags);
 }
 
@@ -1847,6 +2762,8 @@ static void rs_flush_chars(struct tty_struct *tty)
 	save_flags(flags); cli();
 	info->IER |= UART_IER_THRI;
 	serial_out(info, UART_IER, info->IER);
+	if (pxa_buggy_port(info->state->type))
+		rs_interrupt_single(info->state->irq, NULL, NULL);
 	restore_flags(flags);
 }
 
@@ -1923,6 +2840,11 @@ static int rs_write(struct tty_struct * tty, int from_user,
 	    && !(info->IER & UART_IER_THRI)) {
 		info->IER |= UART_IER_THRI;
 		serial_out(info, UART_IER, info->IER);
+		if (pxa_buggy_port(info->state->type)) {
+			save_flags(flags); cli();
+			rs_interrupt_single(info->state->irq, NULL, NULL);
+			restore_flags(flags);
+		}
 	}
 	return ret;
 }
@@ -1980,9 +2902,66 @@ static void rs_send_xchar(struct tty_struct *tty, char ch)
 		/* Make sure transmit interrupts are on */
 		info->IER |= UART_IER_THRI;
 		serial_out(info, UART_IER, info->IER);
+		if (pxa_buggy_port(info->state->type))
+			rs_interrupt_single(info->state->irq, NULL, NULL);
 	}
 }
+/*
+ *added by jordan  : 03/09/12 
+ * 
+ * rs_flip_throttle()
+ * detail function can be retrived in tty_driver.h
+ *
+ * warning: this routine is just for btuart flip flow control. others don't call it. Otherwise, you 
+ *          will take responsibilites for your action. :)
+ */
+static void rs_flip_throttle(struct tty_struct *tty)
+{
+	struct async_struct *info = (struct async_struct *)tty->driver_data;
+	unsigned long flags;
 
+		save_flags(flags); cli();
+		info->MCR &= ~UART_MCR_RTS;		
+		info->IER &= ~UART_IER_UUE;
+		serial_out(info, UART_MCR, info->MCR);
+		serial_out(info, UART_IER, info->IER);
+		btuart_flip_flow_ctl = 1;
+		restore_flags(flags);
+	#ifdef BTUART_FLOW_CONTROL_DEBUG
+	//	printk("w20535[s1]:rs_flip_throttle:up RTS and BTUART INT disable.\n");
+	#endif
+}	
+/*
+ *added by jordan  : 03/09/12 
+ * 
+ * rs_flip_unthrottle() 
+ * detail function can be retrived in tty_driver.h
+ * this function is called in n_tty_receive_buf().
+ *
+ * warning: this routine is just for btuart flip flow control. others don't call it. Otherwise, you 
+ *          will take responsibilites for your action. :)
+ */
+void rs_flip_unthrottle(struct tty_struct *tty)
+{
+	struct async_struct *info = (struct async_struct *)tty->driver_data;
+	unsigned long flags;
+		
+	if(tty && 
+	   info &&
+	   info->state &&
+	   (info->state->iomem_base == (u8 *)&BTUART)){
+		save_flags(flags); cli();
+		info->MCR |= UART_MCR_RTS;		
+		info->IER |= UART_IER_UUE;
+		serial_out(info, UART_MCR, info->MCR);
+		serial_out(info, UART_IER, info->IER);
+		btuart_flip_flow_ctl = 0;
+		restore_flags(flags);
+	#ifdef BTUART_FLOW_CONTROL_DEBUG
+	//	printk("w20535[s2]:rs_flip_unthrottle:down RTS and BTUART INT enabled.\n");
+	#endif
+	}
+}
 /*
  * ------------------------------------------------------------
  * rs_throttle()
@@ -2008,9 +2987,27 @@ static void rs_throttle(struct tty_struct * tty)
 	if (I_IXOFF(tty))
 		rs_send_xchar(tty, STOP_CHAR(tty));
 
-	if (tty->termios->c_cflag & CRTSCTS)
-		info->MCR &= ~UART_MCR_RTS;
-
+	if( info->state->iomem_base == (u8 *)&BTUART ){
+		/*---------------------------------------------
+		 * added by jordan  :03/09/12
+		 * due to btuart flip flow control function so it is not necessary to use n_tty throttle for BTUART
+		 * -------------------------------------------*/
+	#ifdef BTUART_FLOW_CONTROL_DEBUG
+	//	printk("w20535:puzzled n_tty throttle() tried.\n");
+	#endif
+		return;
+		/*---------------------------------------------
+		 * end by jordan 
+		 *-------------------------------------------- */
+	}
+	if( info->state->iomem_base == (u8 *)&FFUART )
+		if (tty->termios->c_cflag & CRTSCTS) 
+		{
+			info->MCR &= ~UART_MCR_RTS;
+#if 0	
+			printk("FFUART: rs_throttle set RTS \n");
+#endif
+		}
 	save_flags(flags); cli();
 	serial_out(info, UART_MCR, info->MCR);
 	restore_flags(flags);
@@ -2036,8 +3033,28 @@ static void rs_unthrottle(struct tty_struct * tty)
 		else
 			rs_send_xchar(tty, START_CHAR(tty));
 	}
-	if (tty->termios->c_cflag & CRTSCTS)
-		info->MCR |= UART_MCR_RTS;
+	if( info->state->iomem_base == (u8 *)&BTUART ){
+		/*---------------------------------------------
+		 * added by jordan  :03/09/12
+		 * due to btuart flip flow control function so it is not necessary to use n_tty throttle for BTUART
+		 * detail info can be retrived in tty_io.c
+		 * -------------------------------------------*/
+	#ifdef BTUART_FLOW_CONTROL_DEBUG
+	//	printk("w20535:puzzled n_tty unthrottle() tried.\n");
+	#endif
+		return;
+		/*---------------------------------------------
+		 * end by jordan 
+		 *-------------------------------------------- */
+	}
+	if( info->state->iomem_base == (u8 *)&FFUART )
+		if (tty->termios->c_cflag & CRTSCTS) 
+		{
+			info->MCR |= UART_MCR_RTS;
+#if 0
+			printk("FFUART: rs_unthrottle clear RTS \n");
+#endif
+		}
 	save_flags(flags); cli();
 	serial_out(info, UART_MCR, info->MCR);
 	restore_flags(flags);
@@ -2136,7 +3153,6 @@ static int set_serial_info(struct async_struct * info,
 	if (new_serial.type) {
 		for (i = 0 ; i < NR_PORTS; i++)
 			if ((state != &rs_table[i]) &&
-			    (rs_table[i].io_type == SERIAL_IO_PORT) &&
 			    (rs_table[i].port == new_port) &&
 			    rs_table[i].type)
 				return -EADDRINUSE;
@@ -2199,7 +3215,7 @@ static int set_serial_info(struct async_struct * info,
 
 	
 check_and_exit:
-	if ((!state->port && !state->iomem_base) || !state->type)
+	if (!state->port || !state->type)
 		return 0;
 	if (info->flags & ASYNC_INITIALIZED) {
 		if (((old_state.flags & ASYNC_SPD_MASK) !=
@@ -2270,18 +3286,33 @@ static int get_modem_info(struct async_struct * info, unsigned int *value)
 
 	control = info->MCR;
 	save_flags(flags); cli();
-	status = serial_in(info, UART_MSR);
+	if (info->state->iomem_base == (u8 *)&FFUART)
+		status = info->MSR;
+	else
+		status = serial_in(info, UART_MSR);
 	restore_flags(flags);
-	result =  ((control & UART_MCR_RTS) ? TIOCM_RTS : 0)
-		| ((control & UART_MCR_DTR) ? TIOCM_DTR : 0)
+	if (info->state->iomem_base == (u8 *)&FFUART) 
+		result =  ((control & UART_MCR_RTS) ? TIOCM_RTS : 0)
+			| ((ffuart_dtr_state) ? 0 : TIOCM_DTR)
 #ifdef TIOCM_OUT1
-		| ((control & UART_MCR_OUT1) ? TIOCM_OUT1 : 0)
-		| ((control & UART_MCR_OUT2) ? TIOCM_OUT2 : 0)
+			| ((control & UART_MCR_OUT1) ? TIOCM_OUT1 : 0)
+			| ((control & UART_MCR_OUT2) ? TIOCM_OUT2 : 0)
 #endif
-		| ((status  & UART_MSR_DCD) ? TIOCM_CAR : 0)
-		| ((status  & UART_MSR_RI) ? TIOCM_RNG : 0)
-		| ((status  & UART_MSR_DSR) ? TIOCM_DSR : 0)
-		| ((status  & UART_MSR_CTS) ? TIOCM_CTS : 0);
+			| ((status  & UART_MSR_DCD) ? TIOCM_CAR : 0)
+			| ((status  & UART_MSR_RI) ? TIOCM_RNG : 0)
+			| ((status  & UART_MSR_DSR) ? TIOCM_DSR : 0)
+			| ((ffuart_cts_state) ? 0 : TIOCM_CTS);		
+	else
+		result =  ((control & UART_MCR_RTS) ? TIOCM_RTS : 0)
+			| ((control & UART_MCR_DTR) ? TIOCM_DTR : 0)
+#ifdef TIOCM_OUT1
+			| ((control & UART_MCR_OUT1) ? TIOCM_OUT1 : 0)
+			| ((control & UART_MCR_OUT2) ? TIOCM_OUT2 : 0)
+#endif
+			| ((status  & UART_MSR_DCD) ? TIOCM_CAR : 0)
+			| ((status  & UART_MSR_RI) ? TIOCM_RNG : 0)
+			| ((status  & UART_MSR_DSR) ? TIOCM_DSR : 0)
+			| ((status  & UART_MSR_CTS) ? TIOCM_CTS : 0);
 
 	if (copy_to_user(value, &result, sizeof(int)))
 		return -EFAULT;
@@ -2298,56 +3329,143 @@ static int set_modem_info(struct async_struct * info, unsigned int cmd,
 		return -EFAULT;
 
 	switch (cmd) {
-	case TIOCMBIS: 
-		if (arg & TIOCM_RTS)
-			info->MCR |= UART_MCR_RTS;
-		if (arg & TIOCM_DTR)
-			info->MCR |= UART_MCR_DTR;
+	case TIOCMBIS:
+		if (info->state->iomem_base == (u8 *)&FFUART) {
+			if (arg & TIOCM_RTS)
+				info->MCR |= UART_MCR_RTS;
+			if (arg & TIOCM_DSR)
+				info->MSR |= UART_MSR_DSR;
+			if (arg & TIOCM_CD)
+				info->MSR |= UART_MSR_DCD;
+			if (arg & TIOCM_RI)
+				info->MSR |= UART_MSR_RI;
 #ifdef TIOCM_OUT1
-		if (arg & TIOCM_OUT1)
-			info->MCR |= UART_MCR_OUT1;
-		if (arg & TIOCM_OUT2)
-			info->MCR |= UART_MCR_OUT2;
+			if (arg & TIOCM_OUT1)
+				info->MCR |= UART_MCR_OUT1;
+			if (arg & TIOCM_OUT2)
+				info->MCR |= UART_MCR_OUT2;
 #endif
-		if (arg & TIOCM_LOOP)
-			info->MCR |= UART_MCR_LOOP;
+			if (arg & TIOCM_LOOP)
+				info->MCR |= UART_MCR_LOOP;
+		}
+		else {
+			if (arg & TIOCM_RTS)
+				info->MCR |= UART_MCR_RTS;
+			if (arg & TIOCM_DTR)
+				info->MCR |= UART_MCR_DTR;
+#ifdef TIOCM_OUT1
+			if (arg & TIOCM_OUT1)
+				info->MCR |= UART_MCR_OUT1;
+			if (arg & TIOCM_OUT2)
+				info->MCR |= UART_MCR_OUT2;
+#endif
+			if (arg & TIOCM_LOOP)
+				info->MCR |= UART_MCR_LOOP;
+		}
 		break;
 	case TIOCMBIC:
-		if (arg & TIOCM_RTS)
-			info->MCR &= ~UART_MCR_RTS;
-		if (arg & TIOCM_DTR)
-			info->MCR &= ~UART_MCR_DTR;
+		if (info->state->iomem_base == (u8 *)&FFUART) {
+			if (arg & TIOCM_RTS)
+				info->MCR &= ~UART_MCR_RTS;
+			if (arg & TIOCM_DSR)
+				info->MSR &= ~UART_MSR_DSR;
+			if (arg & TIOCM_CD)
+				info->MSR &= ~UART_MSR_DCD;
+			if (arg & TIOCM_RI)
+				info->MSR &= ~UART_MSR_RI;
 #ifdef TIOCM_OUT1
-		if (arg & TIOCM_OUT1)
-			info->MCR &= ~UART_MCR_OUT1;
-		if (arg & TIOCM_OUT2)
-			info->MCR &= ~UART_MCR_OUT2;
+			if (arg & TIOCM_OUT1)
+				info->MCR &= ~UART_MCR_OUT1;
+			if (arg & TIOCM_OUT2)
+				info->MCR &= ~UART_MCR_OUT2;
 #endif
-		if (arg & TIOCM_LOOP)
-			info->MCR &= ~UART_MCR_LOOP;
+			if (arg & TIOCM_LOOP)
+				info->MCR &= ~UART_MCR_LOOP;
+		}
+		else {
+			if (arg & TIOCM_RTS)
+				info->MCR &= ~UART_MCR_RTS;
+			if (arg & TIOCM_DTR)
+				info->MCR &= ~UART_MCR_DTR;
+#ifdef TIOCM_OUT1
+			if (arg & TIOCM_OUT1)
+				info->MCR &= ~UART_MCR_OUT1;
+			if (arg & TIOCM_OUT2)
+				info->MCR &= ~UART_MCR_OUT2;
+#endif
+			if (arg & TIOCM_LOOP)
+				info->MCR &= ~UART_MCR_LOOP;
+		}
 		break;
 	case TIOCMSET:
-		info->MCR = ((info->MCR & ~(UART_MCR_RTS |
+		if (info->state->iomem_base == (u8 *)&FFUART) {
+			info->MCR = ((info->MCR & ~(UART_MCR_RTS |
 #ifdef TIOCM_OUT1
-					    UART_MCR_OUT1 |
-					    UART_MCR_OUT2 |
+						    UART_MCR_OUT1 |
+						    UART_MCR_OUT2 |
 #endif
-					    UART_MCR_LOOP |
-					    UART_MCR_DTR))
-			     | ((arg & TIOCM_RTS) ? UART_MCR_RTS : 0)
+						    UART_MCR_LOOP))
+				     | ((arg & TIOCM_RTS) ? UART_MCR_RTS : 0)
 #ifdef TIOCM_OUT1
-			     | ((arg & TIOCM_OUT1) ? UART_MCR_OUT1 : 0)
-			     | ((arg & TIOCM_OUT2) ? UART_MCR_OUT2 : 0)
+				     | ((arg & TIOCM_OUT1) ? UART_MCR_OUT1 : 0)
+				     | ((arg & TIOCM_OUT2) ? UART_MCR_OUT2 : 0)
 #endif
-			     | ((arg & TIOCM_LOOP) ? UART_MCR_LOOP : 0)
-			     | ((arg & TIOCM_DTR) ? UART_MCR_DTR : 0));
+				     | ((arg & TIOCM_LOOP) ? UART_MCR_LOOP : 0));
+			info->MSR = ((info->MSR & ~(UART_MSR_DSR |
+						    UART_MSR_DCD |
+						    UART_MSR_RI ))
+				     | ((arg & TIOCM_DSR) ? UART_MSR_DSR : 0)
+				     | ((arg & TIOCM_CD) ? UART_MSR_DCD : 0)
+				     | ((arg & TIOCM_RI) ? UART_MSR_RI : 0));	
+		}
+		else {
+			info->MCR = ((info->MCR & ~(UART_MCR_RTS |
+#ifdef TIOCM_OUT1
+						    UART_MCR_OUT1 |
+						    UART_MCR_OUT2 |
+#endif
+						    UART_MCR_LOOP |
+						    UART_MCR_DTR))
+				     | ((arg & TIOCM_RTS) ? UART_MCR_RTS : 0)
+#ifdef TIOCM_OUT1
+				     | ((arg & TIOCM_OUT1) ? UART_MCR_OUT1 : 0)
+				     | ((arg & TIOCM_OUT2) ? UART_MCR_OUT2 : 0)
+#endif
+				     | ((arg & TIOCM_LOOP) ? UART_MCR_LOOP : 0)
+				     | ((arg & TIOCM_DTR) ? UART_MCR_DTR : 0));
+		}
 		break;
 	default:
 		return -EINVAL;
 	}
 	save_flags(flags); cli();
 	info->MCR |= ALPHA_KLUDGE_MCR; 		/* Don't ask */
-	serial_out(info, UART_MCR, info->MCR);
+/* Modified by WUL for EZX */
+	if( info->state->iomem_base == (u8 *)&FFUART ){
+		serial_outp(info, UART_MCR, info->MCR);
+/*
+		if( info->MCR & UART_MCR_DTR)
+			GPCR0 = 0x00000100;     //set DTR low
+		else
+			GPSR0 = 0x00000100;     //set DTR high
+		unsigned int aa;
+		aa = serial_inp(info, UART_MCR);
+		printk("Regiater MCR is 0x%2x\n", info->MCR);
+*/
+		if( info->MSR & UART_MSR_DSR)
+			GPCR1 = 0x00000020;     //set DSR low
+		else
+			GPSR1 = 0x00000020;     //set DSR high
+		if( info->MSR & UART_MSR_DCD)
+			GPCR1 = 0x00000010;     //set DCD low
+		else
+			GPSR1 = 0x00000010;     //set DCD high
+		if( info->MSR & UART_MSR_RI)
+			GPCR1 = 0x00000040;     //set RI low
+		else
+			GPSR1 = 0x00000040;     //set RI high		
+	} else
+		serial_out(info, UART_MCR, info->MCR);
 	restore_flags(flags);
 	return 0;
 }
@@ -2369,7 +3487,7 @@ static int do_autoconfig(struct async_struct * info)
 	    (info->state->port != 0  || info->state->iomem_base != 0) &&
 	    (info->state->type != PORT_UNKNOWN)) {
 		irq = detect_uart_irq(info->state);
-		if (irq > 0)
+		if (IRQ_VALID(irq))
 			info->state->irq = irq;
 	}
 
@@ -2470,7 +3588,7 @@ static int set_multiport_struct(struct async_struct * info,
 			   sizeof(struct serial_multiport_struct)))
 		return -EFAULT;
 	
-	if (new_multi.irq != state->irq || state->irq == 0 ||
+	if (new_multi.irq != state->irq || !IRQ_VALID(state->irq) ||
 	    !IRQ_ports[state->irq])
 		return -EINVAL;
 
@@ -2605,6 +3723,91 @@ static int rs_ioctl(struct tty_struct *tty, struct file * file,
 		case TIOCSSERIAL:
 			return set_serial_info(info,
 					       (struct serial_struct *) arg);
+		case TIOCWAKEBTS:
+			GPSR0 = 0x00020000;
+#if BT_ON	
+			printk("Set BT_WAKE as high\n");
+#endif
+			return 0;
+		case TIOCWAKEBTC:
+			GPCR0 = 0x00020000;
+#if BT_ON	
+			printk("Clear BT_WAKE as low\n");
+#endif
+			return 0;
+		case TIOCRESETBTS:
+			GPSR0 = 0x00080000;
+#if BT_ON	
+			printk("Set BT_RESET as high\n");
+#endif
+			return 0;
+		case TIOCRESETBTC:
+			GPCR0 = 0x00080000;
+#if BT_ON	
+			printk("Clear BT_RESET as low\n");
+#endif
+			return 0;
+		case TIOCAUDIOON:
+			bluetoothaudio_open();
+#if BT_ON	
+			printk("Open audio clock\n");
+#endif
+			return 0;
+		case TIOCAUDIOOFF:
+			bluetoothaudio_close();	
+#if BT_ON	
+			printk("Close audio clock\n");
+#endif
+			return 0;
+		case TIOC_ENABLE_IFLOW:
+	//		printk("w20535:enable_iflow.\n");
+			save_flags(flags); cli();
+			if (!btuart_flip_flow_ctl)
+				info->MCR |= UART_MCR_RTS;
+			else	
+				info->MCR &= ~UART_MCR_RTS;
+			serial_out(info, UART_MCR, info->MCR);
+			restore_flags(flags);
+			return 0;
+		case TIOC_DISABLE_IFLOW_RTS_LOW:
+	//		printk("w20535:Software flow control\n");
+			save_flags(flags); cli();
+			info->MCR &= ~UART_MCR_RTS;
+			serial_out(info, UART_MCR, info->MCR);
+			restore_flags(flags);
+#if BT_ON	
+			printk("Software flow control\n");
+#endif
+			return 0;
+		case TIOC_HOST_WAKE_STATE:
+			if((GPLR0 & 0x2000) == 0x2000)
+				bt_hostwake_state = 0;	/* BT_HOSTWAKE is low */
+			else
+				bt_hostwake_state = 1;	/* BT_HOSTWAKE is high */
+			if(copy_to_user((unsigned int *) arg, &bt_hostwake_state, sizeof(int)))
+			{
+#if BT_ON
+				printk("copy_to_user error.host state is %d\n", bt_hostwake_state);
+#endif
+				return -EFAULT;
+			}
+			return 0;
+		case TIOC_HOST_WAKE_WATCH:
+			return bt_hostwake_read((unsigned int *) arg);
+/*
+		case TIOCENABLEBTS:
+			GPSR2 = 0x00400000;
+#if BT_ON	
+			printk("Set BT_ENABLE as high.\n");
+#endif
+			return 0;
+		case TIOCENABLEBTC:
+			GPCR2 = 0x00400000;
+#if BT_ON	
+			printk("Clear BT_ENABLE as low.\n");
+#endif
+			return 0;
+*/
 		case TIOCSERCONFIG:
 			return do_autoconfig(info);
 
@@ -2639,7 +3842,12 @@ static int rs_ioctl(struct tty_struct *tty, struct file * file,
 			restore_flags(flags);
 			/* Force modem status interrupts on */
 			info->IER |= UART_IER_MSI;
-			serial_out(info, UART_IER, info->IER);
+			if( info->state->iomem_base == (u8 *)&FFUART ) {
+				enable_irq(IRQ_GPIO(9));
+				enable_irq(IRQ_GPIO(8));
+			}
+			else 
+				serial_out(info, UART_IER, info->IER);
 			while (1) {
 				interruptible_sleep_on(&info->delta_msr_wait);
 				/* see if a signal did it */
@@ -2648,14 +3856,29 @@ static int rs_ioctl(struct tty_struct *tty, struct file * file,
 				save_flags(flags); cli();
 				cnow = info->state->icount; /* atomic copy */
 				restore_flags(flags);
-				if (cnow.rng == cprev.rng && cnow.dsr == cprev.dsr && 
-				    cnow.dcd == cprev.dcd && cnow.cts == cprev.cts)
-					return -EIO; /* no change => error */
-				if ( ((arg & TIOCM_RNG) && (cnow.rng != cprev.rng)) ||
-				     ((arg & TIOCM_DSR) && (cnow.dsr != cprev.dsr)) ||
-				     ((arg & TIOCM_CD)  && (cnow.dcd != cprev.dcd)) ||
-				     ((arg & TIOCM_CTS) && (cnow.cts != cprev.cts)) ) {
-					return 0;
+				if( info->state->iomem_base == (u8 *)&FFUART ) {
+					if (cnow.dtr == cprev.dtr && cnow.cts == cprev.cts) {
+						return -EIO; /* no change => error */
+					}
+				}
+				else {
+					if (cnow.rng == cprev.rng && cnow.dsr == cprev.dsr && 
+					    cnow.dcd == cprev.dcd && cnow.cts == cprev.cts)
+						return -EIO; /* no change => error */
+				}
+				if( info->state->iomem_base == (u8 *)&FFUART ) {
+					if ( ((arg & TIOCM_DTR)  && (cnow.dtr != cprev.dtr)) ||
+					     ((arg & TIOCM_CTS) && (cnow.cts != cprev.cts)) ) {
+						return 0;
+					}
+				}
+				else {
+					if ( ((arg & TIOCM_RNG) && (cnow.rng != cprev.rng)) ||
+					     ((arg & TIOCM_DSR) && (cnow.dsr != cprev.dsr)) ||
+					     ((arg & TIOCM_CD)  && (cnow.dcd != cprev.dcd)) ||
+					     ((arg & TIOCM_CTS) && (cnow.cts != cprev.cts)) ) {
+						return 0;
+					}
 				}
 				cprev = cnow;
 			}
@@ -2668,20 +3891,39 @@ static int rs_ioctl(struct tty_struct *tty, struct file * file,
 		 *     RI where only 0->1 is counted.
 		 */
 		case TIOCGICOUNT:
-			save_flags(flags); cli();
-			cnow = info->state->icount;
-			restore_flags(flags);
-			icount.cts = cnow.cts;
-			icount.dsr = cnow.dsr;
-			icount.rng = cnow.rng;
-			icount.dcd = cnow.dcd;
-			icount.rx = cnow.rx;
-			icount.tx = cnow.tx;
-			icount.frame = cnow.frame;
-			icount.overrun = cnow.overrun;
-			icount.parity = cnow.parity;
-			icount.brk = cnow.brk;
-			icount.buf_overrun = cnow.buf_overrun;
+			if( info->state->iomem_base == (u8 *)&FFUART ) {
+				save_flags(flags); cli();
+				cnow = info->state->icount;
+				restore_flags(flags);
+				icount.cts = cnow.cts;
+				icount.dtr = cnow.dtr;
+				icount.dsr = cnow.dsr;
+				icount.rng = cnow.rng;
+				icount.dcd = cnow.dcd;
+				icount.rx = cnow.rx;
+				icount.tx = cnow.tx;
+				icount.frame = cnow.frame;
+				icount.overrun = cnow.overrun;
+				icount.parity = cnow.parity;
+				icount.brk = cnow.brk;
+				icount.buf_overrun = cnow.buf_overrun;
+			}
+			else {
+				save_flags(flags); cli();
+				cnow = info->state->icount;
+				restore_flags(flags);
+				icount.cts = cnow.cts;
+				icount.dsr = cnow.dsr;
+				icount.rng = cnow.rng;
+				icount.dcd = cnow.dcd;
+				icount.rx = cnow.rx;
+				icount.tx = cnow.tx;
+				icount.frame = cnow.frame;
+				icount.overrun = cnow.overrun;
+				icount.parity = cnow.parity;
+				icount.brk = cnow.brk;
+				icount.buf_overrun = cnow.buf_overrun;
+			}
 			
 			if (copy_to_user((void *)arg, &icount, sizeof(icount)))
 				return -EFAULT;
@@ -2691,7 +3933,8 @@ static int rs_ioctl(struct tty_struct *tty, struct file * file,
 			/* "setserial -W" is called in Debian boot */
 			printk ("TIOCSER?WILD ioctl obsolete, ignored.\n");
 			return 0;
-
+		
+			
 		default:
 			return -ENOIOCTLCMD;
 		}
@@ -2714,22 +3957,60 @@ static void rs_set_termios(struct tty_struct *tty, struct termios *old_termios)
 	/* Handle transition to B0 status */
 	if ((old_termios->c_cflag & CBAUD) &&
 	    !(cflag & CBAUD)) {
-		info->MCR &= ~(UART_MCR_DTR|UART_MCR_RTS);
+		if( info->state->iomem_base == (u8 *)&FFUART ){
+			info->MCR &= ~UART_MCR_RTS;
+			info->MSR &= ~(UART_MSR_DSR | UART_MSR_DCD | UART_MSR_RI);
+		} else
+			info->MCR &= ~(UART_MCR_DTR|UART_MCR_RTS);
 		save_flags(flags); cli();
-		serial_out(info, UART_MCR, info->MCR);
+		if( info->state->iomem_base == (u8 *)&FFUART ){
+			serial_outp(info, UART_MCR, info->MCR);
+			if( info->MSR & UART_MSR_DSR)
+				GPCR1 = 0x00000020;     //set DSR low
+			else
+				GPSR1 = 0x00000020;     //set DSR high
+			if( info->MSR & UART_MSR_DCD)
+				GPCR1 = 0x00000010;     //set DCD low
+			else
+				GPSR1 = 0x00000010;     //set DCD high
+			if( info->MSR & UART_MSR_RI)
+				GPCR1 = 0x00000040;     //set RI low
+			else
+				GPSR1 = 0x00000040;     //set RI high	
+		} else
+			serial_out(info, UART_MCR, info->MCR);
 		restore_flags(flags);
 	}
 	
 	/* Handle transition away from B0 status */
 	if (!(old_termios->c_cflag & CBAUD) &&
 	    (cflag & CBAUD)) {
-		info->MCR |= UART_MCR_DTR;
+		if( info->state->iomem_base == (u8 *)&FFUART )
+			info->MSR |= UART_MSR_DSR | UART_MSR_DCD | UART_MSR_RI;
+		else
+			info->MCR |= UART_MCR_DTR;
 		if (!(tty->termios->c_cflag & CRTSCTS) || 
 		    !test_bit(TTY_THROTTLED, &tty->flags)) {
 			info->MCR |= UART_MCR_RTS;
 		}
 		save_flags(flags); cli();
-		serial_out(info, UART_MCR, info->MCR);
+		if( info->state->iomem_base == (u8 *)&FFUART ){
+			serial_outp(info, UART_MCR, info->MCR);
+			if( info->MSR & UART_MSR_DSR)
+				GPCR1 = 0x00000020;     //set DSR low
+			else
+				GPSR1 = 0x00000020;     //set DSR high
+			if( info->MSR & UART_MSR_DCD)
+				GPCR1 = 0x00000010;     //set DCD low
+			else
+				GPSR1 = 0x00000010;     //set DCD high
+			if( info->MSR & UART_MSR_RI)
+				GPCR1 = 0x00000040;     //set RI low
+			else
+				GPSR1 = 0x00000040;     //set RI high	
+			
+		} else
+			serial_out(info, UART_MCR, info->MCR);
 		restore_flags(flags);
 	}
 	
@@ -2772,10 +4053,33 @@ static void rs_close(struct tty_struct *tty, struct file * filp)
 	if (!info || serial_paranoia_check(info, tty->device, "rs_close"))
 		return;
 
+  /***********************************
+  *            By Liu Xin
+  ************************************/
+  /* only the ttyS0 used by multiplexer */
+  /* be careful */
+  if( tty == serial_for_mux_tty ) {
+    serial_mux_guard--;
+    if( serial_mux_guard ) {
+      save_flags(flags); cli();
+      (info->state->count)--;
+      restore_flags(flags);
+      return;
+    }
+    serial_for_mux_tty = NULL;
+  }
+  /***********************************
+  *            By Liu Xin
+  ************************************/
+
 	state = info->state;
 	
 	save_flags(flags); cli();
-	
+/*
+#ifdef CONFIG_PM
+      	pm_unregister(state->pm_dev);
+#endif
+*/
 	if (tty_hung_up_p(filp)) {
 		DBG_CNT("before DEC-hung");
 		MOD_DEC_USE_COUNT;
@@ -2844,6 +4148,12 @@ static void rs_close(struct tty_struct *tty, struct file * filp)
 		rs_wait_until_sent(tty, info->timeout);
 	}
 	shutdown(info);
+
+/* Clear ENABLE pin of BT as low when BTUART is close */
+/*
+	if (info->state->iomem_base == (u8 *)&BTUART)
+		GPCR2 = 0x00400000; 
+*/
 	if (tty->driver.flush_buffer)
 		tty->driver.flush_buffer(tty);
 	if (tty->ldisc.flush_buffer)
@@ -2861,6 +4171,14 @@ static void rs_close(struct tty_struct *tty, struct file * filp)
 	info->flags &= ~(ASYNC_NORMAL_ACTIVE|ASYNC_CALLOUT_ACTIVE|
 			 ASYNC_CLOSING);
 	wake_up_interruptible(&info->close_wait);
+/*	
+	if (info->state->iomem_base == (u8 *)&STUART) 
+		dc_disable();
+*/			
+	/*added by jordan*/
+	if (info->state->iomem_base == (u8 *)&BTUART) 
+		tty->driver.btuart = 0;
+	/*end by jordan*/
 	MOD_DEC_USE_COUNT;
 }
 
@@ -3010,6 +4328,10 @@ static int block_til_ready(struct tty_struct *tty, struct file * filp,
 		if (info->flags & ASYNC_CALLOUT_ACTIVE)
 			return -EBUSY;
 		info->flags |= ASYNC_NORMAL_ACTIVE;
+                if(( info->state->iomem_base == (u8 *)&FFUART )&&(!check_ffuart_cable_attached()))
+                {
+                   return -ENOMEDIUM;
+                }
 		return 0;
 	}
 
@@ -3044,10 +4366,19 @@ static int block_til_ready(struct tty_struct *tty, struct file * filp,
 	while (1) {
 		save_flags(flags); cli();
 		if (!(info->flags & ASYNC_CALLOUT_ACTIVE) &&
-		    (tty->termios->c_cflag & CBAUD))
-			serial_out(info, UART_MCR,
-				   serial_inp(info, UART_MCR) |
-				   (UART_MCR_DTR | UART_MCR_RTS));
+		    (tty->termios->c_cflag & CBAUD)) {
+			if( info->state->iomem_base == (u8 *)&FFUART ){
+				serial_out(info, UART_MCR,
+					serial_inp(info, UART_MCR) |
+				   	 UART_MCR_RTS);
+				GPCR1 = 0x00000070;     //set DSR/DCD/RI low
+			} 
+			else {
+				serial_out(info, UART_MCR,
+					serial_inp(info, UART_MCR) |
+					(UART_MCR_DTR | UART_MCR_RTS));
+			}
+		}
 		restore_flags(flags);
 		set_current_state(TASK_INTERRUPTIBLE);
 		if (tty_hung_up_p(filp) ||
@@ -3066,7 +4397,19 @@ static int block_til_ready(struct tty_struct *tty, struct file * filp,
 		    !(info->flags & ASYNC_CLOSING) &&
 		    (do_clocal || (serial_in(info, UART_MSR) &
 				   UART_MSR_DCD)))
-			break;
+                {
+                    if( info->state->iomem_base == (u8 *)&FFUART )
+                    {
+                        if(check_ffuart_cable_attached())
+                        {
+                            break;
+                        }
+                    }
+                    else
+                    {
+			    break;
+                    }
+                }
 		if (signal_pending(current)) {
 			retval = -ERESTARTSYS;
 			break;
@@ -3132,6 +4475,44 @@ static int get_async_struct(int line, struct async_struct **ret_info)
 	return 0;
 }
 
+/* in open function we should check the FFuart cable firstly, since FFUART and USB mux the GPIOs */
+
+static int check_ffuart_cable(struct async_struct *info, struct file * filp)
+{
+    DECLARE_WAITQUEUE(wait, current);
+    int ret = 0 ;
+    if( !check_ffuart_cable_attached() )
+    {
+        if(filp->f_flags & O_NONBLOCK)
+        {
+            return -ENOMEDIUM;
+        }
+        else
+        {
+            add_wait_queue(&info->open_wait, &wait);
+            info->blocked_open++;
+            while (1) 
+            {
+                set_current_state(TASK_INTERRUPTIBLE);
+                if(check_ffuart_cable_attached())
+                {
+                    break;
+                }
+                if (signal_pending(current)) 
+                {
+			ret = -ERESTARTSYS;
+			break;
+		}
+		schedule();
+            }
+            set_current_state(TASK_RUNNING);
+            remove_wait_queue(&info->open_wait, &wait);
+            info->blocked_open--;
+        }
+    }
+    return ret;
+}
+
 /*
  * This routine is called whenever a serial port is opened.  It
  * enables interrupts for a serial port, linking in its async structure into
@@ -3145,10 +4526,35 @@ static int get_async_struct(int line, struct async_struct **ret_info)
 static int rs_open(struct tty_struct *tty, struct file * filp)
 {
 	struct async_struct	*info;
-	int 			retval, line;
+	int 			retval, line, i, stuart_state;
 	unsigned long		page;
-
+        static u8               hkCount = 0;
 	MOD_INC_USE_COUNT;
+	/* added by lilij for hand shake, begin */
+        if (hkCount == 0)
+        {
+#if HANDSHAKE_DEBUG2
+            printk("\nezx_test: rs_begin_open: %d\n", jiffies );
+#endif
+            while (!(GPLR0 & GPIO0_BP_RDY))
+            {
+               printk("rs_open: GPLR0=%x\n",GPLR0);
+               if (!(GPLR0 & GPIO14_BP_WDI2)) {
+                 pm_do_poweroff();
+               }  
+               for(i=0; i<10000; i++);
+            }
+#if HANDSHAKE_DEBUG2
+            printk("\nezx_test: rs_open_end_hk: %d\n", jiffies);
+            printk("\nezx_test: BP_RDY = 1 yes\n");
+#endif
+            GPCR1 = GPIO33_MCU_INT_SW;
+#if HANDSHAKE_DEBUG2
+            printk("\nezx_test: GPSR1 = %x", GPLR1);
+#endif
+            hkCount++;
+        }
+   /* added by lilij for hand shake, end */
 	line = MINOR(tty->device) - tty->driver.minor_start;
 	if ((line < 0) || (line >= NR_PORTS)) {
 		MOD_DEC_USE_COUNT;
@@ -3161,9 +4567,44 @@ static int rs_open(struct tty_struct *tty, struct file * filp)
 	}
 	tty->driver_data = info;
 	info->tty = tty;
+
+        if( info->state->iomem_base == (u8 *)&FFUART )
+        {
+	    retval = check_ffuart_cable(info,filp);
+            if(retval)
+            {
+                MOD_DEC_USE_COUNT;
+                return retval;
+	    }
+        }
+       
+	/***********************************
+	*            By Liu Xin
+	************************************/
+	/* only the ttyS0 used by multiplexer */
+	if(line == TTY_NO_FOR_MUX ) {
+	        if( serial_mux_guard ) {
+			serial_mux_guard++;
+			MOD_DEC_USE_COUNT;
+			printk("Fail to open ttyS0, it's busy!\n");
+			return -EBUSY;
+		} else {
+			serial_mux_guard++;
+			serial_for_mux_tty = tty;
+		}
+	}
+	/***********************************
+	*            By Liu Xin
+	************************************/
 	if (serial_paranoia_check(info, tty->device, "rs_open"))
 		return -ENODEV;
-
+/*
+	if (info->state->iomem_base == (u8 *)&STUART) {
+		stuart_state = dc_enable();
+		if(stuart_state != 0)
+			return -EIO;
+	}
+*/	
 #ifdef SERIAL_DEBUG_OPEN
 	printk("rs_open %s%d, count = %d\n", tty->driver.name, info->line,
 	       info->state->count);
@@ -3207,6 +4648,13 @@ static int rs_open(struct tty_struct *tty, struct file * filp)
 	if (retval)
 		return retval;
 
+/* Set ENABLE pin of BT as high when BTUART is open */
+	if (info->state->iomem_base == (u8 *)&BTUART) {
+/*	
+	GPSR2 = 0x00400000; 
+*/		
+		disable_irq(BT_HOSTWAKE);	
+	}
 	retval = block_til_ready(tty, filp, info);
 	if (retval) {
 #ifdef SERIAL_DEBUG_OPEN
@@ -3234,8 +4682,36 @@ static int rs_open(struct tty_struct *tty, struct file * filp)
 	info->session = current->session;
 	info->pgrp = current->pgrp;
 
+#if BT_ON
+	if (info->state->iomem_base == (u8 *)&BTUART)
+		printk("open ttyS2.\n");
+#endif 
+	if (info->state->iomem_base == (u8 *)&BTUART)
+		init_waitqueue_head(&bt_hostwake_wait);
+/*added by jordan*/
+	if (info->state->iomem_base == (u8 *)&BTUART)
+	{
+		tty->driver.btuart = 1;
+	}
+/*end by jordan*/
 #ifdef SERIAL_DEBUG_OPEN
 	printk("rs_open ttys%d successful...", info->line);
+#endif
+#if 0
+/*----------------------------------------------------
+ *added by jordan for btuart_flow_control   :03/09/12
+ *---------------------------------------------------*/
+	if(info->state->iomem_base == (u8 *)&BTUART){
+		tty->driver.flip_throttle = rs_flip_throttle;
+		tty->driver.flip_unthrottle = rs_flip_unthrottle;
+		tty->driver.btuart = 1;     /*used in n_tty_receive_buf()in n_tty.c*/
+	#ifdef BTUART_FLOW_CONTROL_DEBUG
+		printk("w20535[s0]:drv flip init end.\n");
+	#endif
+	}
+/*------------------------------------------------------
+ *   end of btuart_flow_control
+ *------------------------------------------------------*/
 #endif
 	return 0;
 }
@@ -3251,17 +4727,14 @@ static inline int line_info(char *buf, struct serial_state *state)
 	int	ret;
 	unsigned long flags;
 
-	/*
-	 * Return zero characters for ports not claimed by driver.
-	 */
-	if (state->type == PORT_UNKNOWN) {
-		return 0;	/* ignore unused ports */
-	}
-
 	ret = sprintf(buf, "%d: uart:%s port:%lX irq:%d",
 		      state->line, uart_config[state->type].name, 
-		      (state->port ? state->port : (long)state->iomem_base),
-		      state->irq);
+		      state->port, state->irq);
+
+	if (!state->port || (state->type == PORT_UNKNOWN)) {
+		ret += sprintf(buf+ret, "\n");
+		return ret;
+	}
 
 	/*
 	 * Figure out the current RS-232 lines
@@ -3288,10 +4761,19 @@ static inline int line_info(char *buf, struct serial_state *state)
 	stat_buf[1] = 0;
 	if (control & UART_MCR_RTS)
 		strcat(stat_buf, "|RTS");
-	if (status & UART_MSR_CTS)
-		strcat(stat_buf, "|CTS");
-	if (control & UART_MCR_DTR)
-		strcat(stat_buf, "|DTR");
+	if (info->state->iomem_base == (u8 *)&FFUART) { 
+		if (!ffuart_cts_state)
+			strcat(stat_buf, "|CTS");
+		if (!ffuart_dtr_state)
+			strcat(stat_buf, "|DTR");
+	}
+	else {
+		if (status & UART_MSR_CTS)
+			strcat(stat_buf, "|CTS");
+		if (control & UART_MCR_DTR)
+			strcat(stat_buf, "|DTR");
+	}
+		
 	if (status & UART_MSR_DSR)
 		strcat(stat_buf, "|DSR");
 	if (status & UART_MSR_DCD)
@@ -3326,8 +4808,8 @@ static inline int line_info(char *buf, struct serial_state *state)
 	return ret;
 }
 
-static int rs_read_proc(char *page, char **start, off_t off, int count,
-			int *eof, void *data)
+int rs_read_proc(char *page, char **start, off_t off, int count,
+		 int *eof, void *data)
 {
 	int i, len = 0, l;
 	off_t	begin = 0;
@@ -3452,17 +4934,29 @@ static unsigned detect_uart_irq (struct serial_state * state)
 	probe_irq_off(probe_irq_on());
 	save_mcr = serial_inp(&scr_info, UART_MCR);
 	save_ier = serial_inp(&scr_info, UART_IER);
-	serial_outp(&scr_info, UART_MCR, UART_MCR_OUT1 | UART_MCR_OUT2);
-	
+	if( scr_info.iomem_base == (u8 *)&FFUART ){
+		serial_outp(&scr_info, UART_MCR, UART_MCR_OUT1 | UART_MCR_OUT2);
+		GPSR1 = 0x00000070;     //set DSR/DCD/RI high
+	}
+	else
+		serial_outp(&scr_info, UART_MCR, UART_MCR_OUT1 | UART_MCR_OUT2);
 	irqs = probe_irq_on();
-	serial_outp(&scr_info, UART_MCR, 0);
+	if( scr_info.iomem_base == (u8 *)&FFUART ){
+		serial_outp(&scr_info, UART_MCR, 0);	// The DSR/DCD/RI is still high.
+	} else
+		serial_outp(&scr_info, UART_MCR, 0);
 	udelay (10);
 	if (state->flags & ASYNC_FOURPORT)  {
 		serial_outp(&scr_info, UART_MCR,
 			    UART_MCR_DTR | UART_MCR_RTS);
 	} else {
-		serial_outp(&scr_info, UART_MCR,
-			    UART_MCR_DTR | UART_MCR_RTS | UART_MCR_OUT2);
+		if( scr_info.iomem_base == (u8 *)&FFUART ){
+			serial_outp(&scr_info, UART_MCR,
+				UART_MCR_RTS | UART_MCR_OUT2);
+			GPCR1 = 0x00000070;     //set DSR/DCD/RI low
+		} else	
+			serial_outp(&scr_info, UART_MCR,
+			   	UART_MCR_DTR | UART_MCR_RTS | UART_MCR_OUT2);
 	}
 	serial_outp(&scr_info, UART_IER, 0x0f);	/* enable all intrs */
 	(void)serial_inp(&scr_info, UART_LSR);
@@ -3473,7 +4967,23 @@ static unsigned detect_uart_irq (struct serial_state * state)
 	udelay (20);
 	irq = probe_irq_off(irqs);
 
-	serial_outp(&scr_info, UART_MCR, save_mcr);
+	if( scr_info.iomem_base == (u8 *)&FFUART ){
+		serial_outp(&scr_info, UART_MCR, save_mcr);
+		if(scr_info.MSR & UART_MSR_DSR)
+			GPCR1 = 0x00000020;     //set DSR low
+		else
+			GPSR1 = 0x00000020;     //set DSR high
+		if( scr_info.MSR & UART_MSR_DCD)
+			GPCR1 = 0x00000010;     //set DCD low
+		else
+			GPSR1 = 0x00000010;     //set DCD high
+		if( scr_info.MSR & UART_MSR_RI)
+			GPCR1 = 0x00000040;     //set RI low
+		else
+			GPSR1 = 0x00000040;     //set RI high	
+		
+	} else
+		serial_outp(&scr_info, UART_MCR, save_mcr);
 	serial_outp(&scr_info, UART_IER, save_ier);
 #ifdef CONFIG_SERIAL_MANY_PORTS
 	if (state->flags & ASYNC_FOURPORT)
@@ -3495,7 +5005,12 @@ static int size_fifo(struct async_struct *info)
 	old_mcr = serial_inp(info, UART_MCR);
 	serial_outp(info, UART_FCR, UART_FCR_ENABLE_FIFO |
 		    UART_FCR_CLEAR_RCVR | UART_FCR_CLEAR_XMIT);
-	serial_outp(info, UART_MCR, UART_MCR_LOOP);
+	if( info->state->iomem_base == (u8 *)&FFUART ) {
+		serial_outp(info, UART_MCR, UART_MCR_LOOP);
+		GPSR1 = 0x00000070;     //set DSR/DCD/RI high
+	}
+	else
+		serial_outp(info, UART_MCR, UART_MCR_LOOP);
 	serial_outp(info, UART_LCR, UART_LCR_DLAB);
 	old_dll = serial_inp(info, UART_DLL);
 	old_dlm = serial_inp(info, UART_DLM);
@@ -3509,7 +5024,24 @@ static int size_fifo(struct async_struct *info)
 	     (count < 256); count++)
 		serial_inp(info, UART_RX);
 	serial_outp(info, UART_FCR, old_fcr);
-	serial_outp(info, UART_MCR, old_mcr);
+	if( info->state->iomem_base == (u8 *)&FFUART )
+       	{
+		serial_outp(info, UART_MCR, old_mcr);
+		if( info->MSR & UART_MSR_DSR)
+			GPCR1 = 0x00000020;     //set DSR low
+		else
+		    	GPSR1 = 0x00000020;     //set DSR high
+		if( info->MSR & UART_MSR_DCD)
+			GPCR1 = 0x00000010;     //set DCD low
+		else
+			GPSR1 = 0x00000010;     //set DCD high
+		if( info->MSR & UART_MSR_RI)
+			GPCR1 = 0x00000040;     //set RI low
+		else
+			GPSR1 = 0x00000040;     //set RI high		
+	} 
+        else	
+		serial_outp(info, UART_MCR, old_mcr);
 	serial_outp(info, UART_LCR, UART_LCR_DLAB);
 	serial_outp(info, UART_DLL, old_dll);
 	serial_outp(info, UART_DLM, old_dlm);
@@ -3687,6 +5219,7 @@ static void autoconfig(struct serial_state * state)
 			return;		/* We failed; there's nothing here */
 		}
 	}
+	
 
 	save_mcr = serial_in(info, UART_MCR);
 	save_lcr = serial_in(info, UART_LCR);
@@ -3700,7 +5233,8 @@ static void autoconfig(struct serial_state * state)
 	 * manufacturer would be stupid enough to design a board
 	 * that conflicts with COM 1-4 --- we hope!
 	 */
-	if (!(state->flags & ASYNC_SKIP_TEST)) {
+	/* Note: Don't do this for EZX */
+	if (!(state->flags & ASYNC_SKIP_TEST)) {  
 		serial_outp(info, UART_MCR, UART_MCR_LOOP | 0x0A);
 		status1 = serial_inp(info, UART_MSR) & 0xF0;
 		serial_outp(info, UART_MCR, save_mcr);
@@ -3713,6 +5247,8 @@ static void autoconfig(struct serial_state * state)
 			return;
 		}
 	}
+
+
 	serial_outp(info, UART_LCR, 0xBF); /* set up for StarTech test */
 	serial_outp(info, UART_EFR, 0);	/* EFR is the same as FCR */
 	serial_outp(info, UART_LCR, 0);
@@ -3821,7 +5357,17 @@ static void autoconfig(struct serial_state * state)
 	if (state->type == PORT_RSA)
 		serial_outp(info, UART_RSA_FRR, 0);
 #endif
+
+/********************************************  
+ *  By Liu Changhui
+*********************************************/
+#ifdef _DEBUG_BOARD
 	serial_outp(info, UART_MCR, save_mcr);
+#endif
+/********************************************  
+ *  By Liu Changhui
+*********************************************/
+
 	serial_outp(info, UART_FCR, (UART_FCR_ENABLE_FIFO |
 				     UART_FCR_CLEAR_RCVR |
 				     UART_FCR_CLEAR_XMIT));
@@ -3919,25 +5465,6 @@ static _INLINE_ int get_pci_port(struct pci_dev *dev,
 		
 	}
   
-	/* HP's Diva chip puts the 4th/5th serial port further out, and
-	 * some serial ports are supposed to be hidden on certain models.
-	 */
-	if (dev->vendor == PCI_VENDOR_ID_HP &&
-			dev->device == PCI_DEVICE_ID_HP_SAS) {
-		switch (dev->subsystem_device) {
-		case 0x104B: /* Maestro */
-			if (idx == 3) idx++;
-			break;
-		case 0x1282: /* Everest / Longs Peak */
-			if (idx > 0) idx++;
-			if (idx > 2) idx++;
-			break;
-		}
-		if (idx > 2) {
-			offset = 0x18;
-		}
-	}
-
 	port =  pci_resource_start(dev, base_idx) + offset;
 
 	if ((board->flags & SPCI_FL_BASE_TABLE) == 0)
@@ -4107,14 +5634,12 @@ pci_plx9050_fn(struct pci_dev *dev, struct pci_board *board, int enable)
  * interface chip and different configuration methods:
  *     - 10x cards have control registers in IO and/or memory space;
  *     - 20x cards have control registers in standard PCI configuration space.
- *
- * SIIG initialization functions exported for use by parport_serial.c module.
  */
 
 #define PCI_DEVICE_ID_SIIG_1S_10x (PCI_DEVICE_ID_SIIG_1S_10x_550 & 0xfffc)
 #define PCI_DEVICE_ID_SIIG_2S_10x (PCI_DEVICE_ID_SIIG_2S_10x_550 & 0xfff8)
 
-int __devinit
+static int __devinit
 pci_siig10x_fn(struct pci_dev *dev, struct pci_board *board, int enable)
 {
        u16 data, *p;
@@ -4139,12 +5664,11 @@ pci_siig10x_fn(struct pci_dev *dev, struct pci_board *board, int enable)
        iounmap(p);
        return 0;
 }
-EXPORT_SYMBOL(pci_siig10x_fn);
 
 #define PCI_DEVICE_ID_SIIG_2S_20x (PCI_DEVICE_ID_SIIG_2S_20x_550 & 0xfffc)
 #define PCI_DEVICE_ID_SIIG_2S1P_20x (PCI_DEVICE_ID_SIIG_2S1P_20x_550 & 0xfffc)
 
-int __devinit
+static int __devinit
 pci_siig20x_fn(struct pci_dev *dev, struct pci_board *board, int enable)
 {
        u8 data;
@@ -4163,7 +5687,6 @@ pci_siig20x_fn(struct pci_dev *dev, struct pci_board *board, int enable)
        }
        return 0;
 }
-EXPORT_SYMBOL(pci_siig20x_fn);
 
 /* Added for EKF Intel i960 serial boards */
 static int __devinit
@@ -4245,40 +5768,6 @@ pci_timedia_fn(struct pci_dev *dev, struct pci_board *board, int enable)
 	return 0;
 }
 
-/*
- * HP's Remote Management Console.  The Diva chip came in several
- * different versions.  N-class, L2000 and A500 have two Diva chips, each
- * with 3 UARTs (the third UART on the second chip is unused).  Superdome
- * and Keystone have one Diva chip with 3 UARTs.  Some later machines have
- * one Diva chip, but it has been expanded to 5 UARTs.
- */
-static int __devinit
-pci_hp_diva(struct pci_dev *dev, struct pci_board *board, int enable)
-{
-	if (!enable)
-		return 0;
-
-	switch (dev->subsystem_device) {
-	case 0x1049: /* Prelude Diva 1 */
-	case 0x1223: /* Superdome */
-	case 0x1226: /* Keystone */
-	case 0x1282: /* Everest / Longs Peak */
-		board->num_ports = 3;
-		break;
-	case 0x104A: /* Prelude Diva 2 */
-		board->num_ports = 2;
-		break;
-	case 0x104B: /* Maestro */
-		board->num_ports = 4;
-		break;
-	case 0x1227: /* Powerbar */
-		board->num_ports = 1;
-		break;
-	}
-
-	return 0;
-}
-
 static int __devinit
 pci_xircom_fn(struct pci_dev *dev, struct pci_board *board, int enable)
 {
@@ -4308,7 +5797,6 @@ enum pci_board_num_t {
 	pbn_b0_bt_2_115200,
 	pbn_b0_bt_1_460800,
 	pbn_b0_bt_2_460800,
-	pbn_b0_bt_2_921600,
 
 	pbn_b1_1_115200,
 	pbn_b1_2_115200,
@@ -4323,7 +5811,6 @@ enum pci_board_num_t {
 	pbn_b1_4_1382400,
 	pbn_b1_8_1382400,
 
-	pbn_b2_1_115200,
 	pbn_b2_8_115200,
 	pbn_b2_4_460800,
 	pbn_b2_8_460800,
@@ -4344,7 +5831,6 @@ enum pci_board_num_t {
 	pbn_timedia,
 	pbn_intel_i960,
 	pbn_sgi_ioc3,
-	pbn_hp_diva,
 #ifdef CONFIG_DDB5074
 	pbn_nec_nile4,
 #endif
@@ -4389,7 +5875,6 @@ static struct pci_board pci_boards[] __devinitdata = {
 	{ SPCI_FL_BASE0 | SPCI_FL_BASE_TABLE, 2, 115200 }, /* pbn_b0_bt_2_115200 */
 	{ SPCI_FL_BASE0 | SPCI_FL_BASE_TABLE, 1, 460800 }, /* pbn_b0_bt_1_460800 */
 	{ SPCI_FL_BASE0 | SPCI_FL_BASE_TABLE, 2, 460800 }, /* pbn_b0_bt_2_460800 */
-	{ SPCI_FL_BASE0 | SPCI_FL_BASE_TABLE, 2, 921600 }, /* pbn_b0_bt_2_921600 */
 
 	{ SPCI_FL_BASE1, 1, 115200 },		/* pbn_b1_1_115200 */
 	{ SPCI_FL_BASE1, 2, 115200 },		/* pbn_b1_2_115200 */
@@ -4404,7 +5889,6 @@ static struct pci_board pci_boards[] __devinitdata = {
 	{ SPCI_FL_BASE1, 4, 1382400 },		/* pbn_b1_4_1382400 */
 	{ SPCI_FL_BASE1, 8, 1382400 },		/* pbn_b1_8_1382400 */
 
-	{ SPCI_FL_BASE2, 1, 115200 },		/* pbn_b2_1_115200 */
 	{ SPCI_FL_BASE2, 8, 115200 },		/* pbn_b2_8_115200 */
 	{ SPCI_FL_BASE2, 4, 460800 },		/* pbn_b2_4_460800 */
 	{ SPCI_FL_BASE2, 8, 460800 },		/* pbn_b2_8_460800 */
@@ -4435,7 +5919,6 @@ static struct pci_board pci_boards[] __devinitdata = {
 		8<<2, 2, pci_inteli960ni_fn, 0x10000},
 	{ SPCI_FL_BASE0 | SPCI_FL_IRQRESOURCE,		   /* pbn_sgi_ioc3 */
 		1, 458333, 0, 0, 0, 0x20178 },
-	{ SPCI_FL_BASE0, 5, 115200, 8, 0, pci_hp_diva, 0},   /* pbn_hp_diva */
 #ifdef CONFIG_DDB5074
 	/*
 	 * NEC Vrc-5074 (Nile 4) builtin UART.
@@ -4727,7 +6210,7 @@ static struct pci_device_id serial_pci_tbl[] __devinitdata = {
 		pbn_b0_4_115200 },
 	{	PCI_VENDOR_ID_OXSEMI, PCI_DEVICE_ID_OXSEMI_16PCI952,
 		PCI_ANY_ID, PCI_ANY_ID, 0, 0, 
-		pbn_b0_bt_2_921600 },
+		pbn_b0_2_115200 },
 
 	/* Digitan DS560-558, from jimd@esoft.com */
 	{	PCI_VENDOR_ID_ATT, PCI_DEVICE_ID_ATT_VENUS_MODEM,
@@ -4774,6 +6257,15 @@ static struct pci_device_id serial_pci_tbl[] __devinitdata = {
 	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_1S_10x_850,
 		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
 		pbn_siig10x_0 },
+	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_1S1P_10x_550,
+		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
+		pbn_siig10x_1 },
+	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_1S1P_10x_650,
+		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
+		pbn_siig10x_1 },
+	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_1S1P_10x_850,
+		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
+		pbn_siig10x_1 },
 	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_2S_10x_550,
 		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
 		pbn_siig10x_2 },
@@ -4781,6 +6273,15 @@ static struct pci_device_id serial_pci_tbl[] __devinitdata = {
 		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
 		pbn_siig10x_2 },
 	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_2S_10x_850,
+		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
+		pbn_siig10x_2 },
+	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_2S1P_10x_550,
+		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
+		pbn_siig10x_2 },
+	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_2S1P_10x_650,
+		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
+		pbn_siig10x_2 },
+	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_2S1P_10x_850,
 		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
 		pbn_siig10x_2 },
 	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_4S_10x_550,
@@ -4801,6 +6302,24 @@ static struct pci_device_id serial_pci_tbl[] __devinitdata = {
 	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_1S_20x_850,
 		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
 		pbn_siig20x_0 },
+	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_1S1P_20x_550,
+		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
+		pbn_siig20x_0 },
+	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_1S1P_20x_650,
+		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
+		pbn_siig20x_0 },
+	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_1S1P_20x_850,
+		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
+		pbn_siig20x_0 },
+	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_2P1S_20x_550,
+		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
+		pbn_siig20x_0 },
+	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_2P1S_20x_650,
+		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
+		pbn_siig20x_0 },
+	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_2P1S_20x_850,
+		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
+		pbn_siig20x_0 },
 	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_2S_20x_550,
 		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
 		pbn_siig20x_2 },
@@ -4808,6 +6327,15 @@ static struct pci_device_id serial_pci_tbl[] __devinitdata = {
 		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
 		pbn_siig20x_2 },
 	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_2S_20x_850,
+		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
+		pbn_siig20x_2 },
+	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_2S1P_20x_550,
+		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
+		pbn_siig20x_2 },
+	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_2S1P_20x_650,
+		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
+		pbn_siig20x_2 },
+	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_2S1P_20x_850,
 		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
 		pbn_siig20x_2 },
 	{	PCI_VENDOR_ID_SIIG, PCI_DEVICE_ID_SIIG_4S_20x_550,
@@ -4888,14 +6416,6 @@ static struct pci_device_id serial_pci_tbl[] __devinitdata = {
 	{	PCI_VENDOR_ID_SGI, PCI_DEVICE_ID_SGI_IOC3,
 		0xFF00, 0, 0, 0,
 		pbn_sgi_ioc3 },
-
-	/* HP Diva card */
-	{	PCI_VENDOR_ID_HP, PCI_DEVICE_ID_HP_SAS,
-		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
-		pbn_hp_diva },
-	{	PCI_VENDOR_ID_HP, 0x1290,
-		PCI_ANY_ID, PCI_ANY_ID, 0, 0,
-		pbn_b2_1_115200 },
 
 #ifdef CONFIG_DDB5074
 	/*
@@ -5237,7 +6757,7 @@ static struct pnp_board pnp_devices[] __devinitdata = {
 	{	0, }
 };
 
-static inline void avoid_irq_share(struct pci_dev *dev)
+static void inline avoid_irq_share(struct pci_dev *dev)
 {
 	int i, map = 0x1FF8;
 	struct serial_state *state = rs_table;
@@ -5274,7 +6794,7 @@ static int __devinit check_name(char *name)
        return 0;
 }
 
-static inline int check_compatible_id(struct pci_dev *dev)
+static int inline check_compatible_id(struct pci_dev *dev)
 {
        int i;
        for (i = 0; i < DEVICE_COUNT_COMPATIBLE; i++)
@@ -5377,6 +6897,172 @@ static void __devinit probe_serial_pnp(void)
 
 #endif /* ENABLE_SERIAL_PNP */
 
+#ifdef CONFIG_PM
+/*static int rs_pm_set_state(struct serial_state *state, int pm_state, int oldstate)
+{	
+	struct async_struct *info = state->info;
+	struct tty_struct *tty = info->tty;
+	int running = state->info &&
+		      state->info->flags & ASYNC_INITIALIZED;
+	unsigned long flags;
+
+	if (!pxa_port(info->state->type))
+		return 0;
+	
+	if (pm_state == 0) {				//resume
+		if (running) {
+			save_flags(flags); cli();
+			serial_out(info, UART_MCR, 0);
+			restore_flags(flags);
+			startup(info);
+			change_speed(info, NULL);
+			save_flags(flags); cli();
+			serial_out(info, UART_MCR, info->MCR);
+			restore_flags(flags);
+			rs_start(tty);
+		}
+	} else if (pm_state == 1) {			//suspend
+		if (running) {
+			rs_stop(tty);
+			save_flags(flags); cli();
+			serial_out(info, UART_MCR, 0);
+			restore_flags(flags);
+			shutdown(info);
+		}
+	}
+	return 0;
+}
+*/
+static int rs_pm_callback(struct pm_dev *dev, pm_request_t rqst, void *data)
+{
+	struct serial_state *state = (struct serial_state*) dev->data;
+	struct async_struct *info;
+	struct tty_struct *tty;
+	unsigned long flags;
+	unsigned long gplr;
+	int running = 0;
+	int err = 0;
+		
+	if(state->info != NULL) {
+		info = state->info;
+		tty = info->tty;
+		running = state->info->flags & ASYNC_INITIALIZED;
+	}
+	else
+		return 0;
+	
+	if (!pxa_port(info->state->type))
+                return 0;
+
+	switch (rqst) {
+	case PM_SUSPEND:
+		 if (running) { 
+                    if( info->state->iomem_base == (u8 *)&HWUART )
+                    {
+                        rs_stop(tty);
+                        shutdown(info);
+                        GPSR1 = 0x00090000;
+                        GAFR1_U &= 0xffffff3c;
+                    }
+                    else if( info->state->iomem_base == (u8 *)&BTUART )
+                    {
+                        rs_stop(tty);
+                        shutdown(info);
+			PWER  |= 0x00002000; /* BT_HOSTWAKE(GPIO13) failing edge lead to a interrupt */
+			PFER  |= 0x00002000;
+			
+			gplr = GPLR0;		/* BT_WAKEUP keep original level and BT_RESET keep high*/ 
+			if( gplr & 0x00020000 ) {
+				PGSR0 |= 0x000a0000;
+				state->bt_wakeup = 1;
+			}	
+			else 
+				PGSR0 |= 0x00080000;
+
+			GPSR1 = 0x00002800;
+                        GAFR1_L &= 0xf33fffff;
+                    }
+                    else {
+//                      printk("pm_suspend\n");
+                        rs_stop(tty);
+                        save_flags(flags); cli();
+                        if( info->state->iomem_base == (u8 *)&FFUART )
+                        {
+				    serial_outp(info, UART_MCR, 0);
+				    GPSR1 = 0x00000070;     //set DSR/DCD/RI high
+			    } 
+                        else
+                        {
+                        	 serial_out(info, UART_MCR, 0);
+                        }
+                        restore_flags(flags);
+                        shutdown(info);
+                    }
+			info->flags |= ASYNC_INITIALIZED;
+                }
+		break;	
+	case PM_RESUME:
+		if (running) { 
+			info->flags &= ~ASYNC_INITIALIZED;
+                    if( info->state->iomem_base == (u8 *)&HWUART )
+                    {
+                        startup(info);
+                        /*  HWUART start to work with PIN */
+                        GAFR1_U  &= 0xffffff3c;
+                        GAFR1_U  |= 0x00000041;
+                        rs_start(tty);
+                    }
+		    else if( info->state->iomem_base == (u8 *)&BTUART )
+                    {
+                        startup(info);
+                        /*  BTUART start to work with PIN */
+			if(state->bt_wakeup)
+				GPSR0 = 0x000A0000;
+			else
+				GPSR0 = 0x00080000;
+			GPDR0 |= 0x000A0000;	
+                        GAFR1_L  &= 0xf33fffff;
+                        GAFR1_L  |= 0x08800000;
+                        rs_start(tty);
+			PGSR0 &= ~0x000a0000;
+                    }
+                    else
+                    {
+//			    printk("pm_resume\n");
+                        startup(info);
+                        /* need NOT change speed. since it's implemented in startup() */
+//                        change_speed(info, NULL);
+                        save_flags(flags); cli();
+                        if( info->state->iomem_base == (u8 *)&FFUART )
+                        {
+				serial_outp(info, UART_MCR, info->MCR);
+				if( info->MSR & UART_MSR_DSR)
+					GPCR1 = 0x00000020;     //set DSR low
+				else
+				    	GPSR1 = 0x00000020;     //set DSR high
+				if( info->MSR & UART_MSR_DCD)
+					GPCR1 = 0x00000010;     //set DCD low
+				else
+					GPSR1 = 0x00000010;     //set DCD high
+				if( info->MSR & UART_MSR_RI)
+					GPCR1 = 0x00000040;     //set RI low
+				else
+					GPSR1 = 0x00000040;     //set RI high		
+			    } 
+                        else
+                        {
+				    serial_out(info, UART_MCR, info->MCR);
+                        }
+                        restore_flags(flags);
+                        rs_start(tty);
+                    }
+                }
+		break;
+	}
+	return err;
+}
+#endif
+
 /*
  * The serial driver boot-time initialization code!
  */
@@ -5384,11 +7070,13 @@ static int __init rs_init(void)
 {
 	int i;
 	struct serial_state * state;
-
 	init_bh(SERIAL_BH, do_serial_bh);
 	init_timer(&serial_timer);
 	serial_timer.function = rs_timer;
 	mod_timer(&serial_timer, jiffies + RS_STROBE_TIME);
+
+	init_timer(&tx_timer);
+	tx_timer.function = tx_timeout;
 
 	for (i = 0; i < NR_IRQS; i++) {
 		IRQ_ports[i] = 0;
@@ -5432,7 +7120,7 @@ static int __init rs_init(void)
 	serial_driver.subtype = SERIAL_TYPE_NORMAL;
 	serial_driver.init_termios = tty_std_termios;
 	serial_driver.init_termios.c_cflag =
-		B9600 | CS8 | CREAD | HUPCL | CLOCAL;
+		B115200 | CS8 | CREAD | HUPCL | CLOCAL | CRTSCTS;
 	serial_driver.flags = TTY_DRIVER_REAL_RAW | TTY_DRIVER_NO_DEVFS;
 	serial_driver.refcount = &serial_refcount;
 	serial_driver.table = serial_table;
@@ -5484,32 +7172,58 @@ static int __init rs_init(void)
 		panic("Couldn't register serial driver\n");
 	if (tty_register_driver(&callout_driver))
 		panic("Couldn't register callout driver\n");
-	
+
+/********************************************
+ *  By Liu Xin
+*********************************************/
+	serial_for_mux_driver = &serial_driver;
+  /* fill in in the rs_open() routine */
+  serial_for_mux_tty = NULL;
+  /* fill in in the mux_init routine */
+  serial_mux_dispatcher = NULL;
+  serial_mux_sender = NULL;
+
+  tq_serial_for_mux = &tq_serial;  
+  serial_mux_guard = 0;
+/********************************************
+ *  By Liu Xin
+*********************************************/
+
 	for (i = 0, state = rs_table; i < NR_PORTS; i++,state++) {
 		state->magic = SSTATE_MAGIC;
 		state->line = i;
-		state->type = PORT_UNKNOWN;
 		state->custom_divisor = 0;
 		state->close_delay = 5*HZ/10;
 		state->closing_wait = 30*HZ;
 		state->callout_termios = callout_driver.init_termios;
 		state->normal_termios = serial_driver.init_termios;
-		state->icount.cts = state->icount.dsr = 
-			state->icount.rng = state->icount.dcd = 0;
+		state->icount.cts = state->icount.dtr = 
+			state->icount.dsr = state->icount.rng = state->icount.dcd = 0;
 		state->icount.rx = state->icount.tx = 0;
 		state->icount.frame = state->icount.parity = 0;
 		state->icount.overrun = state->icount.brk = 0;
 		state->irq = irq_cannonicalize(state->irq);
 		if (state->hub6)
 			state->io_type = SERIAL_IO_HUB6;
-		if (state->port && check_region(state->port,8))
+		if (state->port && check_region(state->port,8)) {
+			state->type = PORT_UNKNOWN;
 			continue;
+		}
 #ifdef CONFIG_MCA			
 		if ((state->flags & ASYNC_BOOT_ONLYMCA) && !MCA_bus)
 			continue;
 #endif			
-		if (state->flags & ASYNC_BOOT_AUTOCONF)
+		if (state->flags & ASYNC_BOOT_AUTOCONF) {
+			state->type = PORT_UNKNOWN;
 			autoconfig(state);
+		}
+/*
+#ifdef CONFIG_PM
+		state->pm_dev = pm_register(PM_SYS_DEV, 0, rs_pm_callback);
+        	if (state->pm_dev)
+        		state->pm_dev->data = state;
+#endif
+*/
 	}
 	for (i = 0, state = rs_table; i < NR_PORTS; i++,state++) {
 		if (state->type == PORT_UNKNOWN)
@@ -5536,13 +7250,31 @@ static int __init rs_init(void)
 				   serial_driver.minor_start + state->line);
 		tty_register_devfs(&callout_driver, 0,
 				   callout_driver.minor_start + state->line);
+		state->bt_wakeup = 0;
+#ifdef CONFIG_PM
+		if ((state->iomem_base == (u8 *)&HWUART) || (state->iomem_base == (u8 *)&BTUART)) {
+		state->pm_dev = pm_register(PM_SYS_DEV, 0, rs_pm_callback);
+        	if (state->pm_dev)
+        		state->pm_dev->data = state;
+		}
+#endif
+#if 0
+#ifndef	_DEBUG_BOARD	
+		if (state->iomem_base == (u8 *)&HWUART) 
+			printk(KERN_INFO "It's the HWUART at 0x%p\n", state->iomem_base);
+		else	
+			printk(KERN_INFO "It isn't the HWUART at 0x%p\n", state->iomem_base);
+#endif	
+#endif
 	}
+
 #ifdef ENABLE_SERIAL_PCI
 	probe_serial_pci();
 #endif
 #ifdef ENABLE_SERIAL_PNP
        probe_serial_pnp();
 #endif
+        cebus_ffuart_port_init = 1;
 	return 0;
 }
 
@@ -5694,7 +7426,7 @@ void unregister_serial(int line)
 	if (state->info && state->info->tty)
 		tty_hangup(state->info->tty);
 	state->type = PORT_UNKNOWN;
-	printk(KERN_INFO "ttyS%02d unloaded\n", state->line);
+	printk(KERN_INFO "tty%02d unloaded\n", state->line);
 	/* These will be hidden, because they are devices that will no longer
 	 * be available to the system. (ie, PCMCIA modems, once ejected)
 	 */
@@ -5714,8 +7446,12 @@ static void __exit rs_fini(void)
 
 	/* printk("Unloading %s: version %s\n", serial_name, serial_version); */
 	del_timer_sync(&serial_timer);
+	del_timer(&tx_timer);
 	save_flags(flags); cli();
         remove_bh(SERIAL_BH);
+#ifdef CONFIG_PM
+      	pm_unregister(info->state->pm_dev);
+#endif
 	if ((e1 = tty_unregister_driver(&serial_driver)))
 		printk("serial: failed to unregister serial driver (%d)\n",
 		       e1);
@@ -5767,6 +7503,10 @@ static void __exit rs_fini(void)
 #endif
 }
 
+EXPORT_SYMBOL(dc_disable);
+EXPORT_SYMBOL(dc_enable);
+EXPORT_SYMBOL(dc_standby);
+
 module_init(rs_init);
 module_exit(rs_fini);
 MODULE_DESCRIPTION("Standard/generic (dumb) serial driver");
@@ -5805,8 +7545,11 @@ static inline void wait_for_xmitr(struct async_struct *info)
 	/* Wait for flow control if necessary */
 	if (info->flags & ASYNC_CONS_FLOW) {
 		tmout = 1000000;
-		while (--tmout &&
-		       ((serial_in(info, UART_MSR) & UART_MSR_CTS) == 0));
+		if (info->state->iomem_base == (u8 *)&FFUART) 
+			while (--tmout && ffuart_cts_state);
+		else
+			while (--tmout &&
+		       		((serial_in(info, UART_MSR) & UART_MSR_CTS) == 0));
 	}	
 }
 
@@ -5829,6 +7572,8 @@ static void serial_console_write(struct console *co, const char *s,
 	 */
 	ier = serial_in(info, UART_IER);
 	serial_out(info, UART_IER, 0x00);
+	if (pxa_port(info->state->type))
+		serial_out(info, UART_IER, UART_IER_UUE);
 
 	/*
 	 *	Now, do each character
@@ -5853,6 +7598,37 @@ static void serial_console_write(struct console *co, const char *s,
 	 */
 	wait_for_xmitr(info);
 	serial_out(info, UART_IER, ier);
+}
+
+/*
+ *	Receive character from the serial port
+ */
+static int serial_console_wait_key(struct console *co)
+{
+	static struct async_struct *info;
+	int ier, c;
+
+	info = &async_sercons;
+
+	/*
+	 *	First save the IER then disable the interrupts so
+	 *	that the real driver for the port does not get the
+	 *	character.
+	 */
+	ier = serial_in(info, UART_IER);
+	serial_out(info, UART_IER, 0x00);
+	if (pxa_port(info->state->type))
+		serial_out(info, UART_IER, UART_IER_UUE);
+ 
+	while ((serial_in(info, UART_LSR) & UART_LSR_DR) == 0);
+	c = serial_in(info, UART_RX);
+
+	/*
+	 *	Restore the interrupts
+	 */
+	serial_out(info, UART_IER, ier);
+
+	return c;
 }
 
 static kdev_t serial_console_device(struct console *c)
@@ -5980,7 +7756,13 @@ static int __init serial_console_setup(struct console *co, char *options)
 	serial_out(info, UART_DLM, quot >> 8);		/* MS of divisor */
 	serial_out(info, UART_LCR, cval);		/* reset DLAB */
 	serial_out(info, UART_IER, 0);
-	serial_out(info, UART_MCR, UART_MCR_DTR | UART_MCR_RTS);
+	if (pxa_port(info->state->type))
+		serial_out(info, UART_IER, UART_IER_UUE);
+	if( info->state->iomem_base == (u8 *)&FFUART ){
+		serial_out(info, UART_MCR, UART_MCR_RTS);
+		GPCR1 = 0x00000070;     //set DSR/DCD/RI low
+	} else
+		serial_out(info, UART_MCR, UART_MCR_DTR | UART_MCR_RTS);
 
 	/*
 	 *	If we read 0xff from the LSR, there is no UART here.
@@ -5995,6 +7777,7 @@ static struct console sercons = {
 	name:		"ttyS",
 	write:		serial_console_write,
 	device:		serial_console_device,
+	wait_key:	serial_console_wait_key,
 	setup:		serial_console_setup,
 	flags:		CON_PRINTBUFFER,
 	index:		-1,
@@ -6014,3 +7797,36 @@ void __init serial_console_init(void)
   compile-command: "gcc -D__KERNEL__ -I../../include -Wall -Wstrict-prototypes -O2 -fomit-frame-pointer -fno-strict-aliasing -pipe -fno-strength-reduce -march=i586 -DMODULE -DMODVERSIONS -include ../../include/linux/modversions.h   -DEXPORT_SYMTAB -c serial.c"
   End:
 */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

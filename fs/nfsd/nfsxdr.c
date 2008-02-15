@@ -132,9 +132,8 @@ decode_sattr(u32 *p, struct iattr *iap)
 }
 
 static inline u32 *
-encode_fattr(struct svc_rqst *rqstp, u32 *p, struct svc_fh *fhp)
+encode_fattr(struct svc_rqst *rqstp, u32 *p, struct inode *inode)
 {
-	struct inode *inode = fhp->fh_dentry->d_inode;
 	int type = (inode->i_mode & S_IFMT);
 
 	*p++ = htonl(nfs_ftypes[type >> 12]);
@@ -154,12 +153,7 @@ encode_fattr(struct svc_rqst *rqstp, u32 *p, struct svc_fh *fhp)
 	else
 		*p++ = htonl(0xffffffff);
 	*p++ = htonl((u32) inode->i_blocks);
-	if (rqstp->rq_reffh->fh_version == 1 
-	    && rqstp->rq_reffh->fh_fsid_type == 1
-	    && (fhp->fh_export->ex_flags & NFSEXP_FSID))
-		*p++ = htonl((u32) fhp->fh_export->ex_fsid);
-	else
-		*p++ = htonl((u32) inode->i_dev);
+	*p++ = htonl((u32) inode->i_dev);
 	*p++ = htonl((u32) inode->i_ino);
 	*p++ = htonl((u32) inode->i_atime);
 	*p++ = 0;
@@ -338,7 +332,7 @@ int
 nfssvc_encode_attrstat(struct svc_rqst *rqstp, u32 *p,
 					struct nfsd_attrstat *resp)
 {
-	p = encode_fattr(rqstp, p, &resp->fh);
+	p = encode_fattr(rqstp, p, resp->fh.fh_dentry->d_inode);
 	return xdr_ressize_check(rqstp, p);
 }
 
@@ -347,7 +341,7 @@ nfssvc_encode_diropres(struct svc_rqst *rqstp, u32 *p,
 					struct nfsd_diropres *resp)
 {
 	p = encode_fh(p, &resp->fh);
-	p = encode_fattr(rqstp, p, &resp->fh);
+	p = encode_fattr(rqstp, p, resp->fh.fh_dentry->d_inode);
 	return xdr_ressize_check(rqstp, p);
 }
 
@@ -364,7 +358,7 @@ int
 nfssvc_encode_readres(struct svc_rqst *rqstp, u32 *p,
 					struct nfsd_readres *resp)
 {
-	p = encode_fattr(rqstp, p, &resp->fh);
+	p = encode_fattr(rqstp, p, resp->fh.fh_dentry->d_inode);
 	*p++ = htonl(resp->count);
 	p += XDR_QUADLEN(resp->count);
 

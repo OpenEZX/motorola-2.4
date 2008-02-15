@@ -31,12 +31,11 @@
  * provisions above, a recipient may use your version of this file
  * under either the RHEPL or the GPL.
  *
- * $Id: nodelist.c,v 1.30.2.5 2002/08/20 21:02:00 dwmw2 Exp $
+ * $Id: nodelist.c,v 1.36 2002/01/09 16:52:59 dwmw2 Exp $
  *
  */
 
 #include <linux/kernel.h>
-#include <linux/jffs2.h>
 #include <linux/fs.h>
 #include <linux/mtd/mtd.h>
 #include "nodelist.h"
@@ -69,7 +68,7 @@ void jffs2_add_fd_to_list(struct jffs2_sb_info *c, struct jffs2_full_dirent *new
 	*prev = new;
 
  out:
-	D2(while(*list) {
+	D1(while(*list) {
 		printk(KERN_DEBUG "Dirent \"%s\" (hash 0x%08x, ino #%u\n", (*list)->name, (*list)->nhash, (*list)->ino);
 		list = &(*list)->next;
 	});
@@ -89,13 +88,36 @@ void jffs2_add_tn_to_list(struct jffs2_tmp_dnode_info *tn, struct jffs2_tmp_dnod
         *prev = tn;
 }
 
+static void jffs2_free_tmp_dnode_info_list(struct jffs2_tmp_dnode_info *tn)
+{
+	struct jffs2_tmp_dnode_info *next;
+
+	while (tn) {
+		next = tn;
+		tn = tn->next;
+		jffs2_free_full_dnode(next->fn);
+		jffs2_free_tmp_dnode_info(next);
+	}
+}
+
+static void jffs2_free_full_dirent_list(struct jffs2_full_dirent *fd)
+{
+	struct jffs2_full_dirent *next;
+
+	while (fd) {
+		next = fd->next;
+		jffs2_free_full_dirent(fd);
+		fd = next;
+	}
+}
+
+
 /* Get tmp_dnode_info and full_dirent for all non-obsolete nodes associated
    with this ino, returning the former in order of version */
 
 int jffs2_get_inode_nodes(struct jffs2_sb_info *c, ino_t ino, struct jffs2_inode_info *f,
 			  struct jffs2_tmp_dnode_info **tnp, struct jffs2_full_dirent **fdp,
-			  __u32 *highest_version, __u32 *latest_mctime,
-			  __u32 *mctime_ver)
+			  uint32_t *highest_version)
 {
 	struct jffs2_raw_node_ref *ref = f->inocache->nodes;
 	struct jffs2_tmp_dnode_info *tn, *ret_tn = NULL;
@@ -104,8 +126,6 @@ int jffs2_get_inode_nodes(struct jffs2_sb_info *c, ino_t ino, struct jffs2_inode
 	union jffs2_node_union node;
 	size_t retlen;
 	int err;
-
-	*mctime_ver = 0;
 
 	D1(printk(KERN_DEBUG "jffs2_get_inode_nodes(): ino #%lu\n", ino));
 	if (!f->inocache->nodes) {
@@ -118,7 +138,7 @@ int jffs2_get_inode_nodes(struct jffs2_sb_info *c, ino_t ino, struct jffs2_inode
 			D1(printk(KERN_DEBUG "node at 0x%08x is obsoleted. Ignoring.\n", ref->flash_offset &~3));
 			continue;
 		}
-		err = c->mtd->read(c->mtd, (ref->flash_offset & ~3), min(ref->totlen, sizeof(node)), &retlen, (void *)&node);
+		err = jffs2_flash_read(c, (ref->flash_offset & ~3), min(ref->totlen, sizeof(node)), &retlen, (void *)&node);
 		if (err) {
 			printk(KERN_WARNING "error %d reading node at 0x%08x in get_inode_nodes()\n", err, (ref->flash_offset) & ~3);
 			goto free_out;
@@ -156,26 +176,19 @@ int jffs2_get_inode_nodes(struct jffs2_sb_info *c, ino_t ino, struct jffs2_inode
 			fd->version = node.d.version;
 			fd->ino = node.d.ino;
 			fd->type = node.d.type;
-
-			/* Pick out the mctime of the latest dirent */
-			if(fd->version > *mctime_ver) {
-				*mctime_ver = fd->version;
-				*latest_mctime = node.d.mctime;
-			}
-
-			/* memcpy as much of the name as possible from the raw
-			   dirent we've already read from the flash
-			*/
+				/* memcpy as much of the name as possible from the raw
+				   dirent we've already read from the flash
+				*/
 			if (retlen > sizeof(struct jffs2_raw_dirent))
-				memcpy(&fd->name[0], &node.d.name[0], min((__u32)node.d.nsize, (retlen-sizeof(struct jffs2_raw_dirent))));
+				memcpy(&fd->name[0], &node.d.name[0], min((uint32_t)node.d.nsize, (retlen-sizeof(struct jffs2_raw_dirent))));
 				
-			/* Do we need to copy any more of the name directly
-			   from the flash?
-			*/
+				/* Do we need to copy any more of the name directly
+				   from the flash?
+				*/
 			if (node.d.nsize + sizeof(struct jffs2_raw_dirent) > retlen) {
 				int already = retlen - sizeof(struct jffs2_raw_dirent);
 					
-				err = c->mtd->read(c->mtd, (ref->flash_offset & ~3) + retlen, 
+				err = jffs2_flash_read(c, (ref->flash_offset & ~3) + retlen, 
 						   node.d.nsize - already, &retlen, &fd->name[already]);
 				if (!err && retlen != node.d.nsize - already)
 					err = -EIO;
@@ -202,9 +215,9 @@ int jffs2_get_inode_nodes(struct jffs2_sb_info *c, ino_t ino, struct jffs2_inode
 				err = -EIO;
 				goto free_out;
 			}
-			if (node.i.version > *highest_version)
+			if (node.d.version > *highest_version)
 				*highest_version = node.i.version;
-			D1(printk(KERN_DEBUG "version %d, highest_version now %d\n", node.i.version, *highest_version));
+			D1(printk(KERN_DEBUG "version %d, highest_version now %d\n", node.d.version, *highest_version));
 
 			if (ref->flash_offset & 1) {
 				D1(printk(KERN_DEBUG "obsoleted\n"));
@@ -227,12 +240,7 @@ int jffs2_get_inode_nodes(struct jffs2_sb_info *c, ino_t ino, struct jffs2_inode
 			}
 			tn->version = node.i.version;
 			tn->fn->ofs = node.i.offset;
-			/* There was a bug where we wrote hole nodes out with
-			   csize/dsize swapped. Deal with it */
-			if (node.i.compr == JFFS2_COMPR_ZERO && !node.i.dsize && node.i.csize)
-				tn->fn->size = node.i.csize;
-			else // normal case...
-				tn->fn->size = node.i.dsize;
+			tn->fn->size = node.i.dsize;
 			tn->fn->raw = ref;
 			D1(printk(KERN_DEBUG "dnode @%08x: ver %u, offset %04x, dsize %04x\n", ref->flash_offset &~3, node.i.version, node.i.offset, node.i.dsize));
 			jffs2_add_tn_to_list(tn, &ret_tn);
@@ -257,7 +265,6 @@ int jffs2_get_inode_nodes(struct jffs2_sb_info *c, ino_t ino, struct jffs2_inode
 	}
 	*tnp = ret_tn;
 	*fdp = ret_fd;
-
 	return 0;
 
  free_out:

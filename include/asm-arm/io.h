@@ -23,6 +23,7 @@
 #ifdef __KERNEL__
 
 #include <linux/types.h>
+#include <asm/byteorder.h>
 #include <asm/memory.h>
 #include <asm/arch/hardware.h>
 
@@ -82,12 +83,14 @@ extern void __raw_readsl(unsigned int addr, void *data, int longlen);
  */
 #ifdef __io
 #define outb(v,p)			__raw_writeb(v,__io(p))
-#define outw(v,p)			__raw_writew(v,__io(p))
-#define outl(v,p)			__raw_writel(v,__io(p))
+#define outw(v,p)			__raw_writew(__cpu_to_le16(v),__io(p))
+#define outl(v,p)			__raw_writel(__cpu_to_le32(v),__io(p))
 
 #define inb(p)		({ unsigned int __v = __raw_readb(__io(p)); __v; })
-#define inw(p)		({ unsigned int __v = __raw_readw(__io(p)); __v; })
-#define inl(p)		({ unsigned int __v = __raw_readl(__io(p)); __v; })
+#define inw(p)		\
+	({ unsigned int __v = __le16_to_cpu(__raw_readw(__io(p))); __v; })
+#define inl(p)		\
+	({ unsigned int __v = __le32_to_cpu(__raw_readl(__io(p))); __v; })
 
 #define outsb(p,d,l)			__raw_writesb(__io(p),d,l)
 #define outsw(p,d,l)			__raw_writesw(__io(p),d,l)
@@ -172,6 +175,8 @@ extern void __readwrite_bug(const char *fn);
  */
 #ifdef __mem_pci
 
+#ifndef	__ARMEB__
+
 #define readb(addr) ({ unsigned int __v = __raw_readb(__mem_pci(addr)); __v; })
 #define readw(addr) ({ unsigned int __v = __raw_readw(__mem_pci(addr)); __v; })
 #define readl(addr) ({ unsigned int __v = __raw_readl(__mem_pci(addr)); __v; })
@@ -179,6 +184,25 @@ extern void __readwrite_bug(const char *fn);
 #define writeb(val,addr)		__raw_writeb(val,__mem_pci(addr))
 #define writew(val,addr)		__raw_writew(val,__mem_pci(addr))
 #define writel(val,addr)		__raw_writel(val,__mem_pci(addr))
+
+#else
+
+#define readb(addr) \
+	({ unsigned int __v = __raw_readb(__mem_pci(addr)); __v; })
+#define readw(addr) \
+	({ unsigned int __v = __le16_to_cpu(__raw_readw(__mem_pci(addr))); \
+	 __v; })
+#define readl(addr) \
+	({ unsigned int __v = __le32_to_cpu(__raw_readl(__mem_pci(addr))); \
+	 __v; })
+
+#define writeb(val,addr)		__raw_writeb(val,__mem_pci(addr))
+#define writew(val,addr)	\
+	__raw_writew(__cpu_to_le16(val),__mem_pci(addr))
+#define writel(val,addr)	\
+	__raw_writel(__cpu_to_le32(val),__mem_pci(addr))
+
+#endif // !__ARMEB__
 
 #define memset_io(a,b,c)		_memset_io(__mem_pci(a),(b),(c))
 #define memcpy_fromio(a,b,c)		_memcpy_fromio((a),__mem_pci(b),(c))

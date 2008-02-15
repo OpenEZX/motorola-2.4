@@ -578,7 +578,10 @@ int tdfx_lock(struct inode *inode, struct file *filp, unsigned int cmd,
 
                                 /* Contention */
                         atomic_inc(&dev->total_sleeps);
-			yield();
+#if 1
+			current->policy |= SCHED_YIELD;
+#endif
+                        schedule();
                         if (signal_pending(current)) {
                                 ret = -ERESTARTSYS;
                                 break;
@@ -601,7 +604,8 @@ int tdfx_lock(struct inode *inode, struct file *filp, unsigned int cmd,
                    when dev->last_context == lock.context
                    NOTE WE HOLD THE LOCK THROUGHOUT THIS
                    TIME! */
-		yield();
+		current->policy |= SCHED_YIELD;
+	        schedule();
 	        current->state = TASK_RUNNING;
 	        remove_wait_queue(&dev->context_wait, &entry);
 	        if (signal_pending(current)) {

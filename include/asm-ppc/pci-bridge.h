@@ -1,5 +1,5 @@
 /*
- * BK Id: %F% %I% %G% %U% %#%
+ * BK Id: SCCS/s.pci-bridge.h 1.16 11/29/01 15:43:34 paulus
  */
 #ifdef __KERNEL__
 #ifndef _ASM_PCI_BRIDGE_H
@@ -57,6 +57,7 @@ struct pci_controller {
 
 	int first_busno;
 	int last_busno;
+	int bus_offset;
         
 	void *io_base_virt;
 	unsigned long io_base_phys;
@@ -86,15 +87,21 @@ struct pci_controller {
 
 /* These are used for config access before all the PCI probing
    has been done. */
-int early_read_config_byte(struct pci_controller *hose, int bus, int dev_fn, int where, u8 *val);
-int early_read_config_word(struct pci_controller *hose, int bus, int dev_fn, int where, u16 *val);
-int early_read_config_dword(struct pci_controller *hose, int bus, int dev_fn, int where, u32 *val);
-int early_write_config_byte(struct pci_controller *hose, int bus, int dev_fn, int where, u8 val);
-int early_write_config_word(struct pci_controller *hose, int bus, int dev_fn, int where, u16 val);
-int early_write_config_dword(struct pci_controller *hose, int bus, int dev_fn, int where, u32 val);
+int early_read_config_byte(struct pci_controller *hose, int bus, int dev_fn,
+			   int where, u8 *val);
+int early_read_config_word(struct pci_controller *hose, int bus, int dev_fn,
+			   int where, u16 *val);
+int early_read_config_dword(struct pci_controller *hose, int bus, int dev_fn,
+			    int where, u32 *val);
+int early_write_config_byte(struct pci_controller *hose, int bus, int dev_fn,
+			    int where, u8 val);
+int early_write_config_word(struct pci_controller *hose, int bus, int dev_fn,
+			    int where, u16 val);
+int early_write_config_dword(struct pci_controller *hose, int bus, int dev_fn,
+			     int where, u32 val);
 
-extern void setup_indirect_pci(struct pci_controller* hose, u32 cfg_addr,
-		u32 cfg_data);
+extern void setup_indirect_pci(struct pci_controller* hose,
+			       u32 cfg_addr, u32 cfg_data);
 extern void setup_grackle(struct pci_controller *hose);
 
 extern unsigned char common_swizzle(struct pci_dev *, unsigned char *);

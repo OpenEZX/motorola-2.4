@@ -140,7 +140,7 @@ struct mdc800_data
 
 	unsigned int		endpoint [4];
 
-	struct urb *		irq_urb;
+	purb_t			irq_urb;
 	wait_queue_head_t	irq_wait;
 	int                     irq_woken;
 	char*			irq_urb_buffer;
@@ -149,13 +149,13 @@ struct mdc800_data
 	int 			camera_request_ready; // Status to synchronize with irq
 	char 			camera_response [8];  // last Bytes send after busy
 
-	struct urb *   		write_urb;
+	purb_t   		write_urb;
 	char*			write_urb_buffer;
 	wait_queue_head_t	write_wait;
 	int                     written;
 
 
-	struct urb *		download_urb;
+	purb_t	   		download_urb;
 	char*			download_urb_buffer;
 	wait_queue_head_t	download_wait;
 	int                     downloaded;
@@ -652,7 +652,7 @@ static int mdc800_device_release (struct inode* inode, struct file *file)
  */
 static ssize_t mdc800_device_read (struct file *file, char *buf, size_t len, loff_t *pos)
 {
-	size_t left=len, sts=len; /* single transfer size */
+	int   left=len, sts=len; /* single transfer size */
 	char* ptr=buf;
 	DECLARE_WAITQUEUE(wait, current);
 
@@ -746,7 +746,7 @@ static ssize_t mdc800_device_read (struct file *file, char *buf, size_t len, lof
  */
 static ssize_t mdc800_device_write (struct file *file, const char *buf, size_t len, loff_t *pos)
 {
-	size_t i=0;
+	int i=0;
 	DECLARE_WAITQUEUE(wait, current);
 
 	down (&mdc800->io_lock);

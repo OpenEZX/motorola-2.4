@@ -63,7 +63,8 @@ extern int capi_disc_resp(struct pcbit_chan *chan, struct sk_buff **skb);
 extern int capi_decode_debug_188(u_char *hdr, ushort hdrlen);
 #endif
 
-static inline struct pcbit_chan * 
+extern __inline__ 
+struct pcbit_chan * 
 capi_channel(struct pcbit_dev *dev, struct sk_buff *skb)
 {
 	ushort callref;

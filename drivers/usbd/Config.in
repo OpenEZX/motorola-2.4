@@ -1,0 +1,46 @@
+#
+# USB device configuration from the device viewpoint (e.g. Linux running inside a USB device, not as host)
+#
+# Copyright (c) 2002-2003 Belcarra
+# Copyright (C) 2001 Lineo, Inc.
+# Copyright (C) 2001 Hewlett-Packard Co.
+mainmenu_option next_comment
+
+comment 'USB clients (devices, not hosts)'
+
+dep_tristate 'Support for USB Clients (USB Device, not USB Host) (EXPERIMENTAL)' CONFIG_USBD $CONFIG_EXPERIMENTAL
+
+if [ "$CONFIG_USBD" = "y" -o "$CONFIG_USBD" = "m" ]; then
+   hex    '  idVendor (hex value)' CONFIG_USBD_VENDORID "0000"
+   hex    '  idProduct (hex value)' CONFIG_USBD_PRODUCTID "0000"
+   hex    '  bcdDevice (hex value)' CONFIG_USBD_BCDDEVICE "0000"
+   string '    iManufacturer (string)' CONFIG_USBD_MANUFACTURER "Belcarra"
+   string '    iProduct (string)' CONFIG_USBD_PRODUCT_NAME "Belcarra Linux Device" 
+   comment ''
+
+   bool   '   Use Serial Number in Device Descriptor' CONFIG_USBD_USE_SERIAL_NUMBER
+   if [ "$CONFIG_USBD_USE_SERIAL_NUMBER" = "y" ]; then
+      string '  Default Serial number (string)' CONFIG_USBD_SERIAL_NUMBER_STR ""
+   fi
+
+   bool   '   Self Powered' CONFIG_USBD_SELFPOWERED
+   if [ ! "$CONFIG_USBD_SELFPOWERED" = "y" ]; then
+      int '   Max Power (mA)' CONFIG_USBD_MAXPOWER "0"
+   fi
+
+   tristate '   USB Device Monitor' CONFIG_USBD_MONITOR
+
+
+   comment ''
+   bool   '  USBD Proc FS' CONFIG_USBD_PROCFS
+
+   comment ''
+   source drivers/usbd/serial_fd/Config.in
+   source drivers/usbd/network_fd/Config.in
+   source drivers/usbd/acm_fd/Config.in
+   source drivers/usbd/pst_fd/Config.in
+   source drivers/usbd/bi/Config.in
+   string '    default function (string) (if multi-function)' CONFIG_USBD_MULTIFUNCTION_DEFAULT "" 
+fi
+
+endmenu

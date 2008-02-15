@@ -25,6 +25,7 @@
 
 #include <linux/config.h>
 #include <linux/list.h>
+#include <linux/pm-devices.h>
 
 /*
  * Power management requests
@@ -49,20 +50,6 @@ enum
 };
 
 typedef int pm_request_t;
-
-/*
- * Device types
- */
-enum
-{
-	PM_UNKNOWN_DEV = 0, /* generic */
-	PM_SYS_DEV,	    /* system device (fan, KB controller, ...) */
-	PM_PCI_DEV,	    /* PCI device */
-	PM_USB_DEV,	    /* USB device */
-	PM_SCSI_DEV,	    /* SCSI device */
-	PM_ISA_DEV,	    /* ISA device */
-	PM_MTD_DEV,	    /* Memory Technology Device */
-};
 
 typedef int pm_dev_t;
 
@@ -103,17 +90,37 @@ struct pm_dev
 	void		*data;
 
 	unsigned long	 flags;
-	unsigned long	 state;
-	unsigned long	 prev_state;
+	int		 state;
+	int		 prev_state;
 
 	struct list_head entry;
 };
 
+#if	defined(CONFIG_ARCH_SA1100)
+/* 
+ * Current state
+ */
+
+enum
+{
+	PM_STATE_NORMAL = 0,
+	PM_STATE_REQUESTING_SUSPEND,  /* informing each registered handler of PM_SUSPEND */
+	PM_STATE_SUSPENDING,          /* actively shutting down */
+	PM_STATE_RESUMING
+};
+#endif
+
 #ifdef CONFIG_PM
 
 extern int pm_active;
+#if	defined(CONFIG_ARCH_SA1100)
+extern int pm_current_state;
+#endif
 
 #define PM_IS_ACTIVE() (pm_active != 0)
+#if	defined(CONFIG_ARCH_SA1100)
+#define PM_STATE()     (pm_current_state)
+#endif
 
 /*
  * Register a device with power management
@@ -153,6 +160,9 @@ static inline void pm_dev_idle(struct pm_dev *dev) {}
 #else /* CONFIG_PM */
 
 #define PM_IS_ACTIVE() 0
+#if	defined(CONFIG_ARCH_SA1100)
+#define PM_STATE()     0
+#endif
 
 static inline struct pm_dev *pm_register(pm_dev_t type,
 					 unsigned long id,

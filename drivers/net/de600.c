@@ -718,7 +718,7 @@ static int
 adapter_init(struct net_device *dev)
 {
 	int	i;
-	unsigned long flags;
+	long flags;
 
 	save_flags(flags);
 	cli();

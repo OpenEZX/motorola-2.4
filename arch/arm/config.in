@@ -13,10 +13,15 @@ define_bool CONFIG_RWSEM_GENERIC_SPINLOCK y
 define_bool CONFIG_RWSEM_XCHGADD_ALGORITHM n
 define_bool CONFIG_GENERIC_BUST_SPINLOCK n
 define_bool CONFIG_GENERIC_ISA_DMA n
+define_bool CONFIG_IP_PNP y
+#define_bool CONFIG_IP_PNP_DHCP y
+define_bool CONFIG_IP_PNP_BOOTP y
+#define_bool CONFIG_IP_PNP_RARP y
 
 mainmenu_option next_comment
 comment 'Code maturity level options'
 bool 'Prompt for development and/or incomplete code/drivers' CONFIG_EXPERIMENTAL
+bool 'Prompt for advanced kernel configuration options' CONFIG_ADVANCED_OPTIONS
 bool 'Prompt for obsolete code/drivers' CONFIG_OBSOLETE
 endmenu
 
@@ -33,15 +38,19 @@ mainmenu_option next_comment
 comment 'System Type'
 
 choice 'ARM system type' \
-	"Anakin			CONFIG_ARCH_ANAKIN \
+	"ADIFCC-Based		CONFIG_ARCH_ADIFCC \
+	 Anakin			CONFIG_ARCH_ANAKIN \
 	 Archimedes/A5000	CONFIG_ARCH_ARCA5K \
 	 Cirrus-CL-PS7500FE     CONFIG_ARCH_CLPS7500 \
  	 CLPS711x/EP721x-based	CONFIG_ARCH_CLPS711X \
 	 Co-EBSA285		CONFIG_ARCH_CO285 \
+	 PXA250/210-based	CONFIG_ARCH_PXA \
 	 EBSA-110		CONFIG_ARCH_EBSA110 \
  	 Epxa10db               CONFIG_ARCH_CAMELOT \
 	 FootBridge		CONFIG_ARCH_FOOTBRIDGE \
 	 Integrator		CONFIG_ARCH_INTEGRATOR \
+ 	 IOP3XX-based		CONFIG_ARCH_IOP3XX \
+	 IXP1200-based		CONFIG_ARCH_IXP1200 \
 	 LinkUp-L7200		CONFIG_ARCH_L7200 \
 	 Motorola-MX1ADS        CONFIG_ARCH_MX1ADS \
 	 RiscPC			CONFIG_ARCH_RPC \
@@ -73,6 +82,7 @@ dep_bool '  Assabet' CONFIG_SA1100_ASSABET $CONFIG_ARCH_SA1100
 dep_bool '    Include support for Neponset' CONFIG_ASSABET_NEPONSET $CONFIG_SA1100_ASSABET
 dep_bool '  ADS Bitsy' CONFIG_SA1100_ADSBITSY $CONFIG_ARCH_SA1100
 dep_bool '  Brutus' CONFIG_SA1100_BRUTUS $CONFIG_ARCH_SA1100
+dep_bool '  Cep' CONFIG_SA1100_CEP $CONFIG_ARCH_SA1100
 dep_bool '  CerfBoard' CONFIG_SA1100_CERF $CONFIG_ARCH_SA1100
 if [ "$CONFIG_SA1100_CERF" = "y" ]; then
    choice 'Cerf RAM available' \
@@ -94,6 +104,7 @@ if [ "$CONFIG_SA1100_H3100" = "y" -o "$CONFIG_SA1100_H3600" = "y" -o "$CONFIG_SA
 else
   define_bool CONFIG_SA1100_H3XXX n
 fi
+#dep_bool '  Consus' CONFIG_SA1100_CONSUS $CONFIG_ARCH_SA1100
 #dep_bool '  Empeg' CONFIG_SA1100_EMPEG $CONFIG_ARCH_SA1100
 dep_bool '  Extenex HandHeld Theater (Squashtail)' CONFIG_SA1100_EXTENEX1 $CONFIG_ARCH_SA1100
 if [ "$CONFIG_SA1100_EXTENEX1" = "y" ]; then
@@ -124,6 +135,7 @@ dep_bool '  Yopy' CONFIG_SA1100_YOPY $CONFIG_ARCH_SA1100
 
 # Determine if SA1111 support is required
 if [ "$CONFIG_ASSABET_NEPONSET" = "y" -o \
+     "$CONFIG_SA1100_CONSUS" = "y" -o \
      "$CONFIG_SA1100_JORNADA720" = "y" -o \
      "$CONFIG_SA1100_PFS168" = "y" -o \
      "$CONFIG_SA1100_XP860" = "y" -o \
@@ -135,12 +147,81 @@ if [ "$CONFIG_ASSABET_NEPONSET" = "y" -o \
    define_int CONFIG_FORCE_MAX_ZONEORDER 9
 fi
 
-#dep_tristate 'SA1100 USB function support' CONFIG_SA1100_USB $CONFIG_ARCH_SA1100
-#dep_tristate '  Support for SA11x0 USB network link function' CONFIG_SA1100_USB_NETLINK $CONFIG_SA1100_USB
-#dep_tristate '  Support for SA11x0 USB character device emulation' CONFIG_SA1100_USB_CHAR $CONFIG_SA1100_USB
+dep_tristate 'SA1100 USB function support' CONFIG_SA1100_USB $CONFIG_ARCH_SA1100
+dep_tristate '  Support for SA11x0 USB network link function' CONFIG_SA1100_USB_NETLINK $CONFIG_SA1100_USB
+dep_tristate '  Support for SA11x0 USB character device emulation' CONFIG_SA1100_USB_CHAR $CONFIG_SA1100_USB
 
-dep_tristate 'Compaq iPAQ Handheld sleeve support' CONFIG_H3600_SLEEVE $CONFIG_SA1100_H3600
+if [ "$CONFIG_SA1100_H3XXX" = "y" ]; then
+   comment 'Compaq iPAQ Handheld'
+   tristate '  HAL abstraction layer' CONFIG_H3600_HAL
+   if [ "$CONFIG_SA1100_H3100" = "y" -o "$CONFIG_SA1100_H3600" = "y" ]; then
+      dep_tristate '    Hardware microcontroller (H3100/H3600/H3700)' CONFIG_H3600_MICRO $CONFIG_H3600_HAL
+   else
+      define_tristate CONFIG_H3600_MICRO n
+   fi
+   dep_tristate '    Hardware ASIC (H3800)' CONFIG_H3600_ASIC $CONFIG_SA1100_H3800 $CONFIG_H3600_HAL
+ 
+   # Set a universal variable that specifies the type of hardware support
+   if [ "$CONFIG_H3600_MICRO" = "m" -o "$CONFIG_H3600_ASIC" = "m" ]; then
+         define_tristate CONFIG_H3600_HARDWARE m
+      else
+      if [ "$CONFIG_H3600_MICRO" = "n" -a "$CONFIG_H3600_ASIC" = "n" ]; then
+         define_tristate CONFIG_H3600_HARDWARE n
+      else
+         define_tristate CONFIG_H3600_HARDWARE y
+      fi
+   fi
+
+   dep_tristate '    Expansion sleeves' CONFIG_H3600_SLEEVE $CONFIG_H3600_HARDWARE
+fi
 endmenu
+
+mainmenu_option next_comment
+comment 'Intel PXA250/210 Implementations'
+dep_bool '  Intel DBPXA250 Development Platform' CONFIG_ARCH_LUBBOCK $CONFIG_ARCH_PXA
+dep_bool '  Accelent Xscale IDP' CONFIG_ARCH_PXA_IDP $CONFIG_ARCH_PXA
+dep_bool '  Intrinsyc CerfBoard' CONFIG_ARCH_PXA_CERF $CONFIG_ARCH_PXA
+
+if [ "$CONFIG_ARCH_PXA_CERF" = "y" ]; then
+   define_bool CONFIG_PXA_CERF y
+
+   choice 'CerfBoard Style' \
+      "PDA   CONFIG_PXA_CERF_PDA \
+       BOARD CONFIG_PXA_CERF_BOARD" PDA
+
+   choice 'CerfBoard RAM Available' \
+      "128MB  CONFIG_PXA_CERF_RAM_128MB \
+        64MB  CONFIG_PXA_CERF_RAM_64MB \
+        32MB  CONFIG_PXA_CERF_RAM_32MB \
+        16MB  CONFIG_PXA_CERF_RAM_16MB" 64MB
+
+   choice 'CerfBoard Flash Available' \
+      "64MB  CONFIG_PXA_CERF_FLASH_64MB \
+       32MB  CONFIG_PXA_CERF_FLASH_32MB \
+       16MB  CONFIG_PXA_CERF_FLASH_16MB \
+        8MB  CONFIG_PXA_CERF_FLASH_8MB" 32MB
+fi
+
+if [ "$CONFIG_ARCH_LUBBOCK" = "y" ]; then
+   define_bool CONFIG_SA1111 n
+fi
+
+dep_tristate 'PXA USB function support' CONFIG_PXA_USB $CONFIG_ARCH_PXA
+dep_tristate ' Support for PXA USB network link function' CONFIG_PXA_USB_NETLINK $CONFIG_PXA_USB
+
+endmenu
+
+if [ "$CONFIG_ARCH_IXP1200" = "y" ]; then
+   mainmenu_option next_comment
+   comment 'IXP1200 Implementation Options'
+   choice 'IXP1200 Board Type' \
+        "IXP12EB		CONFIG_ARCH_IXP12EB \
+         IXM1200		CONFIG_ARCH_IXPM1200 \
+         ENP-3510		CONFIG_ARCH_ENP3510" IXP12EB
+   hex 'SDRAM Location'  CONFIG_IXP1200_SDRAM_BASE C0000000
+   int 'SDRAM Size(MB)' CONFIG_IXP1200_SDRAM_SIZE 32
+   endmenu
+fi
 
 mainmenu_option next_comment
 comment 'CLPS711X/EP721X Implementations'
@@ -170,6 +251,44 @@ if [ "$CONFIG_ARCH_EP7211" = "y" -o \
 fi
 endmenu
 
+
+if [ "$CONFIG_ARCH_IOP3XX" = "y" ]; then
+   mainmenu_option next_comment
+   comment 'IOP3xx Implementation Options'
+   choice 'IOP3xx System Type' \
+      "IQ80310		CONFIG_ARCH_IQ80310\
+       IQ80321		CONFIG_ARCH_IQ80321" IQ80310
+
+# Which IOP variant are we running?
+   if [ "$CONFIG_ARCH_IQ80310" = "y" ]; then
+      define_bool CONFIG_ARCH_IOP310 y
+   else
+      define_bool CONFIG_ARCH_IOP310 n
+   fi
+
+   if [ "$CONFIG_ARCH_IQ80321" = "y" ]; then
+      define_bool CONFIG_ARCH_IOP321 y
+   else
+      define_bool CONFIG_ARCH_IOP321 n
+   fi
+
+   comment 'IOP3xx Chipset Features'
+   dep_bool 'Support IOP3xx AAU (EXPERIMENTAL)' CONFIG_IOP3XX_AAU $CONFIG_EXPERIMENTAL
+   dep_bool 'Support IOP3xx DMA (EXPERIMENTAL)' CONFIG_IOP3XX_DMA $CONFIG_EXPERIMENTAL
+   dep_bool 'Support IOP3xx Messaging Unit (EXPERIMENTAL)' CONFIG_IOP3XX_MU $CONFIG_EXPERIMENTAL
+   dep_bool 'Support IOP3xx Performance Monitor (EXPERIMENTAL)' CONFIG_IOP3XX_PMON $CONFIG_EXPERIMENTAL
+   endmenu
+fi
+
+if [ "$CONFIG_ARCH_ADIFCC" = "y" ]; then
+   mainmenu_option next_comment
+   comment 'ADI FCC Implementation Options'
+   choice 'ADI FCC System Type' \
+	"80200EVB	CONFIG_ARCH_ADI_EVB \
+	 BRH		CONFIG_ARCH_BRH" 80200EVB
+   endmenu
+fi 
+
 # Definitions to make life easier
 if [ "$CONFIG_ARCH_ARCA5K" = "y" -o \
      "$CONFIG_ARCH_RPC" = "y" ]; then
@@ -177,6 +296,7 @@ if [ "$CONFIG_ARCH_ARCA5K" = "y" -o \
 else
    define_bool CONFIG_ARCH_ACORN n
 fi
+
 
 # see Documentation/arm/ConfigVars for a description of these
 if [ "$CONFIG_ARCH_CO285" = "y" -o \
@@ -227,7 +347,8 @@ if [ "$CONFIG_ARCH_EBSA110"    = "y" -o "$CONFIG_FOOTBRIDGE"    = "y" -o \
      "$CONFIG_ARCH_NEXUSPCI"   = "y" -o "$CONFIG_ARCH_CLPS711X" = "y" -o \
      "$CONFIG_ARCH_INTEGRATOR" = "y" -o "$CONFIG_ARCH_SA1100"   = "y" -o \
      "$CONFIG_ARCH_L7200"      = "y" -o "$CONFIG_ARCH_ANAKIN"	= "y" -o \
-     "$CONFIG_ARCH_CAMELOT"    = "y" -o "$CONFIG_ARCH_MX1ADS"   = "y" ]; then
+     "$CONFIG_ARCH_CAMELOT"    = "y" -o "$CONFIG_ARCH_MX1ADS"   = "y" -o \
+     "$CONFIG_ARCH_IXP1200"    = "y" ]; then
    define_bool CONFIG_CPU_32v4 y
 else
    define_bool CONFIG_CPU_32v4 n
@@ -292,8 +413,10 @@ fi
 # ARM922T
 if [ "$CONFIG_ARCH_CAMELOT" = "y" ]; then
          define_bool CONFIG_CPU_ARM922T y
+         define_bool CONFIG_PLD y
 else
          define_bool CONFIG_CPU_ARM922T n
+         define_bool CONFIG_PLD n
 fi
 if [ "$CONFIG_CPU_ARM922T" = "y" ]; then
    bool '  ARM922T CPU idle' CONFIG_CPU_ARM922_CPU_IDLE
@@ -344,7 +467,8 @@ fi
 # SA110
 if [ "$CONFIG_ARCH_EBSA110"  = "y" -o "$CONFIG_FOOTBRIDGE" = "y" -o \
      "$CONFIG_ARCH_TBOX"     = "y" -o "$CONFIG_ARCH_SHARK" = "y" -o \
-     "$CONFIG_ARCH_NEXUSPCI" = "y" -o "$CONFIG_ARCH_ANAKIN" = "y" ]; then
+     "$CONFIG_ARCH_NEXUSPCI" = "y" -o "$CONFIG_ARCH_ANAKIN" = "y" -o \
+     "$CONFIG_ARCH_IXP1200" = "y" ]; then
    define_bool CONFIG_CPU_SA110 y
 else
    if [ "$CONFIG_ARCH_RPC" = "y" ]; then
@@ -361,6 +485,29 @@ else
    define_bool CONFIG_CPU_SA1100 n
 fi
 
+# XScale
+if [ "$CONFIG_ARCH_PXA" = "y" -o \
+     "$CONFIG_ARCH_IOP3XX" = "y" -o \
+     "$CONFIG_ARCH_ADIFCC" = "y" ]; then
+   define_bool CONFIG_CPU_32v5 y
+   define_bool CONFIG_CPU_XSCALE y
+   define_bool CONFIG_ARM_THUMB y
+   bool 'Workaround for XScale cache errata (see help)' CONFIG_XSCALE_CACHE_ERRATA
+fi
+
+if [ "$CONFIG_ARCH_IOP3XX" = "y" -o \
+     "$CONFIG_ARCH_ADIFCC" = "y" ]; then
+#   bool 'Use XScale PMU as timer source' CONFIG_XSCALE_PMU_TIMER
+   if [ "$CONFIG_CPU_XSCALE" = "y" -a "$CONFIG_XSCALE_PMU_TIMER" != "y" ]; then
+      define_bool CONFIG_XSCALE_PMU y
+   else
+      define_bool CONFIG_XSCALE_PMU n
+   fi
+fi
+
+dep_bool 'Support Abatron BDI2000 for XScale' CONFIG_XSCALE_BDI2000 $CONFIG_CPU_XSCALE
+
+
 if [ "$CONFIG_CPU_32" = "y" ]; then
    dep_bool 'Support Thumb instructions (experimental)' CONFIG_ARM_THUMB $CONFIG_EXPERIMENTAL
 fi
@@ -372,6 +519,13 @@ if [ "$CONFIG_ARCH_EDB7211" = "y" -o \
 else
    define_bool CONFIG_DISCONTIGMEM n
 fi
+#bool 'Turn OOM Killer on' CONFIG_EMBEDDED_OOM_KILLER 
+bool 'Real Time Scheduler' CONFIG_RTSCHED
+if [ "$CONFIG_RTSCHED" = "y" ]; then
+    int 'Maximum Priority?' CONFIG_MAX_PRI 127
+fi
+
+bool 'Generate big endian kernel' CONFIG_CPU_BIG_ENDIAN
 
 endmenu
 
@@ -381,7 +535,10 @@ comment 'General setup'
 # Now handle the bus types
 if [ "$CONFIG_ARCH_FTVPCI" = "y" -o \
      "$CONFIG_ARCH_SHARK" = "y" -o \
-     "$CONFIG_FOOTBRIDGE_HOST" = "y" ]; then
+     "$CONFIG_FOOTBRIDGE_HOST" = "y" -o \
+     "$CONFIG_ARCH_IOP3XX" = "y" -o \
+     "$CONFIG_ARCH_IXP1200" = "y" -o \
+     "$CONFIG_ARCH_BRH" = "y" ] ; then
    define_bool CONFIG_PCI y
 else
    if [ "$CONFIG_ARCH_INTEGRATOR" = "y" ]; then
@@ -411,13 +568,31 @@ else
    define_bool CONFIG_ISA_DMA n
 fi
 
+if [ "$CONFIG_ADVANCED_OPTIONS" = "y" -a  "$CONFIG_CPU_32" = "y" -a \
+     "$CONFIG_DISCONTIGMEM" != "y" ]; then
+  bool "Set custom kernel base address" CONFIG_KERNEL_START_BOOL
+  if [ "$CONFIG_KERNEL_START_BOOL" = "y" ]; then
+    hex "  Virtual address of kernel base" CONFIG_KERNEL_START 0xc0000000
+  fi
+fi
+
+if [ "$CONFIG_KERNEL_START_BOOL" != "y" ]; then
+  define_hex CONFIG_KERNEL_START 0xc0000000
+fi
+
+# Compressed boot loader in ROM.  Yes, we really want to ask about
+# TEXT and BSS so we preserve their values in the config files.
+bool 'Compressed boot loader in ROM/flash' CONFIG_ZBOOT_ROM
+hex 'Compressed ROM boot loader base address' CONFIG_ZBOOT_ROM_TEXT 0
+hex 'Compressed ROM boot loader BSS address' CONFIG_ZBOOT_ROM_BSS 0
+
 if [ "$CONFIG_ARCH_SA1100" = "y" -o \
      "$CONFIG_ARCH_INTEGRATOR" = "y" ]; then
    dep_bool 'Support CPU clock change (EXPERIMENTAL)' CONFIG_CPU_FREQ $CONFIG_EXPERIMENTAL
 fi
 
 source drivers/pci/Config.in
-bool 'Support for hot-pluggable devices' CONFIG_HOTPLUG
+bool 'Support hot-pluggable devices' CONFIG_HOTPLUG
 if [ "$CONFIG_HOTPLUG" = "y" ]; then
    source drivers/pcmcia/Config.in
 else
@@ -427,6 +602,14 @@ bool 'Networking support' CONFIG_NET
 bool 'System V IPC' CONFIG_SYSVIPC
 bool 'BSD Process Accounting' CONFIG_BSD_PROCESS_ACCT
 bool 'Sysctl support' CONFIG_SYSCTL
+
+if [ "$CONFIG_ARCH_OMAP1510" = "y" -o  "$CONFIG_ARCH_PXA" = "y" ]; then
+    bool 'Kernel Execute-In-Place from ROM' CONFIG_XIP_ROM
+    if [ "$CONFIG_XIP_ROM" = "y" ]; then
+        hex '  Kernel .text physical address' CONFIG_XIP_PHYS_ADDR 0
+    fi    
+fi   
+
 comment 'At least one math emulation must be selected'
 tristate 'NWFPE math emulation' CONFIG_FPE_NWFPE
 dep_tristate 'FastFPE math emulation (experimental)' CONFIG_FPE_FASTFPE $CONFIG_EXPERIMENTAL
@@ -435,20 +618,30 @@ choice 'Kernel core (/proc/kcore) format' \
 	 A.OUT		CONFIG_KCORE_AOUT" ELF
 tristate 'Kernel support for a.out binaries' CONFIG_BINFMT_AOUT
 tristate 'Kernel support for ELF binaries' CONFIG_BINFMT_ELF
+dep_mbool 'Support for ELF multithreaded core dumps' CONFIG_MULTITHREADED_CORES $CONFIG_BINFMT_ELF
+string 'Default core dump file path' CONFIG_COREDUMP_PATH
 tristate 'Kernel support for MISC binaries' CONFIG_BINFMT_MISC
 dep_bool 'Power Management support (experimental)' CONFIG_PM $CONFIG_EXPERIMENTAL
+if [ "$CONFIG_SA1100_H3XXX" = "y" -o "$CONFIG_ARCH_LUBBOCK" = "y" ]; then
+   dep_tristate 'Advanced power management support' CONFIG_APM $CONFIG_PM
+fi
 dep_tristate 'RISC OS personality' CONFIG_ARTHUR $CONFIG_CPU_32
 
 if [ "$CONFIG_ARCH_EBSA110" = "y" -o         \
      "$CONFIG_ARCH_SA1100" = "y" -o          \
+     "$CONFIG_ARCH_PXA" = "y" -o             \
      "$CONFIG_ARCH_CLPS7500" = "y" -o        \
      "$CONFIG_ARCH_PERSONAL_SERVER" = "y" -o \
      "$CONFIG_ARCH_CATS" = "y" -o            \
      "$CONFIG_ARCH_P720T" = "y" -o	     \
      "$CONFIG_ARCH_CDB89712" = "y" -o	     \
      "$CONFIG_ARCH_CAMELOT" = "y" -o	     \
-     "$CONFIG_ARCH_ANAKIN" = "y"  -o         \
-     "$CONFIG_ARCH_MX1ADS" = "y" ]; then
+     "$CONFIG_ARCH_ANAKIN" = "y" -o          \
+     "$CONFIG_ARCH_MX1ADS" = "y" -o          \
+     "$CONFIG_ARCH_IOP3XX" = "y" -o 	     \
+     "$CONFIG_ARCH_INTEGRATOR" = "y" -o	     \
+     "$CONFIG_ARCH_ADIFCC" = "y" -o	     \
+     "$CONFIG_ARCH_IXP1200" = "y" ]; then    
    string 'Default kernel command string' CONFIG_CMDLINE ""
 fi
 if [ "$CONFIG_ARCH_NETWINDER" = "y" -o  \
@@ -457,7 +650,11 @@ if [ "$CONFIG_ARCH_NETWINDER" = "y" -o  \
      "$CONFIG_ARCH_FTVPCI" = "y" -o     \
      "$CONFIG_ARCH_SHARK" = "y" -o      \
      "$CONFIG_ARCH_CO285" = "y" -o      \
+     "$CONFIG_ARCH_IXP1200"   = "y" -o	\
      "$CONFIG_ARCH_SA1100" = "y" -o     \
+     "$CONFIG_ARCH_LUBBOCK" = "y" -o    \
+     "$CONFIG_ARCH_PXA_IDP" = "y" -o    \
+     "$CONFIG_ARCH_PXA_CERF" = "y" -o   \
      "$CONFIG_ARCH_INTEGRATOR" = "y" -o \
      "$CONFIG_ARCH_CDB89712" = "y" -o   \
      "$CONFIG_ARCH_P720T" = "y" ]; then
@@ -467,9 +664,13 @@ if [ "$CONFIG_ARCH_NETWINDER" = "y" -o  \
 	   "$CONFIG_ARCH_EBSA285" = "y" -o    \
 	   "$CONFIG_ARCH_SHARK" = "y" -o      \
 	   "$CONFIG_ARCH_CO285" = "y" -o      \
+	   "$CONFIG_ARCH_IXP1200" = "y" -o    \
 	   "$CONFIG_ARCH_SA1100" = "y" -o     \
            "$CONFIG_ARCH_INTEGRATOR" = "y" -o \
-	   "$CONFIG_ARCH_P720T" = "y" ]; then
+	   "$CONFIG_ARCH_P720T" = "y" -o      \
+           "$CONFIG_ARCH_LUBBOCK" = "y" -o    \
+           "$CONFIG_ARCH_PXA_CERF" = "y" -o   \
+           "$CONFIG_ARCH_PXA_IDP" = "y" ]; then
          bool '  Timer LED' CONFIG_LEDS_TIMER
          bool '  CPU usage LED' CONFIG_LEDS_CPU
       fi
@@ -478,15 +679,28 @@ if [ "$CONFIG_ARCH_NETWINDER" = "y" -o  \
       define_bool CONFIG_LEDS_TIMER y
    fi
 fi
-if [ "$CONFIG_CPU_32" = "y" -a "$CONFIG_ARCH_EBSA110" != "y" ]; then
+if [ "$CONFIG_CPU_32" = "y" -a \
+     "$CONFIG_ARCH_EBSA110" != "y" -a \
+     "$CONFIG_ARCH_SA1100" != "y" ]; then
    bool 'Kernel-mode alignment trap handler' CONFIG_ALIGNMENT_TRAP
 fi
+if [ "$CONFIG_ARCH_SA1100" = "y" ]; then
+   define_bool CONFIG_ALIGNMENT_TRAP y
+fi
+dep_bool 'Preemptible Kernel' CONFIG_PREEMPT $CONFIG_CPU_32
+if [ "$CONFIG_PREEMPT" = "y" ]; then
+   bool 'Collect preemption latency times' CONFIG_PREEMPT_TIMES
+   bool 'Break selected locks' CONFIG_LOCK_BREAK
+fi
+
 endmenu
 
 source drivers/parport/Config.in
 
 if [ "$CONFIG_ALIGNMENT_TRAP" = "y" ]; then
   source drivers/mtd/Config.in
+else
+  define_bool CONFIG_MTD n
 fi
 
 source drivers/pnp/Config.in
@@ -503,7 +717,7 @@ if [ "$CONFIG_NET" = "y" ]; then
    mainmenu_option next_comment
    comment 'Network device support'
 
-   bool 'Network device support' CONFIG_NETDEVICES
+   bool 'Network device support?' CONFIG_NETDEVICES
    if [ "$CONFIG_NETDEVICES" = "y" ]; then
       source drivers/net/Config.in
    fi
@@ -530,7 +744,7 @@ endmenu
 mainmenu_option next_comment
 comment 'SCSI support'
 
-tristate 'SCSI support' CONFIG_SCSI
+tristate 'SCSI support?' CONFIG_SCSI
 
 if [ "$CONFIG_SCSI" != "n" ]; then
    source drivers/scsi/Config.in
@@ -553,6 +767,16 @@ if [ "$CONFIG_ISDN" != "n" ]; then
    source drivers/isdn/Config.in
 fi
 endmenu
+
+if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
+   mainmenu_option next_comment
+   comment 'MMC PXA250 subsystem'
+   tristate 'MMC PXA250 support' CONFIG_MMCPXA250
+   if [ "$CONFIG_MMCPXA250" != "n" ]; then
+      source drivers/mmcpxa250/Config.in
+   fi
+   endmenu
+fi
 
 #
 # input before char - char/joystick depends on it. As does USB.
@@ -592,13 +816,14 @@ if [ "$CONFIG_VT" = "y" ]; then
 
    # Do we use the PC-type keyboard map?
    if [ "$CONFIG_FOOTBRIDGE_HOST" = "y" -o \
+        "$CONFIG_SA1111" = "y" -o          \
         "$CONFIG_ARCH_SHARK" = "y" -o      \
         "$CONFIG_ARCH_SA1100" = "y" -o     \
         "$CONFIG_ARCH_INTEGRATOR" = "y" -o \
         "$CONFIG_ARCH_TBOX" = "y" -o       \
         "$CONFIG_ARCH_CLPS7500" = "y" -o   \
         "$CONFIG_ARCH_P720T" = "y" -o      \
-        "$CONFIG_ARCH_ANAKIN" = "y" -o      \
+        "$CONFIG_ARCH_ANAKIN" = "y" -o     \
 	"$CONFIG_ARCH_MX1ADS" = "y" ]; then
       define_bool CONFIG_PC_KEYMAP y
    fi
@@ -614,11 +839,12 @@ if [ "$CONFIG_ARCH_ACORN" = "y" -o \
      "$CONFIG_ARCH_TBOX" = "y" -o \
      "$CONFIG_ARCH_SHARK" = "y" -o \
      "$CONFIG_ARCH_SA1100" = "y" -o \
+     "$CONFIG_ARCH_PXA" = "y" -o \
      "$CONFIG_PCI" = "y" ]; then
    mainmenu_option next_comment
    comment 'Sound'
 
-   tristate 'Sound card support' CONFIG_SOUND
+   tristate 'Sound support' CONFIG_SOUND
    if [ "$CONFIG_SOUND" != "n" ]; then
       source drivers/sound/Config.in
    fi
@@ -628,10 +854,23 @@ fi
 source drivers/misc/Config.in
 
 source drivers/usb/Config.in
+source drivers/usbd/Config.in
 
-source net/bluetooth/Config.in
+if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
+   source net/bluetooth/Config.in
+   if [ "$CONFIG_SA1100_H3XXX" = "y" ]; then
+      source drivers/mmc/Config.in
+   fi
+fi
 
 mainmenu_option next_comment
+
+comment 'Kernel tracing'
+tristate 'Kernel events tracing support' CONFIG_TRACE
+endmenu
+
+mainmenu_option next_comment
+
 comment 'Kernel hacking'
 
 # RMK wants arm kernels compiled with frame pointers so hardwire this to y.  If
@@ -654,6 +893,43 @@ dep_bool '  Verbose kernel error messages' CONFIG_DEBUG_ERRORS $CONFIG_DEBUG_KER
 dep_bool '  Kernel low-level debugging functions' CONFIG_DEBUG_LL $CONFIG_DEBUG_KERNEL
 dep_bool '    Kernel low-level debugging messages via footbridge serial port' CONFIG_DEBUG_DC21285_PORT $CONFIG_DEBUG_LL $CONFIG_FOOTBRIDGE
 dep_bool '    Kernel low-level debugging messages via UART2' CONFIG_DEBUG_CLPS711X_UART2 $CONFIG_DEBUG_LL $CONFIG_ARCH_CLPS711X
+dep_bool '  KGDB support' CONFIG_KGDB $CONFIG_DEBUG_KERNEL
+dep_bool '     KGB over serial port' CONFIG_KGDB_SERIAL $CONFIG_KGDB
+dep_bool '     Console messages over KGDB' CONFIG_KGDB_CONSOLE $CONFIG_KGDB
+dep_bool '     Enable SysRq-G command to invoke kgdb via breakpoint?' CONFIG_KGDB_SYSRQ $CONFIG_MAGIC_SYSRQ $CONFIG_KGDB
+# dep_bool '     Include KGDB thread support' CONFIG_KGDB_THREAD $CONFIG_KGDB
+# dep_bool '     KGDB over ethernet' CONFIG_KGDB_UDP
+dep_bool '     Add additional compile options' CONFIG_KGDB_MORE $CONFIG_KGDB
+if [ "$CONFIG_KGDB_MORE" = "y" ]; then
+   string ' Additional compile options' CONFIG_KGDB_OPTIONS "-O1"
+fi
+if [ "$CONFIG_KGDB_SERIAL" = "y" ]; then
+   if [ "$CONFIG_ARCH_INTEGRATOR" = "y" -o \
+        "$CONFIG_ARCH_IQ80310" = "y" ]; then
+	choice 'KGDB serial port UART selection' \
+		"0	CONFIG_KGDB_UART0 \
+		 1	CONFIG_KGDB_UART1" 1
+   fi
+   if [ "$CONFIG_ARCH_SA1100" = "y" ]; then
+	choice 'KGDB serial port UART selection' \
+		"1	CONFIG_KGDB_UART1 \
+		 2	CONFIG_KGDB_UART2 \
+		 3	CONFIG_KGDB_UART3" 1
+   fi
+   if [ "$CONFIG_ARCH_INTEGRATOR" = "y" -o \
+        "$CONFIG_ARCH_IQ80310" = "y" -o \
+        "$CONFIG_ARCH_SA1100" = "y" ]; then
+	choice 'KGDB serial port BAUD rate selection' \
+		"9600	CONFIG_KGDB_9600BAUD \
+		 19200	CONFIG_KGDB_19200BAUD \
+		 38400	CONFIG_KGDB_38400BAUD \
+		 57600	CONFIG_KGDB_57600BAUD \
+		 115200	CONFIG_KGDB_115200BAUD" 9600
+   fi
+fi
+
+bool 'Kernel panic log enable' CONFIG_PANIC_LOG
+dep_bool '  Capture current context trigger enable' CONFIG_CONTEXT_CAP $CONFIG_PANIC_LOG
 endmenu
 
 source lib/Config.in

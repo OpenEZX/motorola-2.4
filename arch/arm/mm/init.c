@@ -51,6 +51,9 @@
 static unsigned long totalram_pages;
 extern pgd_t swapper_pg_dir[PTRS_PER_PGD];
 extern char _stext, _text, _etext, _end, __init_begin, __init_end;
+#ifdef CONFIG_XIP_ROM
+extern char _endtext, _sdata;
+#endif
 
 /*
  * The sole use of this is to pass memory configuration
@@ -346,7 +349,11 @@ static __init void reserve_node_zero(unsigned int bootmap_pfn, unsigned int boot
 	 * Register the kernel text and data with bootmem.
 	 * Note that this can only be in node 0.
 	 */
+#ifdef CONFIG_XIP_ROM
+	reserve_bootmem_node(pgdat, __pa(&_sdata), &_end - &_sdata);
+#else
 	reserve_bootmem_node(pgdat, __pa(&_stext), &_end - &_stext);
+#endif
 
 #ifdef CONFIG_CPU_32
 	/*
@@ -378,7 +385,7 @@ static __init void reserve_node_zero(unsigned int bootmap_pfn, unsigned int boot
 	 */
 	if (machine_is_archimedes() || machine_is_a5k())
 		reserve_bootmem_node(pgdat, 0x02000000, 0x00080000);
-	if (machine_is_edb7211())
+	if (machine_is_edb7211() || machine_is_fortunet())
 		reserve_bootmem_node(pgdat, 0xc0000000, 0x00020000);
 	if (machine_is_p720t())
 		reserve_bootmem_node(pgdat, PHYS_OFFSET, 0x00014000);
@@ -388,6 +395,14 @@ static __init void reserve_node_zero(unsigned int bootmap_pfn, unsigned int boot
 	 * our precious DMA-able memory...
 	 */
 	reserve_bootmem_node(pgdat, PHYS_OFFSET, __pa(swapper_pg_dir)-PHYS_OFFSET);
+#endif
+
+#ifdef CONFIG_ARCH_PXA
+	/*
+	 * by zxf, 12/18/02
+	 * reserve the first page memory for exiting sleep and user off mode
+	 */
+	reserve_bootmem_node(pgdat, PHYS_OFFSET, PAGE_SIZE);
 #endif
 }
 
@@ -596,8 +611,13 @@ void __init mem_init(void)
 	unsigned int codepages, datapages, initpages;
 	int i, node;
 
+#ifndef CONFIG_XIP_ROM
 	codepages = &_etext - &_text;
 	datapages = &_end - &_etext;
+#else
+	codepages = &_endtext - &_text;
+	datapages = &_end - &_sdata;
+#endif
 	initpages = &__init_end - &__init_begin;
 
 	high_memory = (void *)__va(meminfo.end);
@@ -653,11 +673,13 @@ void __init mem_init(void)
 
 void free_initmem(void)
 {
+#ifndef CONFIG_XIP_ROM
 	if (!machine_is_integrator()) {
 		free_area((unsigned long)(&__init_begin),
 			  (unsigned long)(&__init_end),
 			  "init");
 	}
+#endif
 }
 
 #ifdef CONFIG_BLK_DEV_INITRD

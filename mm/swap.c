@@ -57,10 +57,9 @@ void activate_page(struct page * page)
  */
 void lru_cache_add(struct page * page)
 {
-	if (!PageLRU(page)) {
+	if (!TestSetPageLRU(page)) {
 		spin_lock(&pagemap_lru_lock);
-		if (!TestSetPageLRU(page))
-			add_page_to_inactive_list(page);
+		add_page_to_inactive_list(page);
 		spin_unlock(&pagemap_lru_lock);
 	}
 }

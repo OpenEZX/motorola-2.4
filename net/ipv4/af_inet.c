@@ -503,9 +503,12 @@ static int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		return -EADDRNOTAVAIL;
 
 	snum = ntohs(addr->sin_port);
+/* 
+        wang wei(w20070):  we need bind to 500(IKE) by ezx, so let it go here 
+
 	if (snum && snum < PROT_SOCK && !capable(CAP_NET_BIND_SERVICE))
 		return -EACCES;
-
+*/
 	/*      We keep a pair of addresses. rcv_saddr is the one
 	 *      used by hash lookups, and saddr is used for transmit.
 	 *
@@ -619,6 +622,13 @@ int inet_stream_connect(struct socket *sock, struct sockaddr * uaddr,
 		err = -EISCONN;
 		if (sk->state != TCP_CLOSE) 
 			goto out;
+
+		err = -EAGAIN;
+		if (sk->num == 0) {
+			if (sk->prot->get_port(sk, 0) != 0)
+				goto out;
+			sk->sport = htons(sk->num);
+		}
 
 		err = sk->prot->connect(sk, uaddr, addr_len);
 		if (err < 0)

@@ -81,9 +81,8 @@ ENTRY(cpu_arm926_data_abort)
 
 	tst	r3, #1<<5			@ Check for Thumb-bit (NE -> found)
 	ldrneh	r1, [r2]			@ Read aborted Thumb instruction        
-	tstne	r1, r1, lsr #12 		@ C = bit 11
-
 	ldreq	r1, [r2]			@ Read aborted ARM instruction
+	movne	r1, r1, lsl #(20-12)		@ shift thumb bit 10 to ARM bit 20
 	tsteq	r1, r1, lsr #21 		@ C = bit 20
 
 	sbc	r1, r1, r1			@ r1 = C - 1
@@ -408,6 +407,10 @@ ENTRY(cpu_arm926_tlb_invalidate_all)
  */
 	.align	5
 ENTRY(cpu_arm926_tlb_invalidate_range)
+	sub	r3, r1, r0
+	cmp	r3, #256 * PAGESIZE		@ arbitary, should be tuned
+	bhi	cpu_arm926_tlb_invalidate_all
+
 	mov	r3, #0
 	mcr	p15, 0, r3, c7, c10, 4		@ drain WB
 
@@ -660,7 +663,8 @@ __arm926_proc_info:
 	b	__arm926_setup
 	.long	cpu_arch_name
 	.long	cpu_elf_name
-	.long	HWCAP_SWP | HWCAP_HALF | HWCAP_26BIT
+	.long	HWCAP_SWP | HWCAP_HALF | HWCAP_THUMB | \
+		HWCAP_FAST_MULT
 	.long	cpu_arm926_info
 	.long	arm926_processor_functions
 	.size	__arm926_proc_info, . - __arm926_proc_info

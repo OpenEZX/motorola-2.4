@@ -549,7 +549,7 @@ ip_fw_domatch(struct ip_fwkernel *f,
 			strcpy(outskb->data+sizeof(__u32)*2, rif);
 			memcpy(outskb->data+sizeof(__u32)*2+IFNAMSIZ, ip,
 			       len-(sizeof(__u32)*2+IFNAMSIZ));
-			netlink_broadcast(ipfwsk, outskb, 0, ~0, GFP_ATOMIC);
+			netlink_broadcast(ipfwsk, outskb, 0, ~0, GFP_KERNEL);
 		}
 		else {
 #endif
@@ -723,7 +723,6 @@ ip_fw_check(struct iphdr *ip,
 						      src_port, dst_port,
 						      count, tcpsyn)) {
 					ret = FW_BLOCK;
-					cleanup(chain, 0, slot);
 					goto out;
 				}
 				break;
@@ -1252,7 +1251,7 @@ static struct ip_fwkernel *convert_ipfw(struct ip_fwuser *fwuser, int *errno)
 		return NULL;
 	}
 
-	fwkern = kmalloc(SIZEOF_STRUCT_IP_FW_KERNEL, GFP_ATOMIC);
+	fwkern = kmalloc(SIZEOF_STRUCT_IP_FW_KERNEL, GFP_KERNEL);
 	if (!fwkern) {
 		duprintf("convert_ipfw: kmalloc failed!\n");
 		*errno = ENOMEM;

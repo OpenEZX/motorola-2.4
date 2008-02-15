@@ -39,6 +39,8 @@ extern asmlinkage void __backtrace(void);
 #define mb() __asm__ __volatile__ ("" : : : "memory")
 #define rmb() mb()
 #define wmb() mb()
+#define set_mb(var, value)  do { var = value; mb(); } while (0)
+#define set_wmb(var, value) do { var = value; wmb(); } while (0)
 #define nop() __asm__ __volatile__("mov\tr0,r0\t@ nop\n\t");
 
 #define prepare_to_switch()    do { } while(0)
@@ -61,6 +63,13 @@ extern struct task_struct *__switch_to(struct task_struct *prev, struct task_str
 #define local_irq_restore(x)	__restore_flags(x)
 #define local_irq_disable()	__cli()
 #define local_irq_enable()	__sti()
+
+#define irqs_disabled()				\
+({						\
+        unsigned long cpsr_val;			\
+        asm ("mrs %0, cpsr" : "=r" (cpsr_val));	\
+        cpsr_val & 128;				\
+})
 
 #ifdef CONFIG_SMP
 #error SMP not supported

@@ -22,9 +22,9 @@ static unsigned int hw_led_state;
 #ifdef CONFIG_SA1100_CERF_CPLD
 
 #define LED_D0		GPIO_GPIO(0)
-#define LED_D1		GPIO_GPIO(0)
-#define LED_D2		GPIO_GPIO(0)
-#define LED_D3		GPIO_GPIO(0)
+#define LED_D1		GPIO_GPIO(1)
+#define LED_D2		GPIO_GPIO(2)
+#define LED_D3		GPIO_GPIO(3)
 #define LED_MASK	(LED_D0|LED_D1|LED_D2|LED_D3)
 
 #else
@@ -45,7 +45,7 @@ void cerf_leds_event(led_event_t evt)
 
         switch (evt) {
         case led_start:
-                hw_led_state = LED_MASK;
+                hw_led_state = 0;
                 led_state = LED_STATE_ENABLED;
                 break;
 
@@ -55,11 +55,11 @@ void cerf_leds_event(led_event_t evt)
 
         case led_claim:
                 led_state |= LED_STATE_CLAIMED;
-                hw_led_state = LED_MASK;
+                hw_led_state = 0;
                 break;
         case led_release:
                 led_state &= ~LED_STATE_CLAIMED;
-                hw_led_state = LED_MASK;
+                hw_led_state = 0;
                 break;
 
 #ifdef CONFIG_LEDS_TIMER

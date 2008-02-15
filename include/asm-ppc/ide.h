@@ -18,6 +18,7 @@
 #include <linux/sched.h>
 #include <asm/processor.h>
 #include <asm/mpc8xx.h>
+#include <asm/io.h>
 
 #ifndef MAX_HWIFS
 #define MAX_HWIFS	8
@@ -28,7 +29,7 @@
 #include <linux/config.h>
 #include <linux/hdreg.h>
 #include <linux/ioport.h>
-#include <asm/io.h>
+
 
 extern void ppc_generic_ide_fix_driveid(struct hd_driveid *id);
 
@@ -74,11 +75,27 @@ static __inline__ ide_ioreg_t ide_default_io_base(int index)
 }
 
 static __inline__ void ide_init_hwif_ports(hw_regs_t *hw,
-					   ide_ioreg_t data_port,
-					   ide_ioreg_t ctrl_port, int *irq)
+		ide_ioreg_t data_port,
+		ide_ioreg_t ctrl_port, int *irq)
 {
+	ide_ioreg_t reg = data_port;
+	int	i;
+
 	if (ppc_ide_md.ide_init_hwif != NULL)
 		ppc_ide_md.ide_init_hwif(hw, data_port, ctrl_port, irq);
+	else {
+		for (i = IDE_DATA_OFFSET; i <= IDE_STATUS_OFFSET; i++)
+			hw->io_ports[i] = reg++;
+
+		if (ctrl_port) {
+			hw->io_ports[IDE_CONTROL_OFFSET] = ctrl_port;
+		} else {
+			hw->io_ports[IDE_CONTROL_OFFSET] =
+				hw->io_ports[IDE_DATA_OFFSET] + 0x206;
+		}
+		if (irq != NULL)
+			*irq = 0;
+	}
 }
 
 static __inline__ void ide_init_default_hwifs(void)
@@ -128,18 +145,6 @@ typedef union {
 		unsigned head		: 4;	/* always zeros here */
 	} b;
 } select_t;
-
-typedef union {
-	unsigned all			: 8;	/* all of the bits together */
-	struct {
-		unsigned HOB		: 1;	/* 48-bit address ordering */
-		unsigned reserved456	: 3;
-		unsigned bit3		: 1;	/* ATA-2 thingy */
-		unsigned SRST		: 1;	/* host soft reset bit */
-		unsigned nIEN		: 1;	/* device INTRQ to host */
-		unsigned bit0		: 1;
-	} b;
-} control_t;
 
 #if !defined(ide_request_irq)
 #define ide_request_irq(irq,hand,flg,dev,id)	request_irq((irq),(hand),(flg),(dev),(id))

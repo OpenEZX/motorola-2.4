@@ -1,27 +1,10 @@
-/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
- * vim:expandtab:shiftwidth=8:tabstop=8:
- *
- *  Copyright (C) 1998 Peter J. Braam <braam@clusterfs.com>
- *  Copyright (C) 2000 Red Hat, Inc.
- *  Copyright (C) 2000 Los Alamos National Laboratory
- *  Copyright (C) 2000 TurboLinux, Inc.
- *  Copyright (C) 2001 Mountain View Data, Inc.
- *  Copyright (C) 2001 Tacit Networks, Inc. <phil@off.net>
- *
- *   This file is part of InterMezzo, http://www.inter-mezzo.org.
- *
- *   InterMezzo is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
- *
- *   InterMezzo is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with InterMezzo; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+/*
+ * Intermezzo. (C) 1998 Peter J. Braam
+ * Intermezzo. (C) 2000 Red Hat, Inc.
+ * Intermezzo. (C) 2000 Los Alamos National Laboratory
+ * Intermezzo. (C) 2000 TurboLinux, Inc.
+ * Intermezzo. (C) 2001 Mountain View Data, Inc.
  */
 
 #include <linux/types.h>
@@ -45,7 +28,9 @@
 #endif
 
 #include <linux/intermezzo_fs.h>
+#include <linux/intermezzo_upcall.h>
 #include <linux/intermezzo_psdev.h>
+#include <linux/intermezzo_kml.h>
 
 #if defined(CONFIG_EXT3_FS) || defined (CONFIG_EXT3_FS_MODULE)
 
@@ -100,7 +85,7 @@ static void *presto_e3_trans_start(struct presto_file_set *fset,
                 return ERR_PTR(-ENOSPC);
         }
         
-        if (  (op != KML_OPCODE_UNLINK && op != KML_OPCODE_RMDIR)
+        if (  (op != PRESTO_OP_UNLINK && op != PRESTO_OP_RMDIR)
               && avail_kmlblocks < 6 ) {
                 return ERR_PTR(-ENOSPC);
         }            
@@ -122,71 +107,52 @@ static void *presto_e3_trans_start(struct presto_file_set *fset,
            and operations involving the LML records 
         */
         switch (op) {
-        case KML_OPCODE_TRUNC:
+        case PRESTO_OP_TRUNC:
                 jblocks = one_path_blks + extra_name_blks + trunc_blks
                         + EXT3_DELETE_TRANS_BLOCKS; 
                 break;
-        case KML_OPCODE_KML_TRUNC:
-                /* Hopefully this is a little better, but I'm still mostly
-                 * guessing here. */
-                /* unlink 1 */
-                jblocks = extra_name_blks + trunc_blks +
-                        EXT3_DELETE_TRANS_BLOCKS + 2; 
-
-                /* unlink 2 */
-                jblocks += extra_name_blks + trunc_blks +
-                        EXT3_DELETE_TRANS_BLOCKS + 2; 
-
-                /* rename 1 */
-                jblocks += 2 * extra_path_blks + trunc_blks + 
-                        2 * EXT3_DATA_TRANS_BLOCKS + 2 + 3;
-
-                /* rename 2 */
-                jblocks += 2 * extra_path_blks + trunc_blks + 
-                        2 * EXT3_DATA_TRANS_BLOCKS + 2 + 3;
-                break;
-        case KML_OPCODE_RELEASE:
+        case PRESTO_OP_RELEASE:
                 /* 
                 jblocks = one_path_blks + lml_blks + 2*trunc_blks; 
                 */
                 jblocks = one_path_blks; 
                 break;
-        case KML_OPCODE_SETATTR:
+        case PRESTO_OP_SETATTR:
                 jblocks = one_path_blks + trunc_blks + 1 ; 
                 break;
-        case KML_OPCODE_CREATE:
+        case PRESTO_OP_CREATE:
                 jblocks = one_path_blks + trunc_blks 
                         + EXT3_DATA_TRANS_BLOCKS + 3 + 2; 
                 break;
-        case KML_OPCODE_LINK:
+        case PRESTO_OP_LINK:
                 jblocks = one_path_blks + trunc_blks 
                         + EXT3_DATA_TRANS_BLOCKS + 2; 
                 break;
-        case KML_OPCODE_UNLINK:
+        case PRESTO_OP_UNLINK:
                 jblocks = one_path_blks + extra_name_blks + trunc_blks
                         + EXT3_DELETE_TRANS_BLOCKS + 2; 
                 break;
-        case KML_OPCODE_SYMLINK:
+        case PRESTO_OP_SYMLINK:
                 jblocks = one_path_blks + extra_path_blks + trunc_blks
                         + EXT3_DATA_TRANS_BLOCKS + 5; 
                 break;
-        case KML_OPCODE_MKDIR:
+        case PRESTO_OP_MKDIR:
                 jblocks = one_path_blks + trunc_blks
                         + EXT3_DATA_TRANS_BLOCKS + 4 + 2;
                 break;
-        case KML_OPCODE_RMDIR:
+        case PRESTO_OP_RMDIR:
                 jblocks = one_path_blks + extra_name_blks + trunc_blks
                         + EXT3_DELETE_TRANS_BLOCKS + 1; 
                 break;
-        case KML_OPCODE_MKNOD:
+        case PRESTO_OP_MKNOD:
                 jblocks = one_path_blks + trunc_blks + 
                         EXT3_DATA_TRANS_BLOCKS + 3 + 2;
                 break;
-        case KML_OPCODE_RENAME:
+        case PRESTO_OP_RENAME:
                 jblocks = one_path_blks + extra_path_blks + trunc_blks + 
                         2 * EXT3_DATA_TRANS_BLOCKS + 2 + 3;
                 break;
-        case KML_OPCODE_WRITE:
+        case PRESTO_OP_WRITE:
                 jblocks = one_path_blks; 
                 /*  add this when we can wrap our transaction with 
                     that of ext3_file_write (ordered writes)
@@ -198,8 +164,7 @@ static void *presto_e3_trans_start(struct presto_file_set *fset,
                 return NULL;
         }
 
-        CDEBUG(D_JOURNAL, "creating journal handle (%d blocks) for op %d\n",
-               jblocks, op);
+        CDEBUG(D_JOURNAL, "creating journal handle (%d blocks)\n", jblocks);
         /* journal_start/stop does not do its own locking while updating
          * the handle/transaction information. Hence we create our own
          * critical section to protect these calls. -SHP
@@ -210,7 +175,7 @@ static void *presto_e3_trans_start(struct presto_file_set *fset,
         return handle;
 }
 
-static void presto_e3_trans_commit(struct presto_file_set *fset, void *handle)
+void presto_e3_trans_commit(struct presto_file_set *fset, void *handle)
 {
         if ( presto_no_journal(fset) || !handle)
                 return;
@@ -221,7 +186,7 @@ static void presto_e3_trans_commit(struct presto_file_set *fset, void *handle)
         unlock_kernel();
 }
 
-static void presto_e3_journal_file_data(struct inode *inode)
+void presto_e3_journal_file_data(struct inode *inode)
 {
 #ifdef EXT3_JOURNAL_DATA_FL
         inode->u.ext3_i.i_flags |= EXT3_JOURNAL_DATA_FL;
@@ -230,56 +195,11 @@ static void presto_e3_journal_file_data(struct inode *inode)
 #endif
 }
 
-/* The logic here is a slightly modified version of ext3/inode.c:block_to_path
- */
-static int presto_e3_has_all_data(struct inode *inode)
-{
-        int ptrs = EXT3_ADDR_PER_BLOCK(inode->i_sb);
-        int ptrs_bits = EXT3_ADDR_PER_BLOCK_BITS(inode->i_sb);
-        const long direct_blocks = EXT3_NDIR_BLOCKS,
-                indirect_blocks = ptrs,
-                double_blocks = (1 << (ptrs_bits * 2));
-        long block = (inode->i_size + inode->i_sb->s_blocksize - 1) >>
-                inode->i_sb->s_blocksize_bits;
-
-        ENTRY;
-
-        if (inode->i_size == 0) {
-                EXIT;
-                return 1;
-        }
-
-        if (block < direct_blocks) {
-                /* No indirect blocks, no problem. */
-        } else if (block < indirect_blocks + direct_blocks) {
-                block++;
-        } else if (block < double_blocks + indirect_blocks + direct_blocks) {
-                block += 2;
-        } else if (((block - double_blocks - indirect_blocks - direct_blocks)
-                    >> (ptrs_bits * 2)) < ptrs) {
-                block += 3;
-        }
-
-        block *= (inode->i_sb->s_blocksize / 512);
-
-        CDEBUG(D_CACHE, "Need %ld blocks, have %ld.\n", block, inode->i_blocks);
-
-        if (block > inode->i_blocks) {
-                EXIT;
-                return 0;
-        }
-
-        EXIT;
-        return 1;
-}
-
 struct journal_ops presto_ext3_journal_ops = {
-        .tr_all_data     = presto_e3_has_all_data,
-        .tr_avail        = presto_e3_freespace,
-        .tr_start        =  presto_e3_trans_start,
-        .tr_commit       = presto_e3_trans_commit,
-        .tr_journal_data = presto_e3_journal_file_data,
-        .tr_ilookup      = presto_iget_ilookup
+        tr_avail: presto_e3_freespace,
+        tr_start:  presto_e3_trans_start,
+        tr_commit: presto_e3_trans_commit,
+        tr_journal_data: presto_e3_journal_file_data
 };
 
 #endif /* CONFIG_EXT3_FS */

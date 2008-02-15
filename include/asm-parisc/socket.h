@@ -3,7 +3,7 @@
 
 #include <asm/sockios.h>
 
-/* For setsockopt(2) */
+/* For setsockoptions(2) */
 #define SOL_SOCKET	0xffff
 
 #define SO_DEBUG	0x0001

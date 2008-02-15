@@ -410,8 +410,6 @@ struct super_block *hpfs_read_super(struct super_block *s, void *options,
 	/*s->s_hpfs_mounting = 1;*/
 	dev = s->s_dev;
 	set_blocksize(dev, 512);
-	s->s_blocksize = 512;
-	s->s_blocksize_bits = 9;
 	s->s_hpfs_fs_size = -1;
 	if (!(bootblock = hpfs_map_sector(s, 0, &bh0, 0))) goto bail1;
 	if (!(superblock = hpfs_map_sector(s, 16, &bh1, 1))) goto bail2;
@@ -438,6 +436,8 @@ struct super_block *hpfs_read_super(struct super_block *s, void *options,
 
 	/* Fill superblock stuff */
 	s->s_magic = HPFS_SUPER_MAGIC;
+	s->s_blocksize = 512;
+	s->s_blocksize_bits = 9;
 	s->s_op = &hpfs_sops;
 
 	s->s_hpfs_root = superblock->root;
@@ -584,4 +584,3 @@ EXPORT_NO_SYMBOLS;
 
 module_init(init_hpfs_fs)
 module_exit(exit_hpfs_fs)
-MODULE_LICENSE("GPL");

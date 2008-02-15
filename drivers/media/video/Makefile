@@ -1,5 +1,5 @@
 #
-# Makefile for the video capture/playback device drivers.
+# Makefile for the kernel character device drivers.
 #
 # Note! Dependencies are done automagically by 'make dep', which also
 # removes any old dependencies. DON'T put your own dependencies here
@@ -27,9 +27,10 @@ O_TARGET := video.o
 
 export-objs     :=	i2c-old.o videodev.o bttv-if.o cpia.o
 
-list-multi	:=	bttv.o zoran.o
+list-multi	:=	bttv.o zoran.o h3600_backpaq_camera.o
 bttv-objs	:=	bttv-driver.o bttv-cards.o bttv-if.o
 zoran-objs      :=	zr36120.o zr36120_i2c.o zr36120_mem.o
+h3600-objs      :=      h3600_backpaq_core.o h3600_backpaq_algo.o
 
 obj-$(CONFIG_VIDEO_DEV) += videodev.o
 
@@ -48,6 +49,7 @@ obj-$(CONFIG_VIDEO_ZORAN) += zr36067.o i2c-old.o
 obj-$(CONFIG_VIDEO_ZORAN_BUZ) += saa7111.o saa7185.o
 obj-$(CONFIG_VIDEO_ZORAN_DC10) += saa7110.o adv7175.o
 obj-$(CONFIG_VIDEO_ZORAN_LML33) += bt819.o bt856.o
+obj-$(CONFIG_VIDEO_CYBERPRO) += cyberpro.o i2c-old.o saa7111.o
 obj-$(CONFIG_VIDEO_LML33) += bt856.o bt819.o
 obj-$(CONFIG_VIDEO_PMS) += pms.o
 obj-$(CONFIG_VIDEO_PLANB) += planb.o
@@ -58,6 +60,7 @@ obj-$(CONFIG_VIDEO_CPIA_PP) += cpia_pp.o
 obj-$(CONFIG_VIDEO_CPIA_USB) += cpia_usb.o
 obj-$(CONFIG_VIDEO_MEYE) += meye.o
 obj-$(CONFIG_TUNER_3036) += tuner-3036.o
+obj-$(CONFIG_VIDEO_H3600_BACKPAQ) += h3600_backpaq_camera.o
 
 # Extract lists of the multi-part drivers.
 # The 'int-*' lists are the intermediate files used to build the multi's.
@@ -85,3 +88,6 @@ zoran.o: zr36120.o zr36120_i2c.o zr36120_mem.o
 
 bttv.o: $(bttv-objs)
 	$(LD) $(LD_RFLAG) -r -o $@ $(bttv-objs)
+
+h3600_backpaq_camera.o: $(h3600-objs)
+	$(LD) $(LD_RFLAG) -r -o $@ $(h3600-objs)

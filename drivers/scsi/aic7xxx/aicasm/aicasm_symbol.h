@@ -36,7 +36,7 @@
  * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGES.
  *
- * $Id: //depot/aic7xxx/aic7xxx/aicasm/aicasm_symbol.h#10 $
+ * $Id: //depot/aic7xxx/aic7xxx/aicasm/aicasm_symbol.h#6 $
  *
  * $FreeBSD: src/sys/dev/aic7xxx/aicasm/aicasm_symbol.h,v 1.11 2000/09/22 22:19:55 gibbs Exp $
  */
@@ -58,9 +58,8 @@ typedef enum {
 	CONST,
 	DOWNLOAD_CONST,
 	LABEL,
-	CONDITIONAL,
-	MACRO
-} symtype;
+	CONDITIONAL
+}symtype;
 
 typedef enum {
 	RO = 0x01,
@@ -69,11 +68,10 @@ typedef enum {
 }amode_t;
 
 struct reg_info {
-	u_int	 address;
+	u_int8_t address;
 	int	 size;
 	amode_t	 mode;
 	u_int8_t valid_bitmask;
-	u_int8_t modes;
 	int	 typecheck_masks;
 };
 
@@ -85,8 +83,8 @@ struct mask_info {
 };
 
 struct const_info {
-	u_int	value;
-	int	define;
+	u_int8_t value;
+	int	 define;
 };
 
 struct alias_info {
@@ -95,24 +93,10 @@ struct alias_info {
 
 struct label_info {
 	int	address;
-	int	exported;
 };
 
 struct cond_info {
 	int	func_num;
-};
-
-struct macro_arg {
-	STAILQ_ENTRY(macro_arg)	links;
-	regex_t	arg_regex;
-	char   *replacement_text;
-};
-STAILQ_HEAD(macro_arg_list, macro_arg) args;
-
-struct macro_info {
-	struct macro_arg_list args;
-	int   narg;
-	const char* body;
 };
 
 typedef struct expression_info {
@@ -124,13 +108,12 @@ typedef struct symbol {
 	char	*name;
 	symtype	type;
 	union	{
-		struct reg_info	  *rinfo;
-		struct mask_info  *minfo;
+		struct reg_info *rinfo;
+		struct mask_info *minfo;
 		struct const_info *cinfo;
 		struct alias_info *ainfo;
 		struct label_info *linfo;
-		struct cond_info  *condinfo;
-		struct macro_info *macroinfo;
+		struct cond_info *condinfo;
 	}info;
 } symbol_t;
 

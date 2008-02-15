@@ -157,6 +157,8 @@ restart:
 		if ((bh = bh_use[ra_ptr++]) == NULL)
 			goto next;
 		wait_on_buffer(bh);
+		debug_lock_break(1);
+		conditional_schedule();
 		if (!buffer_uptodate(bh)) {
 			/* read error, skip block & hope for the best */
 			brelse(bh);
@@ -354,8 +356,8 @@ static int ext3_add_entry (handle_t *handle, struct dentry *dentry,
 			 */
 			dir->i_mtime = dir->i_ctime = CURRENT_TIME;
 			dir->u.ext3_i.i_flags &= ~EXT3_INDEX_FL;
-			dir->i_version = ++event;
 			ext3_mark_inode_dirty(handle, dir);
+			dir->i_version = ++event;
 			BUFFER_TRACE(bh, "call ext3_journal_dirty_metadata");
 			ext3_journal_dirty_metadata(handle, bh);
 			brelse(bh);
@@ -464,8 +466,8 @@ static int ext3_create (struct inode * dir, struct dentry * dentry, int mode)
 		inode->i_op = &ext3_file_inode_operations;
 		inode->i_fop = &ext3_file_operations;
 		inode->i_mapping->a_ops = &ext3_aops;
-		err = ext3_add_nondir(handle, dentry, inode);
 		ext3_mark_inode_dirty(handle, inode);
+		err = ext3_add_nondir(handle, dentry, inode);
 	}
 	ext3_journal_stop(handle, dir);
 	return err;
@@ -489,8 +491,8 @@ static int ext3_mknod (struct inode * dir, struct dentry *dentry,
 	err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
 		init_special_inode(inode, mode, rdev);
-		err = ext3_add_nondir(handle, dentry, inode);
 		ext3_mark_inode_dirty(handle, inode);
+		err = ext3_add_nondir(handle, dentry, inode);
 	}
 	ext3_journal_stop(handle, dir);
 	return err;
@@ -829,9 +831,9 @@ static int ext3_rmdir (struct inode * dir, struct dentry *dentry)
 	 * recovery. */
 	inode->i_size = 0;
 	ext3_orphan_add(handle, inode);
+	ext3_mark_inode_dirty(handle, inode);
 	dir->i_nlink--;
 	inode->i_ctime = dir->i_ctime = dir->i_mtime = CURRENT_TIME;
-	ext3_mark_inode_dirty(handle, inode);
 	dir->u.ext3_i.i_flags &= ~EXT3_INDEX_FL;
 	ext3_mark_inode_dirty(handle, dir);
 
@@ -883,8 +885,8 @@ static int ext3_unlink(struct inode * dir, struct dentry *dentry)
 	inode->i_nlink--;
 	if (!inode->i_nlink)
 		ext3_orphan_add(handle, inode);
-	inode->i_ctime = dir->i_ctime;
 	ext3_mark_inode_dirty(handle, inode);
+	inode->i_ctime = dir->i_ctime;
 	retval = 0;
 
 end_unlink:
@@ -933,8 +935,8 @@ static int ext3_symlink (struct inode * dir,
 		inode->i_size = l-1;
 	}
 	inode->u.ext3_i.i_disksize = inode->i_size;
-	err = ext3_add_nondir(handle, dentry, inode);
 	ext3_mark_inode_dirty(handle, inode);
+	err = ext3_add_nondir(handle, dentry, inode);
 out_stop:
 	ext3_journal_stop(handle, dir);
 	return err;
@@ -970,8 +972,8 @@ static int ext3_link (struct dentry * old_dentry,
 	ext3_inc_count(handle, inode);
 	atomic_inc(&inode->i_count);
 
-	err = ext3_add_nondir(handle, dentry, inode);
 	ext3_mark_inode_dirty(handle, inode);
+	err = ext3_add_nondir(handle, dentry, inode);
 	ext3_journal_stop(handle, dir);
 	return err;
 }

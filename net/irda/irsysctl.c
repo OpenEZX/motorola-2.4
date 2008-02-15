@@ -35,22 +35,22 @@
 #define NET_IRDA 412 /* Random number */
 enum { DISCOVERY=1, DEVNAME, DEBUG, FAST_POLL, DISCOVERY_SLOTS,
        DISCOVERY_TIMEOUT, SLOT_TIMEOUT, MAX_BAUD_RATE, MIN_TX_TURN_TIME,
-       MAX_TX_DATA_SIZE, MAX_NOREPLY_TIME, WARN_NOREPLY_TIME,
-       LAP_KEEPALIVE_TIME };
+       MAX_NOREPLY_TIME, WARN_NOREPLY_TIME, LAP_KEEPALIVE_TIME,STATUS,MODEM };
 
 extern int  sysctl_discovery;
 extern int  sysctl_discovery_slots;
 extern int  sysctl_discovery_timeout;
-extern int  sysctl_slot_timeout;
+extern int  sysctl_slot_timeout;	/* Candidate */
 extern int  sysctl_fast_poll_increase;
 int         sysctl_compression = 0;
 extern char sysctl_devname[];
 extern int  sysctl_max_baud_rate;
 extern int  sysctl_min_tx_turn_time;
-extern int  sysctl_max_tx_data_size;
 extern int  sysctl_max_noreply_time;
 extern int  sysctl_warn_noreply_time;
 extern int  sysctl_lap_keepalive_time;
+static int  sysctl_status=0;
+int sysctl_modem=0;
 
 #ifdef CONFIG_IRDA_DEBUG
 extern unsigned int irda_debug;
@@ -67,8 +67,6 @@ static int max_max_baud_rate = 16000000;	/* See qos.c - IrLAP spec */
 static int min_max_baud_rate = 2400;
 static int max_min_tx_turn_time = 10000;	/* See qos.c - IrLAP spec */
 static int min_min_tx_turn_time = 0;
-static int max_max_tx_data_size = 2048;		/* See qos.c - IrLAP spec */
-static int min_max_tx_data_size = 64;
 static int max_max_noreply_time = 40;		/* See qos.c - IrLAP spec */
 static int min_max_noreply_time = 3;
 static int max_warn_noreply_time = 3;		/* 3s == standard */
@@ -97,43 +95,42 @@ static int do_devname(ctl_table *table, int write, struct file *filp,
 /* One file */
 static ctl_table irda_table[] = {
 	{ DISCOVERY, "discovery", &sysctl_discovery,
-	  sizeof(int), 0644, NULL, &proc_dointvec },
+	  sizeof(int), 0666, NULL, &proc_dointvec },
 	{ DEVNAME, "devname", sysctl_devname,
-	  65, 0644, NULL, &do_devname, &sysctl_string},
+	  65, 0666, NULL, &do_devname, &sysctl_string},
 #ifdef CONFIG_IRDA_DEBUG
         { DEBUG, "debug", &irda_debug,
-	  sizeof(int), 0644, NULL, &proc_dointvec },
+	  sizeof(int), 0666, NULL, &proc_dointvec },
 #endif
 #ifdef CONFIG_IRDA_FAST_RR
         { FAST_POLL, "fast_poll_increase", &sysctl_fast_poll_increase,
-	  sizeof(int), 0644, NULL, &proc_dointvec },
+	  sizeof(int), 0666, NULL, &proc_dointvec },
 #endif
 	{ DISCOVERY_SLOTS, "discovery_slots", &sysctl_discovery_slots,
-	  sizeof(int), 0644, NULL, &proc_dointvec_minmax, &sysctl_intvec,
+	  sizeof(int), 0666, NULL, &proc_dointvec_minmax, &sysctl_intvec,
 	  NULL, &min_discovery_slots, &max_discovery_slots },
 	{ DISCOVERY_TIMEOUT, "discovery_timeout", &sysctl_discovery_timeout,
-	  sizeof(int), 0644, NULL, &proc_dointvec },
+	  sizeof(int), 0666, NULL, &proc_dointvec },
 	{ SLOT_TIMEOUT, "slot_timeout", &sysctl_slot_timeout,
-	  sizeof(int), 0644, NULL, &proc_dointvec_minmax, &sysctl_intvec,
+	  sizeof(int), 0666, NULL, &proc_dointvec_minmax, &sysctl_intvec,
 	  NULL, &min_slot_timeout, &max_slot_timeout },
 	{ MAX_BAUD_RATE, "max_baud_rate", &sysctl_max_baud_rate,
-	  sizeof(int), 0644, NULL, &proc_dointvec_minmax, &sysctl_intvec,
+	  sizeof(int), 0666, NULL, &proc_dointvec_minmax, &sysctl_intvec,
 	  NULL, &min_max_baud_rate, &max_max_baud_rate },
 	{ MIN_TX_TURN_TIME, "min_tx_turn_time", &sysctl_min_tx_turn_time,
-	  sizeof(int), 0644, NULL, &proc_dointvec_minmax, &sysctl_intvec,
+	  sizeof(int), 0666, NULL, &proc_dointvec_minmax, &sysctl_intvec,
 	  NULL, &min_min_tx_turn_time, &max_min_tx_turn_time },
-	{ MAX_TX_DATA_SIZE, "max_tx_data_size", &sysctl_max_tx_data_size,
-	  sizeof(int), 0644, NULL, &proc_dointvec_minmax, &sysctl_intvec,
-	  NULL, &min_max_tx_data_size, &max_max_tx_data_size },
 	{ MAX_NOREPLY_TIME, "max_noreply_time", &sysctl_max_noreply_time,
-	  sizeof(int), 0644, NULL, &proc_dointvec_minmax, &sysctl_intvec,
+	  sizeof(int), 0666, NULL, &proc_dointvec_minmax, &sysctl_intvec,
 	  NULL, &min_max_noreply_time, &max_max_noreply_time },
 	{ WARN_NOREPLY_TIME, "warn_noreply_time", &sysctl_warn_noreply_time,
-	  sizeof(int), 0644, NULL, &proc_dointvec_minmax, &sysctl_intvec,
+	  sizeof(int), 0666, NULL, &proc_dointvec_minmax, &sysctl_intvec,
 	  NULL, &min_warn_noreply_time, &max_warn_noreply_time },
 	{ LAP_KEEPALIVE_TIME, "lap_keepalive_time", &sysctl_lap_keepalive_time,
-	  sizeof(int), 0644, NULL, &proc_dointvec_minmax, &sysctl_intvec,
+	  sizeof(int), 0666, NULL, &proc_dointvec_minmax, &sysctl_intvec,
 	  NULL, &min_lap_keepalive_time, &max_lap_keepalive_time },
+	{STATUS,"status",&sysctl_status,sizeof(int),0666,NULL,&proc_dointvec},
+    {MODEM,"modem",&sysctl_modem,sizeof(int),0666,NULL,&proc_dointvec},
 	{ 0 }
 };
 

@@ -56,7 +56,6 @@
  * Scott Murray            Some small cleanups to the init code output.
  *                         (Jan 7, 2001)
  * Zwane Mwaikambo	   Added PM support. (Dec 4 2001)
- * Zwane Mwaikambo	   Code, data structure cleanups. (Feb 15 2002)
  *
  */
 
@@ -72,7 +71,6 @@
 #include "mpu401.h"
 
 #define OPL3SA2_MODULE_NAME	"opl3sa2"
-#define PFX			OPL3SA2_MODULE_NAME ": "
 
 /* Useful control port indexes: */
 #define OPL3SA2_PM	     0x01
@@ -94,10 +92,9 @@
 #define DEFAULT_TIMBRE 0
 
 /* Power saving modes */
-#define OPL3SA2_PM_MODE0	0x00
-#define OPL3SA2_PM_MODE1	0x04	/* PSV */
-#define OPL3SA2_PM_MODE2	0x05	/* PSV | PDX */
-#define OPL3SA2_PM_MODE3	0x27	/* ADOWN | PSV | PDN | PDX */
+#define OPL3SA2_PM_MODE1	0x05
+#define OPL3SA2_PM_MODE2	0x04
+#define OPL3SA2_PM_MODE3	0x03
 
 /* For checking against what the card returns: */
 #define VERSION_UNKNOWN 0
@@ -111,7 +108,6 @@
 #define CHIPSET_UNKNOWN -1
 #define CHIPSET_OPL3SA2 0
 #define CHIPSET_OPL3SA3 1
-static const char *CHIPSET_TABLE[] = {"OPL3-SA2", "OPL3-SA3"};
 
 #if defined CONFIG_ISAPNP || defined CONFIG_ISAPNP_MODULE
 #define OPL3SA2_CARDS_MAX 4
@@ -122,40 +118,38 @@ static const char *CHIPSET_TABLE[] = {"OPL3-SA2", "OPL3-SA3"};
 /* This should be pretty obvious */
 static int opl3sa2_cards_num; /* = 0 */
 
-typedef struct {
-	/* device resources */
+/* What's my version(s)? */
+static int chipset[OPL3SA2_CARDS_MAX] = { CHIPSET_UNKNOWN };
+
+/* Oh well, let's just cache the name(s) */
+static char chipset_name[OPL3SA2_CARDS_MAX][12];
+
+/* Where's my mixer(s)? */
+static int opl3sa2_mixer[OPL3SA2_CARDS_MAX] = { -1 };
+
+/* Bag o' mixer data */
+typedef struct opl3sa2_mixerdata_tag {
 	unsigned short cfg_port;
-	struct address_info cfg;
-	struct address_info cfg_mss;
-	struct address_info cfg_mpu;
+	unsigned short padding;
+	unsigned char  pm_reg;
+	unsigned int   in_suspend;
+	struct pm_dev  *pmdev;
+	unsigned int   card;
+	unsigned int   volume_l;
+	unsigned int   volume_r;
+	unsigned int   mic;
+	unsigned int   bass_l;
+	unsigned int   bass_r;
+	unsigned int   treble_l;
+	unsigned int   treble_r;
+	unsigned int   wide_l;
+	unsigned int   wide_r;
+} opl3sa2_mixerdata;
+static opl3sa2_mixerdata opl3sa2_data[OPL3SA2_CARDS_MAX];
 
-#if defined CONFIG_ISAPNP || defined CONFIG_ISAPNP_MODULE
-	/* PnP Stuff */
-	struct pci_dev* pdev;
-	int activated;			/* Whether said devices have been activated */
-#endif
-
-#ifdef CONFIG_PM
-	unsigned int	in_suspend;
-	struct pm_dev	*pmdev;
-#endif
-	unsigned int	card;
-	int		chipset;	/* What's my version(s)? */
-	char		*chipset_name;
-
-	/* mixer data */
-	int		mixer;
-	unsigned int	volume_l;
-	unsigned int	volume_r;
-	unsigned int	mic;
-	unsigned int	bass_l;
-	unsigned int	bass_r;
-	unsigned int	treble_l;
-	unsigned int	treble_r;
-	unsigned int	wide_l;
-	unsigned int	wide_r;
-} opl3sa2_state_t;
-static opl3sa2_state_t opl3sa2_state[OPL3SA2_CARDS_MAX];
+static struct address_info cfg[OPL3SA2_CARDS_MAX];
+static struct address_info cfg_mss[OPL3SA2_CARDS_MAX];
+static struct address_info cfg_mpu[OPL3SA2_CARDS_MAX];
 
 /* Our parameters */
 static int __initdata io	= -1;
@@ -172,6 +166,11 @@ static int __initdata loopback	= -1;
 static int __initdata isapnp = 1;
 static int __initdata multiple = 1;
 
+/* PnP devices */
+struct pci_dev* opl3sa2_dev[OPL3SA2_CARDS_MAX];
+
+/* Whether said devices have been activated */
+static int opl3sa2_activated[OPL3SA2_CARDS_MAX];
 #else
 static int __initdata isapnp; /* = 0 */
 static int __initdata multiple; /* = 0 */
@@ -241,7 +240,7 @@ static inline void opl3sa2_read(unsigned short port,
  * All of the mixer functions...
  */
 
-static void opl3sa2_set_volume(opl3sa2_state_t* devc, int left, int right)
+static void opl3sa2_set_volume(opl3sa2_mixerdata* devc, int left, int right)
 {
 	static unsigned char scale[101] = {
 		0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0e, 0x0e, 0x0e,
@@ -276,7 +275,7 @@ static void opl3sa2_set_volume(opl3sa2_state_t* devc, int left, int right)
 }
 
 
-static void opl3sa2_set_mic(opl3sa2_state_t* devc, int level)
+static void opl3sa2_set_mic(opl3sa2_mixerdata* devc, int level)
 {
 	unsigned char vol = 0x1F;
 
@@ -291,7 +290,7 @@ static void opl3sa2_set_mic(opl3sa2_state_t* devc, int level)
 }
 
 
-static void opl3sa3_set_bass(opl3sa2_state_t* devc, int left, int right)
+static void opl3sa3_set_bass(opl3sa2_mixerdata* devc, int left, int right)
 {
 	unsigned char bass;
 
@@ -302,7 +301,7 @@ static void opl3sa3_set_bass(opl3sa2_state_t* devc, int left, int right)
 }
 
 
-static void opl3sa3_set_treble(opl3sa2_state_t* devc, int left, int right)
+static void opl3sa3_set_treble(opl3sa2_mixerdata* devc, int left, int right)
 {	
 	unsigned char treble;
 
@@ -313,7 +312,7 @@ static void opl3sa3_set_treble(opl3sa2_state_t* devc, int left, int right)
 }
 
 
-static void opl3sa3_set_wide(opl3sa2_state_t* devc, int left, int right)
+static void opl3sa3_set_wide(opl3sa2_mixerdata* devc, int left, int right)
 {	
 	unsigned char wide;
 
@@ -324,7 +323,7 @@ static void opl3sa3_set_wide(opl3sa2_state_t* devc, int left, int right)
 }
 
 
-static void opl3sa2_mixer_reset(opl3sa2_state_t* devc)
+static void opl3sa2_mixer_reset(opl3sa2_mixerdata* devc, int card)
 {
 	if(devc) {
 		opl3sa2_set_volume(devc, DEFAULT_VOLUME, DEFAULT_VOLUME);
@@ -333,7 +332,7 @@ static void opl3sa2_mixer_reset(opl3sa2_state_t* devc)
 		opl3sa2_set_mic(devc, DEFAULT_MIC);
 		devc->mic = DEFAULT_MIC;
 
-		if(devc->chipset == CHIPSET_OPL3SA3) {
+		if(chipset[card] == CHIPSET_OPL3SA3) {
 			opl3sa3_set_bass(devc, DEFAULT_TIMBRE, DEFAULT_TIMBRE);
 			devc->bass_l = devc->bass_r = DEFAULT_TIMBRE;
 			opl3sa3_set_treble(devc, DEFAULT_TIMBRE, DEFAULT_TIMBRE);
@@ -343,13 +342,13 @@ static void opl3sa2_mixer_reset(opl3sa2_state_t* devc)
 }
 
 
-static void opl3sa2_mixer_restore(opl3sa2_state_t* devc)
+static void opl3sa2_mixer_restore(opl3sa2_mixerdata* devc, int card)
 {
 	if (devc) {
 		opl3sa2_set_volume(devc, devc->volume_l, devc->volume_r);
 		opl3sa2_set_mic(devc, devc->mic);
 
-		if (devc->chipset == CHIPSET_OPL3SA3) {
+		if (chipset[card] == CHIPSET_OPL3SA3) {
 			opl3sa3_set_bass(devc, devc->bass_l, devc->bass_r);
 			opl3sa3_set_treble(devc, devc->treble_l, devc->treble_r);
 		}
@@ -391,7 +390,7 @@ static int opl3sa2_mixer_ioctl(int dev, unsigned int cmd, caddr_t arg)
 {
 	int cmdf = cmd & 0xff;
 
-	opl3sa2_state_t* devc = (opl3sa2_state_t *) mixer_devs[dev]->devc;
+	opl3sa2_mixerdata* devc = (opl3sa2_mixerdata*) mixer_devs[dev]->devc;
 	
 	switch(cmdf) {
 		case SOUND_MIXER_VOLUME:
@@ -474,7 +473,7 @@ static int opl3sa3_mixer_ioctl(int dev, unsigned int cmd, caddr_t arg)
 {
 	int cmdf = cmd & 0xff;
 
-	opl3sa2_state_t* devc = (opl3sa2_state_t *) mixer_devs[dev]->devc;
+	opl3sa2_mixerdata* devc = (opl3sa2_mixerdata*) mixer_devs[dev]->devc;
 
 	switch(cmdf) {
 		case SOUND_MIXER_BASS:
@@ -617,7 +616,7 @@ static void __init attach_opl3sa2_mss(struct address_info* hw_config)
 			AD1848_REROUTE(SOUND_MIXER_LINE3, SOUND_MIXER_LINE);
 		}
 		else {
-			printk(KERN_ERR PFX "MSS mixer not installed?\n");
+			printk(KERN_ERR "opl3sa2: MSS mixer not installed?\n");
 		}
 	}
 }
@@ -634,14 +633,15 @@ static int __init probe_opl3sa2(struct address_info* hw_config, int card)
 	unsigned char misc;
 	unsigned char tmp;
 	unsigned char version;
+	char tag;
 
 	/*
 	 * Try and allocate our I/O port range.
 	 */
 	if(!request_region(hw_config->io_base, 2, OPL3SA2_MODULE_NAME)) {
-		printk(KERN_ERR PFX "Control I/O port %#x not free\n",
+		printk(KERN_ERR "opl3sa2: Control I/O port %#x not free\n",
 		       hw_config->io_base);
-		goto out_nodev;
+		return 0;
 	}
 
 	/*
@@ -652,9 +652,9 @@ static int __init probe_opl3sa2(struct address_info* hw_config, int card)
 	opl3sa2_write(hw_config->io_base, OPL3SA2_MISC, misc ^ 0x07);
 	opl3sa2_read(hw_config->io_base, OPL3SA2_MISC, &tmp);
 	if(tmp != misc) {
-		printk(KERN_ERR PFX "Control I/O port %#x is not a YMF7xx chipset!\n",
+		printk(KERN_ERR "opl3sa2: Control I/O port %#x is not a YMF7xx chipset!\n",
 		       hw_config->io_base);
-		goto out_region;
+		return 0;
 	}
 
 	/*
@@ -665,9 +665,9 @@ static int __init probe_opl3sa2(struct address_info* hw_config, int card)
 	opl3sa2_read(hw_config->io_base, OPL3SA2_MIC, &tmp);
 	if((tmp & 0x9f) != 0x8a) {
 		printk(KERN_ERR
-		       PFX "Control I/O port %#x is not a YMF7xx chipset!\n",
+		       "opl3sa2: Control I/O port %#x is not a YMF7xx chipset!\n",
 		       hw_config->io_base);
-		goto out_region;
+		return 0;
 	}
 	opl3sa2_write(hw_config->io_base, OPL3SA2_MIC, tmp);
 
@@ -678,49 +678,50 @@ static int __init probe_opl3sa2(struct address_info* hw_config, int card)
 	 * of the miscellaneous register.
 	 */
 	version = misc & 0x07;
-	printk(KERN_DEBUG PFX "chipset version = %#x\n", version);
+	printk(KERN_DEBUG "opl3sa2: chipset version = %#x\n", version);
 	switch(version) {
 		case 0:
-			opl3sa2_state[card].chipset = CHIPSET_UNKNOWN;
+			chipset[card] = CHIPSET_UNKNOWN;
+			tag = '?'; /* silence compiler warning */
 			printk(KERN_ERR
-			       PFX "Unknown Yamaha audio controller version\n");
+			       "opl3sa2: Unknown Yamaha audio controller version\n");
 			break;
 
 		case VERSION_YMF711:
-			opl3sa2_state[card].chipset = CHIPSET_OPL3SA2;
-			printk(KERN_INFO PFX "Found OPL3-SA2 (YMF711)\n");
+			chipset[card] = CHIPSET_OPL3SA2;
+			tag = '2';
+			printk(KERN_INFO "opl3sa2: Found OPL3-SA2 (YMF711)\n");
 			break;
 
 		case VERSION_YMF715:
-			opl3sa2_state[card].chipset = CHIPSET_OPL3SA3;
+			chipset[card] = CHIPSET_OPL3SA3;
+			tag = '3';
 			printk(KERN_INFO
-			       PFX "Found OPL3-SA3 (YMF715 or YMF719)\n");
+			       "opl3sa2: Found OPL3-SA3 (YMF715 or YMF719)\n");
 			break;
 
 		case VERSION_YMF715B:
-			opl3sa2_state[card].chipset = CHIPSET_OPL3SA3;
+			chipset[card] = CHIPSET_OPL3SA3;
+			tag = '3';
 			printk(KERN_INFO
-			       PFX "Found OPL3-SA3 (YMF715B or YMF719B)\n");
+			       "opl3sa2: Found OPL3-SA3 (YMF715B or YMF719B)\n");
 			break;
 
 		case VERSION_YMF715E:
 		default:
-			opl3sa2_state[card].chipset = CHIPSET_OPL3SA3;
+			chipset[card] = CHIPSET_OPL3SA3;
+			tag = '3';
 			printk(KERN_INFO
-			       PFX "Found OPL3-SA3 (YMF715E or YMF719E)\n");
+			       "opl3sa2: Found OPL3-SA3 (YMF715E or YMF719E)\n");
 			break;
 	}
 
-	if(opl3sa2_state[card].chipset != CHIPSET_UNKNOWN) {
+	if(chipset[card] != CHIPSET_UNKNOWN) {
 		/* Generate a pretty name */
-		opl3sa2_state[card].chipset_name = (char *)CHIPSET_TABLE[opl3sa2_state[card].chipset];
-		return 0;
+		sprintf(chipset_name[card], "OPL3-SA%c", tag);
+		return 1;
 	}
-
-out_region:
-	release_region(hw_config->io_base, 2);
-out_nodev:
-	return -ENODEV;
+	return 0;
 }
 
 
@@ -745,28 +746,30 @@ static void __init attach_opl3sa2(struct address_info* hw_config, int card)
 static void __init attach_opl3sa2_mixer(struct address_info *hw_config, int card)
 {
 	struct mixer_operations* mixer_operations;
-	opl3sa2_state_t* devc = &opl3sa2_state[card];
+	opl3sa2_mixerdata* devc;
 
 	/* Install master mixer */
-	if(devc->chipset == CHIPSET_OPL3SA3) {
+	if(chipset[card] == CHIPSET_OPL3SA3) {
 		mixer_operations = &opl3sa3_mixer_operations;
 	}
 	else {
 		mixer_operations = &opl3sa2_mixer_operations;
 	}
 
-	devc->cfg_port = hw_config->io_base;
-	devc->mixer = sound_install_mixer(MIXER_DRIVER_VERSION,
-					  mixer_operations->name,
-					  mixer_operations,
-					  sizeof(struct mixer_operations),
-					  devc);
-	if(devc->mixer < 0) {
-		printk(KERN_ERR PFX "Could not install %s master mixer\n",
-			 mixer_operations->name);
-	}
-	else {
-			opl3sa2_mixer_reset(devc);
+	if((devc = &opl3sa2_data[card])) {
+		devc->cfg_port = hw_config->io_base;
+
+		opl3sa2_mixer[card] = sound_install_mixer(MIXER_DRIVER_VERSION,
+							  mixer_operations->name,
+							  mixer_operations,
+							  sizeof(struct mixer_operations),
+							  devc);
+		if(opl3sa2_mixer[card] < 0) {
+			printk(KERN_ERR "opl3sa2: Could not install %s master mixer\n",
+				 mixer_operations->name);
+		}
+		else
+			opl3sa2_mixer_reset(devc, card);
 	}
 }
 
@@ -800,7 +803,7 @@ static void __init opl3sa2_set_ymode(struct address_info* hw_config, int ymode)
 		opl3sa2_write(hw_config->io_base, OPL3SA2_SYS_CTRL, sys_ctrl);
 	}
 	else {
-		printk(KERN_ERR PFX "not setting ymode, it must be one of 0,1,2,3\n");
+		printk(KERN_ERR "opl3sa2: not setting ymode, it must be one of 0,1,2,3\n");
 	}
 }
 
@@ -815,7 +818,7 @@ static void __init opl3sa2_set_loopback(struct address_info* hw_config, int loop
 		opl3sa2_write(hw_config->io_base, OPL3SA2_MISC, misc);
 	}
 	else {
-		printk(KERN_ERR PFX "not setting loopback, it must be either 0 or 1\n");
+		printk(KERN_ERR "opl3sa2: not setting loopback, it must be either 0 or 1\n");
 	}
 }
 
@@ -826,8 +829,8 @@ static void __exit unload_opl3sa2(struct address_info* hw_config, int card)
 	release_region(hw_config->io_base, 2);
 
 	/* Unload mixer */
-	if(opl3sa2_state[card].mixer >= 0)
-		sound_unload_mixerdev(opl3sa2_state[card].mixer);
+	if(opl3sa2_mixer[card] >= 0)
+		sound_unload_mixerdev(opl3sa2_mixer[card]);
 }
 
 
@@ -865,21 +868,21 @@ static int __init opl3sa2_isapnp_probe(struct address_info* hw_cfg,
 	 */
 	ret = dev->prepare(dev);
 	if(ret && ret != -EBUSY) {
-		printk(KERN_ERR PFX "ISA PnP found device that could not be autoconfigured.\n");
+		printk(KERN_ERR "opl3sa2: ISA PnP found device that could not be autoconfigured.\n");
 		return -ENODEV;
 	}
 	if(ret == -EBUSY) {
-		opl3sa2_state[card].activated = 1;
+		opl3sa2_activated[card] = 1;
 	}
 	else {
 		if(dev->activate(dev) < 0) {
-			printk(KERN_WARNING PFX "ISA PnP activate failed\n");
-			opl3sa2_state[card].activated = 0;
+			printk(KERN_WARNING "opl3sa2: ISA PnP activate failed\n");
+			opl3sa2_activated[card] = 0;
 			return -ENODEV;
 		}
 
 		printk(KERN_DEBUG
-		       PFX "Activated ISA PnP card %d (active=%d)\n",
+		       "opl3sa2: Activated ISA PnP card %d (active=%d)\n",
 		       card, dev->active);
 
 	}
@@ -908,7 +911,7 @@ static int __init opl3sa2_isapnp_probe(struct address_info* hw_cfg,
 	opl3sa2_clear_slots(mss_cfg);
 	opl3sa2_clear_slots(mpu_cfg);
 
-	opl3sa2_state[card].pdev = dev;
+	opl3sa2_dev[card] = dev;
 
 	return 0;
 }
@@ -916,12 +919,11 @@ static int __init opl3sa2_isapnp_probe(struct address_info* hw_cfg,
 
 /* End of component functions */
 
-#ifdef CONFIG_PM
 /* Power Management support functions */
 static int opl3sa2_suspend(struct pm_dev *pdev, unsigned char pm_mode)
 {
 	unsigned long flags;
-	opl3sa2_state_t *p;
+	opl3sa2_mixerdata *p;
 
 	if (!pdev)
 		return -EINVAL;
@@ -929,7 +931,7 @@ static int opl3sa2_suspend(struct pm_dev *pdev, unsigned char pm_mode)
 	save_flags(flags);
 	cli();
 
-	p = (opl3sa2_state_t *) pdev->data;
+	p = (opl3sa2_mixerdata *) pdev->data;
 
 	switch (pm_mode) {
 	case 1:
@@ -949,7 +951,8 @@ static int opl3sa2_suspend(struct pm_dev *pdev, unsigned char pm_mode)
 
 	p->in_suspend = 1;
 	/* its supposed to automute before suspending, so we wont bother */
-	opl3sa2_write(p->cfg_port, OPL3SA2_PM, pm_mode);
+	opl3sa2_read(p->cfg_port, OPL3SA2_PM, &p->pm_reg);
+	opl3sa2_write(p->cfg_port, OPL3SA2_PM, p->pm_reg | pm_mode);
 	/* wait a while for the clock oscillator to stabilise */
 	mdelay(10);
 
@@ -960,17 +963,18 @@ static int opl3sa2_suspend(struct pm_dev *pdev, unsigned char pm_mode)
 static int opl3sa2_resume(struct pm_dev *pdev)
 {
 	unsigned long flags;
-	opl3sa2_state_t *p;
+	opl3sa2_mixerdata *p;
 
 	if (!pdev)
 		return -EINVAL;
 
-	p = (opl3sa2_state_t *) pdev->data;
+	p = (opl3sa2_mixerdata *) pdev->data;
 	save_flags(flags);
 	cli();
 
-	opl3sa2_write(p->cfg_port, OPL3SA2_PM, OPL3SA2_PM_MODE0);
-	opl3sa2_mixer_restore(p);
+	/* I don't think this is necessary */
+	opl3sa2_write(p->cfg_port, OPL3SA2_PM, p->pm_reg);
+	opl3sa2_mixer_restore(p, p->card);
 	p->in_suspend = 0;
 
 	restore_flags(flags);
@@ -979,7 +983,7 @@ static int opl3sa2_resume(struct pm_dev *pdev)
 
 static int opl3sa2_pm_callback(struct pm_dev *pdev, pm_request_t rqst, void *data)
 {
-	unsigned char mode = (unsigned  long)data;
+	unsigned char mode = (unsigned  char)data;
 
 	switch (rqst) {
 		case PM_SUSPEND:
@@ -990,7 +994,6 @@ static int opl3sa2_pm_callback(struct pm_dev *pdev, pm_request_t rqst, void *dat
 	}
 	return 0;
 }
-#endif /* CONFIG_PM */
 
 /*
  * Install OPL3-SA2 based card(s).
@@ -1014,16 +1017,16 @@ static int __init init_opl3sa2(void)
 		 * should still be able to disable PNP support for this 
 		 * single driver!
 		 */
-		if(isapnp && opl3sa2_isapnp_probe(&opl3sa2_state[card].cfg,
-						  &opl3sa2_state[card].cfg_mss,
-						  &opl3sa2_state[card].cfg_mpu,
+		if(isapnp && opl3sa2_isapnp_probe(&cfg[card],
+						  &cfg_mss[card],
+						  &cfg_mpu[card],
 						  card) < 0) {
 			if(!opl3sa2_cards_num)
-				printk(KERN_INFO PFX "No PnP cards found\n");
+				printk(KERN_INFO "opl3sa2: No PnP cards found\n");
 			if(io == -1)
 				break;
 			isapnp=0;
-			printk(KERN_INFO PFX "Search for a card at 0x%d.\n", io);
+			printk(KERN_INFO "opl3sa2: Search for a card at 0x%d.\n", io);
 			/* Fall through */
 		}
 #endif
@@ -1033,7 +1036,7 @@ static int __init init_opl3sa2(void)
 			if(io == -1 || irq == -1 || dma == -1 ||
 			   dma2 == -1 || mss_io == -1) {
 				printk(KERN_ERR
-				       PFX "io, mss_io, irq, dma, and dma2 must be set\n");
+				       "opl3sa2: io, mss_io, irq, dma, and dma2 must be set\n");
 				return -EINVAL;
 			}
 
@@ -1042,31 +1045,31 @@ static int __init init_opl3sa2(void)
 			 * (NOTE: IRQ and DMA aren't used, so they're set to
 			 *  give pretty output from conf_printf. :)
 			 */
-			opl3sa2_state[card].cfg.io_base = io;
-			opl3sa2_state[card].cfg.irq     = irq;
-			opl3sa2_state[card].cfg.dma     = dma;
-			opl3sa2_state[card].cfg.dma2    = dma2;
+			cfg[card].io_base = io;
+			cfg[card].irq     = irq;
+			cfg[card].dma     = dma;
+			cfg[card].dma2    = dma2;
 	
 			/* The MSS config: */
-			opl3sa2_state[card].cfg_mss.io_base      = mss_io;
-			opl3sa2_state[card].cfg_mss.irq          = irq;
-			opl3sa2_state[card].cfg_mss.dma          = dma;
-			opl3sa2_state[card].cfg_mss.dma2         = dma2;
-			opl3sa2_state[card].cfg_mss.card_subtype = 1; /* No IRQ or DMA setup */
+			cfg_mss[card].io_base      = mss_io;
+			cfg_mss[card].irq          = irq;
+			cfg_mss[card].dma          = dma;
+			cfg_mss[card].dma2         = dma2;
+			cfg_mss[card].card_subtype = 1; /* No IRQ or DMA setup */
 
-			opl3sa2_state[card].cfg_mpu.io_base       = mpu_io;
-			opl3sa2_state[card].cfg_mpu.irq           = irq;
-			opl3sa2_state[card].cfg_mpu.dma           = -1;
-			opl3sa2_state[card].cfg_mpu.always_detect = 1; /* Use shared IRQs */
+			cfg_mpu[card].io_base       = mpu_io;
+			cfg_mpu[card].irq           = irq;
+			cfg_mpu[card].dma           = -1;
+			cfg_mpu[card].always_detect = 1; /* Use shared IRQs */
 
 			/* Call me paranoid: */
-			opl3sa2_clear_slots(&opl3sa2_state[card].cfg);
-			opl3sa2_clear_slots(&opl3sa2_state[card].cfg_mss);
-			opl3sa2_clear_slots(&opl3sa2_state[card].cfg_mpu);
+			opl3sa2_clear_slots(&cfg[card]);
+			opl3sa2_clear_slots(&cfg_mss[card]);
+			opl3sa2_clear_slots(&cfg_mpu[card]);
 		}
 
-		if(probe_opl3sa2(&opl3sa2_state[card].cfg, card) ||
-		   !probe_opl3sa2_mss(&opl3sa2_state[card].cfg_mss)) {
+		if(!probe_opl3sa2(&cfg[card], card) ||
+		   !probe_opl3sa2_mss(&cfg_mss[card])) {
 			/*
 			 * If one or more cards are already registered, don't
 			 * return an error but print a warning.  Note, this
@@ -1075,7 +1078,7 @@ static int __init init_opl3sa2(void)
 			 */
 			if(opl3sa2_cards_num) {
 				printk(KERN_WARNING
-				       PFX "There was a problem probing one "
+				       "opl3sa2: There was a problem probing one "
 				       " of the ISA PNP cards, continuing\n");
 				opl3sa2_cards_num--;
 				continue;
@@ -1083,51 +1086,47 @@ static int __init init_opl3sa2(void)
 				return -ENODEV;
 		}
 
-		attach_opl3sa2(&opl3sa2_state[card].cfg, card);
-		conf_printf(opl3sa2_state[card].chipset_name, &opl3sa2_state[card].cfg);
-		attach_opl3sa2_mss(&opl3sa2_state[card].cfg_mss);
-		attach_opl3sa2_mixer(&opl3sa2_state[card].cfg, card);
+		attach_opl3sa2(&cfg[card], card);
+		conf_printf(chipset_name[card], &cfg[card]);
+		attach_opl3sa2_mss(&cfg_mss[card]);
+		attach_opl3sa2_mixer(&cfg[card], card);
 
-		/* ewww =) */
-		opl3sa2_state[card].card = card;
-
-#ifdef CONFIG_PM
+		opl3sa2_data[card].card = card;
 		/* register our power management capabilities */
-		opl3sa2_state[card].pmdev = pm_register(PM_ISA_DEV, card, opl3sa2_pm_callback);
-		if (opl3sa2_state[card].pmdev)
-			opl3sa2_state[card].pmdev->data = &opl3sa2_state[card];
-#endif
+		opl3sa2_data[card].pmdev = pm_register(PM_ISA_DEV, card, opl3sa2_pm_callback);
+		if (opl3sa2_data[card].pmdev)
+			opl3sa2_data[card].pmdev->data = &opl3sa2_data[card];
 
 		/*
 		 * Set the Yamaha 3D enhancement mode (aka Ymersion) if asked to and
 		 * it's supported.
 		 */
 		if(ymode != -1) {
-			if(opl3sa2_state[card].chipset == CHIPSET_OPL3SA2) {
+			if(chipset[card] == CHIPSET_OPL3SA2) {
 				printk(KERN_ERR
-				       PFX "ymode not supported on OPL3-SA2\n");
+				       "opl3sa2: ymode not supported on OPL3-SA2\n");
 			}
 			else {
-				opl3sa2_set_ymode(&opl3sa2_state[card].cfg, ymode);
+				opl3sa2_set_ymode(&cfg[card], ymode);
 			}
 		}
 
 
 		/* Set A/D input to Mono loopback if asked to. */
 		if(loopback != -1) {
-			opl3sa2_set_loopback(&opl3sa2_state[card].cfg, loopback);
+			opl3sa2_set_loopback(&cfg[card], loopback);
 		}
 		
 		/* Attach MPU if we've been asked to do so */
-		if(opl3sa2_state[card].cfg_mpu.io_base != -1) {
-			if(probe_opl3sa2_mpu(&opl3sa2_state[card].cfg_mpu)) {
-				attach_opl3sa2_mpu(&opl3sa2_state[card].cfg_mpu);
+		if(cfg_mpu[card].io_base != -1) {
+			if(probe_opl3sa2_mpu(&cfg_mpu[card])) {
+				attach_opl3sa2_mpu(&cfg_mpu[card]);
 			}
 		}
 	}
 
 	if(isapnp) {
-		printk(KERN_NOTICE PFX "%d PnP card(s) found.\n", opl3sa2_cards_num);
+		printk(KERN_NOTICE "opl3sa2: %d PnP card(s) found.\n", opl3sa2_cards_num);
 	}
 
 	return 0;
@@ -1142,23 +1141,22 @@ static void __exit cleanup_opl3sa2(void)
 	int card;
 
 	for(card = 0; card < opl3sa2_cards_num; card++) {
-#ifdef CONFIG_PM
-		if (opl3sa2_state[card].pmdev)
-			pm_unregister(opl3sa2_state[card].pmdev);
-#endif
-	        if(opl3sa2_state[card].cfg_mpu.slots[1] != -1) {
-			unload_opl3sa2_mpu(&opl3sa2_state[card].cfg_mpu);
+		if (opl3sa2_data[card].pmdev)
+			pm_unregister(opl3sa2_data[card].pmdev);
+
+	        if(cfg_mpu[card].slots[1] != -1) {
+			unload_opl3sa2_mpu(&cfg_mpu[card]);
 		}
-		unload_opl3sa2_mss(&opl3sa2_state[card].cfg_mss);
-		unload_opl3sa2(&opl3sa2_state[card].cfg, card);
+		unload_opl3sa2_mss(&cfg_mss[card]);
+		unload_opl3sa2(&cfg[card], card);
 
 #if defined CONFIG_ISAPNP || defined CONFIG_ISAPNP_MODULE
-		if(opl3sa2_state[card].activated && opl3sa2_state[card].pdev) {
-			opl3sa2_state[card].pdev->deactivate(opl3sa2_state[card].pdev);
+		if(opl3sa2_activated[card] && opl3sa2_dev[card]) {
+			opl3sa2_dev[card]->deactivate(opl3sa2_dev[card]);
 
 			printk(KERN_DEBUG
-			       PFX "Deactivated ISA PnP card %d (active=%d)\n",
-			       card, opl3sa2_state[card].pdev->active);
+			       "opl3sa2: Deactivated ISA PnP card %d (active=%d)\n",
+			       card, opl3sa2_dev[card]->active);
 		}
 #endif
 	}

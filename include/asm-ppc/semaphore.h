@@ -133,11 +133,6 @@ extern inline void up(struct semaphore * sem)
 		__up(sem);
 }
 
-static inline int sem_getcount(struct semaphore *sem)
-{
-	return atomic_read(&sem->count);
-}
-
 #endif /* __KERNEL__ */
 
 #endif /* !(_PPC_SEMAPHORE_H) */

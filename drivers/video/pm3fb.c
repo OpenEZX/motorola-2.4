@@ -5,7 +5,6 @@
  *  Based on code written by:
  *           Sven Luther, <luther@dpt-info.u-strasbg.fr>
  *           Alan Hourihane, <alanh@fairlite.demon.co.uk>
- *           Russel King, <rmk@arm.linux.org.uk>
  *  Based on linux/drivers/video/skeletonfb.c:
  *	Copyright (C) 1997 Geert Uytterhoeven
  *  Based on linux/driver/video/pm2fb.c:
@@ -16,13 +15,9 @@
  *  License. See the file COPYING in the main directory of this archive for
  *  more details.
  *
- *  $Header: /cvsroot/linux/drivers/video/pm3fb.c,v 1.1 2002/02/25 19:11:06 marcelo Exp $
+ *  $Header: /home/pm3fb/pm3fb/pm3fb.c,v 1.139 2001/08/28 08:13:54 dolbeau Exp $
  *
  *  CHANGELOG:
- *  Mon Feb 11 10:35:48 MET 2002, v 1.4.11B: Cosmetic update.
- *  Wed Jan 23 14:16:59 MET 2002, v 1.4.11: Preliminary 2.5.x support, patch for 2.5.2.
- *  Wed Nov 28 11:08:29 MET 2001, v 1.4.10: potential bug fix for SDRAM-based board, patch for 2.4.16.
- *  Thu Sep 20 10:24:42 MET DST 2001, v 1.4.9: sync bug fix, preliminary flatpanel support, better timings.
  *  Tue Aug 28 10:13:01 MET DST 2001, v 1.4.8: memory timings check, minor bug fixes.
  *  Wed Jul 18 19:06:14 CEST 2001, v 1.4.7: Mode fix (800x600-100, 1024x768-100 changed), using HW panning + accel bug fix.
  *  Mon Jun 25 10:33:56 MET DST 2001, v 1.4.6: Depth 12 fix, chip reset ioctl, moved memory erase ioctl to DEBUG.
@@ -53,8 +48,8 @@
  */
 
 #include <linux/config.h>
-#include <linux/module.h>
 #include <linux/version.h>
+#include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/string.h>
@@ -80,7 +75,6 @@
 
 #include <asm/io.h>
 #include <asm/uaccess.h>
-
 #ifdef CONFIG_FB_OF
 #include <asm/prom.h>
 #endif
@@ -128,7 +122,6 @@ struct pm3fb_timings
 	unsigned long refresh;
 	unsigned long powerdown;
 };
-typedef enum pm3fb_timing_result { pm3fb_timing_ok, pm3fb_timing_problem, pm3fb_timing_retry } pm3fb_timing_result;
 #define PM3FB_UNKNOWN_TIMING_VALUE ((unsigned long)-1)
 #define PM3FB_UNKNOWN_TIMINGS { PM3FB_UNKNOWN_TIMING_VALUE, PM3FB_UNKNOWN_TIMING_VALUE, PM3FB_UNKNOWN_TIMING_VALUE, PM3FB_UNKNOWN_TIMING_VALUE, PM3FB_UNKNOWN_TIMING_VALUE }
 
@@ -191,21 +184,13 @@ static struct {
 			    PM3VideoControl_VSYNC_ACTIVE_HIGH
 			    | PM3VideoControl_PIXELSIZE_8BIT}}, {
 		"1024x768-74-32", {
-			78752, 1024, 768, 32, 128, 304, 1328, 1, 4, 38,
-			806, 1024, 0, 32,
-			PM3VideoControl_ENABLE |
-			PM3VideoControl_HSYNC_ACTIVE_HIGH
-			|
-			PM3VideoControl_VSYNC_ACTIVE_HIGH
-			| PM3VideoControl_PIXELSIZE_32BIT}},
-/* Generated mode : "1600x1024", for the SGI 1600SW flat panel*/
-	{
-		"SGI1600SW", {
-			108000, 1600, 1024, 16, 56, 104, 1704, 3, 6, 32,
-			1056, 1600, 0, 8,
-			PM3VideoControl_ENABLE|
-			PM3VideoControl_HSYNC_ACTIVE_LOW|PM3VideoControl_VSYNC_ACTIVE_LOW|
-			PM3VideoControl_PIXELSIZE_32BIT}}, 
+	78752, 1024, 768, 32, 128, 304, 1328, 1, 4, 38,
+			    806, 1024, 0, 32,
+			    PM3VideoControl_ENABLE |
+			    PM3VideoControl_HSYNC_ACTIVE_HIGH
+			    |
+			    PM3VideoControl_VSYNC_ACTIVE_HIGH
+			    | PM3VideoControl_PIXELSIZE_32BIT}},
 /* ##### auto-generated mode, by fbtimings2pm3 */
 /* Generated mode : "640x480-60" */
 	{
@@ -554,11 +539,9 @@ short disable[PM3_MAX_BOARD];
 short noaccel[PM3_MAX_BOARD];
 char fontn[PM3_MAX_BOARD][PM3_FONTNAME_SIZE];
 short depth[PM3_MAX_BOARD];
-short flatpanel[PM3_MAX_BOARD];
 static struct display disp[PM3_MAX_BOARD];
 static char g_options[PM3_OPTIONS_SIZE] __initdata = "pm3fb,dummy";
 short printtimings = 0;
-short forcesize[PM3_MAX_BOARD];
 
 /* ********************* */
 /* ***** prototype ***** */
@@ -566,8 +549,7 @@ short forcesize[PM3_MAX_BOARD];
 /* card-specific */
 static void pm3fb_j2000_setup(struct pm3fb_info *l_fb_info);
 /* permedia3-specific */
-static pm3fb_timing_result pm3fb_preserve_memory_timings(struct pm3fb_info *l_fb_info);
-static pm3fb_timing_result pm3fb_try_memory_timings(struct pm3fb_info *l_fb_info);
+static int pm3fb_preserve_memory_timings(struct pm3fb_info *l_fb_info);
 static void pm3fb_write_memory_timings(struct pm3fb_info *l_fb_info);
 static unsigned long pm3fb_read_dac_reg(struct pm3fb_info *l_fb_info,
 					unsigned long r);
@@ -683,7 +665,7 @@ static struct fb_ops pm3fb_ops = {
 	    NULL, NULL
 };
 #endif /* KERNEL_2_2 */
-#if (defined KERNEL_2_4) || (defined KERNEL_2_5)
+#ifdef KERNEL_2_4
 struct fbgen_hwswitch pm3fb_switch = {
 	pm3fb_detect, pm3fb_encode_fix, pm3fb_decode_var, pm3fb_encode_var,
 	pm3fb_get_par, pm3fb_set_par, pm3fb_getcolreg, pm3fb_setcolreg,
@@ -696,7 +678,7 @@ static struct fb_ops pm3fb_ops = {
 	fbgen_get_fix, fbgen_get_var, fbgen_set_var,
 	fbgen_get_cmap, fbgen_set_cmap, fbgen_pan_display, pm3fb_ioctl, NULL, NULL
 };
-#endif /* KERNEL_2_4 or KERNEL_2_5 */
+#endif /* KERNEL_2_4 */
 #ifdef PM3FB_USE_ACCEL
 #ifdef FBCON_HAS_CFB32
 static struct display_switch pm3fb_cfb32 = {
@@ -727,75 +709,52 @@ static struct display_switch pm3fb_cfb8 = {
 #endif /* FBCON_HAS_CFB8 */
 #endif /* PM3FB_USE_ACCEL */
 
-/* ****************************** */
-/* ***** card-specific data ***** */
-/* ****************************** */
-struct pm3fb_card_timings {
-	unsigned long memsize; /* 0 for last value (i.e. default) */
-	struct pm3fb_timings memt;
-};
-
-static struct pm3fb_card_timings t_FormacProFormance3[] = {
-	{ 16, { 0x02e311b8, 0x06100205, 0x08000002, 0x00000079, 0x00000000} },
-	{ 0, { 0x02e311b8, 0x06100205, 0x08000002, 0x00000079, 0x00000000} } /* from 16 MB PF3 */
-};
-
-static struct pm3fb_card_timings t_AppianJeronimo2000[] = {
-	{ 32, { 0x02e311B8, 0x07424905, 0x0c000003, 0x00000061, 0x00000000} },
-	{ 0, { 0x02e311B8, 0x07424905, 0x0c000003, 0x00000061, 0x00000000} } /* from 32MB J2000 */
-};
-
-static struct pm3fb_card_timings t_3DLabsOxygenVX1[] = {
-	{ 32, { 0x30e311b8, 0x08501204, 0x08000002, 0x0000006b, 0x00000000} },
-	{ 0, { 0x30e311b8, 0x08501204, 0x08000002, 0x0000006b, 0x00000000} } /* from 32MB VX1 */
-};
-
+/* ********************************** */
+/* ***** card-specific function ***** */
+/* ********************************** */
 static struct {
 		char cardname[32]; /* recognized card name */
 		u16 subvendor; /* subvendor of the card */
 		u16 subdevice; /* subdevice of the card */
 		u8  func; /* function of the card to which the extra init apply */
 		void (*specific_setup)(struct pm3fb_info *l_fb_info); /* card/func specific setup, done before _any_ FB access */
-	struct pm3fb_card_timings *c_memt; /* defauls timings for the boards */
+	struct pm3fb_timings memt; /* default timing for the board WARNING : might be *card* - specific */
 } cardbase[] = {
-	{ "Unknown Permedia3 board", 0xFFFF, 0xFFFF, 0xFF, NULL, NULL },
-	{ "Appian Jeronimo 2000 head 1", 0x1097, 0x3d32, 1, NULL,
-	  t_AppianJeronimo2000
-	},
+	{ "Unknown Permedia3 board", 0xFFFF, 0xFFFF, 0xFF, NULL, PM3FB_UNKNOWN_TIMINGS },
+	{ "Appian Jeronimo 2000 head 1", 0x1097, 0x3d32, 1, NULL, PM3FB_UNKNOWN_TIMINGS },
 	{ "Appian Jeronimo 2000 head 2", 0x1097, 0x3d32, 2, pm3fb_j2000_setup,
-	  t_AppianJeronimo2000
+	  {0x02e311B8, 0x07424905, 0x0c000003, 0x00000061, 0x00000000} /* also in pm3fb_j2000_setup */
 	},
 	{ "Formac ProFormance 3", PCI_VENDOR_ID_3DLABS, 0x000a, 0, NULL, /* Formac use 3DLabs ID ?!? */
-	  t_FormacProFormance3
+	  { 0x02e311b8, 0x06100205, 0x08000002, 0x00000079, 0x00000000} /* from the 16Mb ProFormance 3 */
 	},
-	{ "3DLabs Permedia3 Create!", PCI_VENDOR_ID_3DLABS, 0x0127, 0, NULL, NULL },
+	{ "3DLabs Permedia3 Create!", PCI_VENDOR_ID_3DLABS, 0x0127, 0, NULL, PM3FB_UNKNOWN_TIMINGS },
 	{ "3DLabs Oxygen VX1 PCI", PCI_VENDOR_ID_3DLABS, 0x0121, 0, NULL,
-	  t_3DLabsOxygenVX1
+	  { 0x30e311b8, 0x08501204, 0x08000002, 0x0000006b, 0x00000000 }
 	},
-	{ "3DLabs Oxygen VX1 AGP", PCI_VENDOR_ID_3DLABS, 0x0125, 0, NULL, NULL },
-	{ "3DLabs Oxygen VX1-16 AGP", PCI_VENDOR_ID_3DLABS, 0x0140, 0, NULL, NULL },
-	{ "3DLabs Oxygen VX1-1600SW PCI", PCI_VENDOR_ID_3DLABS, 0x0800, 0, NULL, NULL },
-	{ "\0", 0x0, 0x0, 0, NULL, NULL }
+	{ "3DLabs Oxygen VX1 AGP", PCI_VENDOR_ID_3DLABS, 0x0125, 0, NULL, PM3FB_UNKNOWN_TIMINGS },
+	{ "3DLabs Oxygen VX1-16 AGP", PCI_VENDOR_ID_3DLABS, 0x0140, 0, NULL, PM3FB_UNKNOWN_TIMINGS },
+	{ "3DLabs Oxygen VX1-1600SW PCI", PCI_VENDOR_ID_3DLABS, 0x0800, 0, NULL, PM3FB_UNKNOWN_TIMINGS },
+	{ "\0", 0x0, 0x0, 0, NULL, PM3FB_UNKNOWN_TIMINGS }
 };
 
-/* ********************************** */
-/* ***** card-specific function ***** */
-/* ********************************** */
 static void pm3fb_j2000_setup(struct pm3fb_info *l_fb_info)
 {       /* the appian j2000 require more initialization of the second head */
 	/* l_fb_info must point to the _second_ head of the J2000 */
 	
 	DTRACE;
-
-	l_fb_info->memt = t_AppianJeronimo2000[0].memt; /* 32 MB, first and only j2000 ? */
+	
+	/* Memory timings for the Appian J2000 board. also in cardbase */
+	l_fb_info->memt.caps = 0x02e311B8;
+	l_fb_info->memt.timings = 0x07424905;
+	l_fb_info->memt.control = 0x0c000003;
+	l_fb_info->memt.refresh = 0x00000061;
+	l_fb_info->memt.powerdown = 0x00000000;
 	
 	pm3fb_write_memory_timings(l_fb_info);
 }
 
-/* *************************************** */
-/* ***** permedia3-specific function ***** */
-/* *************************************** */
-static pm3fb_timing_result pm3fb_preserve_memory_timings(struct pm3fb_info *l_fb_info)
+static int pm3fb_preserve_memory_timings(struct pm3fb_info *l_fb_info)
 {
 	l_fb_info->memt.caps = PM3_READ_REG(PM3LocalMemCaps);
 	l_fb_info->memt.timings = PM3_READ_REG(PM3LocalMemTimings);
@@ -810,35 +769,20 @@ static pm3fb_timing_result pm3fb_preserve_memory_timings(struct pm3fb_info *l_fb
 	    (l_fb_info->memt.powerdown == PM3FB_UNKNOWN_TIMING_VALUE))
 	{
 		printk(KERN_ERR "pm3fb: invalid memory timings in permedia3 board #%ld\n", l_fb_info->board_num);
-		return(pm3fb_try_memory_timings(l_fb_info));
-	}
-	return(pm3fb_timing_ok);
-}
-
-static pm3fb_timing_result pm3fb_try_memory_timings(struct pm3fb_info *l_fb_info)
-{
-	if (cardbase[l_fb_info->board_type].c_memt)
-	{
-		int i = 0, done = 0;
-		while (!done)
+		if ((cardbase[l_fb_info->board_type].memt.caps != PM3FB_UNKNOWN_TIMING_VALUE) &&
+		    (cardbase[l_fb_info->board_type].memt.timings != PM3FB_UNKNOWN_TIMING_VALUE) &&
+		    (cardbase[l_fb_info->board_type].memt.control != PM3FB_UNKNOWN_TIMING_VALUE) &&
+		    (cardbase[l_fb_info->board_type].memt.refresh != PM3FB_UNKNOWN_TIMING_VALUE) &&
+		    (cardbase[l_fb_info->board_type].memt.powerdown != PM3FB_UNKNOWN_TIMING_VALUE))
 		{
-			if ((cardbase[l_fb_info->board_type].c_memt[i].memsize == l_fb_info->fb_size)
-			    || !(cardbase[l_fb_info->board_type].c_memt[i].memsize))
-			{ /* will use the 0-sized timings by default */
-				done = 1;
-				l_fb_info->memt = cardbase[l_fb_info->board_type].c_memt[i].memt;
-				printk(KERN_WARNING  "pm3fb: trying to use predefined memory timings for permedia3 board #%ld (%s, %ld MB)\n",
-				       l_fb_info->board_num,
-				       cardbase[l_fb_info->board_type].cardname,
-				       cardbase[l_fb_info->board_type].c_memt[i].memsize);
-				pm3fb_write_memory_timings(l_fb_info);
-				return(pm3fb_timing_retry);
-			}
-			i++;
+			l_fb_info->memt = cardbase[l_fb_info->board_type].memt;
+			printk(KERN_WARNING "pm3fb: trying to use predefined memory timings for permedia3 board #%ld (%s)\n", l_fb_info->board_num, cardbase[l_fb_info->board_type].cardname);
+			pm3fb_write_memory_timings(l_fb_info);
 		}
-	} else
-		return(pm3fb_timing_problem);
-	return(pm3fb_timing_ok);
+		else
+			return(1);
+	}
+	return(0);
 }
 
 static void pm3fb_write_memory_timings(struct pm3fb_info *l_fb_info)
@@ -872,6 +816,10 @@ static void pm3fb_write_memory_timings(struct pm3fb_info *l_fb_info)
 			  PM3RD_SClkControl_SOURCE_PCLK |
 			  PM3RD_SClkControl_ENABLE);
 }
+
+/* *************************************** */
+/* ***** permedia3-specific function ***** */
+/* *************************************** */
 
 static unsigned long pm3fb_read_dac_reg(struct pm3fb_info *l_fb_info,
 					unsigned long r)
@@ -1067,7 +1015,6 @@ static void pm3fb_show_cur_timing(struct pm3fb_info *l_fb_info)
 /* write the mode to registers */
 static void pm3fb_write_mode(struct pm3fb_info *l_fb_info)
 {
-	char tempsync = 0x00, tempmisc = 0x00;
 	DTRACE;
 
 	PM3_SLOW_WRITE_REG(PM3MemBypassWriteMask, 0xffffffff);
@@ -1197,26 +1144,22 @@ static void pm3fb_write_mode(struct pm3fb_info *l_fb_info)
 	/*
 	   PM3_SLOW_WRITE_REG(PM3RD_IndexControl, 0x00);
 	 */
-	if ((l_fb_info->current_par->video & PM3VideoControl_HSYNC_MASK) ==
-	    PM3VideoControl_HSYNC_ACTIVE_HIGH)
-		tempsync |= PM3RD_SyncControl_HSYNC_ACTIVE_HIGH;
-	if ((l_fb_info->current_par->video & PM3VideoControl_VSYNC_MASK) ==
-	    PM3VideoControl_VSYNC_ACTIVE_HIGH)
-		tempsync |= PM3RD_SyncControl_VSYNC_ACTIVE_HIGH;
-	
-	PM3_WRITE_DAC_REG(PM3RD_SyncControl, tempsync);
-	DPRINTK(2, "PM3RD_SyncControl: %d\n", tempsync);
-	
-	if (flatpanel[l_fb_info->board_num])
 	{
-		PM3_WRITE_DAC_REG(PM3RD_DACControl, PM3RD_DACControl_BLANK_PEDESTAL_ENABLE);
-		PM3_WAIT(2);
-		PM3_WRITE_REG(PM3VSConfiguration, 0x06);
-		PM3_WRITE_REG(0x5a00, 1 << 14); /* black magic... */
-		tempmisc = PM3RD_MiscControl_VSB_OUTPUT_ENABLE;
+		char tempsync = 0x00;
+
+		if ((l_fb_info->current_par->
+		     video & PM3VideoControl_HSYNC_MASK) ==
+		    PM3VideoControl_HSYNC_ACTIVE_HIGH)
+			tempsync |= PM3RD_SyncControl_HSYNC_ACTIVE_HIGH;
+		if ((l_fb_info->current_par->
+		     video & PM3VideoControl_VSYNC_MASK) ==
+		    PM3VideoControl_VSYNC_ACTIVE_HIGH)
+			tempsync |= PM3RD_SyncControl_VSYNC_ACTIVE_HIGH;
+
+		PM3_WRITE_DAC_REG(PM3RD_SyncControl, tempsync);
+		DPRINTK(2, "PM3RD_SyncControl: %d\n", tempsync);
 	}
-	else
-		PM3_WRITE_DAC_REG(PM3RD_DACControl, 0x00);
+	PM3_WRITE_DAC_REG(PM3RD_DACControl, 0x00);
 
 	switch (l_fb_info->current_par->depth) {
 	case 8:
@@ -1225,7 +1168,8 @@ static void pm3fb_write_mode(struct pm3fb_info *l_fb_info)
 		PM3_WRITE_DAC_REG(PM3RD_ColorFormat,
 				  PM3RD_ColorFormat_CI8_COLOR |
 				  PM3RD_ColorFormat_COLOR_ORDER_BLUE_LOW);
-		tempmisc |= PM3RD_MiscControl_HIGHCOLOR_RES_ENABLE;
+		PM3_WRITE_DAC_REG(PM3RD_MiscControl,
+				  PM3RD_MiscControl_HIGHCOLOR_RES_ENABLE);
 		break;
 	case 12:
 		PM3_WRITE_DAC_REG(PM3RD_PixelSize,
@@ -1234,8 +1178,9 @@ static void pm3fb_write_mode(struct pm3fb_info *l_fb_info)
 				  PM3RD_ColorFormat_4444_COLOR |
 				  PM3RD_ColorFormat_COLOR_ORDER_BLUE_LOW |
 				  PM3RD_ColorFormat_LINEAR_COLOR_EXT_ENABLE);
-		tempmisc |= PM3RD_MiscControl_DIRECTCOLOR_ENABLE |
-			PM3RD_MiscControl_HIGHCOLOR_RES_ENABLE;
+		PM3_WRITE_DAC_REG(PM3RD_MiscControl,
+				  PM3RD_MiscControl_DIRECTCOLOR_ENABLE |
+				  PM3RD_MiscControl_HIGHCOLOR_RES_ENABLE);
 		break;		
 	case 15:
 		PM3_WRITE_DAC_REG(PM3RD_PixelSize,
@@ -1244,8 +1189,9 @@ static void pm3fb_write_mode(struct pm3fb_info *l_fb_info)
 				  PM3RD_ColorFormat_5551_FRONT_COLOR |
 				  PM3RD_ColorFormat_COLOR_ORDER_BLUE_LOW |
 				  PM3RD_ColorFormat_LINEAR_COLOR_EXT_ENABLE);
-		tempmisc |= PM3RD_MiscControl_DIRECTCOLOR_ENABLE |
-			PM3RD_MiscControl_HIGHCOLOR_RES_ENABLE;
+		PM3_WRITE_DAC_REG(PM3RD_MiscControl,
+				  PM3RD_MiscControl_DIRECTCOLOR_ENABLE |
+				  PM3RD_MiscControl_HIGHCOLOR_RES_ENABLE);
 		break;		
 	case 16:
 		PM3_WRITE_DAC_REG(PM3RD_PixelSize,
@@ -1254,8 +1200,9 @@ static void pm3fb_write_mode(struct pm3fb_info *l_fb_info)
 				  PM3RD_ColorFormat_565_FRONT_COLOR |
 				  PM3RD_ColorFormat_COLOR_ORDER_BLUE_LOW |
 				  PM3RD_ColorFormat_LINEAR_COLOR_EXT_ENABLE);
-		tempmisc |= PM3RD_MiscControl_DIRECTCOLOR_ENABLE |
-			PM3RD_MiscControl_HIGHCOLOR_RES_ENABLE;
+		PM3_WRITE_DAC_REG(PM3RD_MiscControl,
+				  PM3RD_MiscControl_DIRECTCOLOR_ENABLE |
+				  PM3RD_MiscControl_HIGHCOLOR_RES_ENABLE);
 		break;
 	case 32:
 		PM3_WRITE_DAC_REG(PM3RD_PixelSize,
@@ -1263,12 +1210,12 @@ static void pm3fb_write_mode(struct pm3fb_info *l_fb_info)
 		PM3_WRITE_DAC_REG(PM3RD_ColorFormat,
 				  PM3RD_ColorFormat_8888_COLOR |
 				  PM3RD_ColorFormat_COLOR_ORDER_BLUE_LOW);
-		tempmisc |= PM3RD_MiscControl_DIRECTCOLOR_ENABLE |
-			PM3RD_MiscControl_HIGHCOLOR_RES_ENABLE;
+		PM3_WRITE_DAC_REG(PM3RD_MiscControl,
+				  PM3RD_MiscControl_DIRECTCOLOR_ENABLE |
+				  PM3RD_MiscControl_HIGHCOLOR_RES_ENABLE);
 		break;
 	}
-	PM3_WRITE_DAC_REG(PM3RD_MiscControl, tempmisc);
-	
+
 	PM3_SHOW_CUR_MODE;
 }
 
@@ -1390,9 +1337,8 @@ static void pm3fb_read_mode(struct pm3fb_info *l_fb_info,
 
 static unsigned long pm3fb_size_memory(struct pm3fb_info *l_fb_info)
 {
-	unsigned long memsize = 0, tempBypass, i, temp1, temp2;
+	unsigned long memsize, tempBypass, i, temp1, temp2;
 	u16 subvendor, subdevice;
-	pm3fb_timing_result ptr;
 
 	DTRACE;
 
@@ -1438,7 +1384,7 @@ static unsigned long pm3fb_size_memory(struct pm3fb_info *l_fb_info)
 	
 	/* card-specific setup is done, we preserve the final
            memory timing for future reference */
-	if ((ptr = pm3fb_preserve_memory_timings(l_fb_info)) == pm3fb_timing_problem) { /* memory timings were wrong ! oops.... */
+	if (pm3fb_preserve_memory_timings(l_fb_info)) { /* memory timings were wrong ! oops.... */
 		return(0);
 	}
 	
@@ -1464,12 +1410,12 @@ static unsigned long pm3fb_size_memory(struct pm3fb_info *l_fb_info)
 		temp1 = readl((l_fb_info->v_fb + (i * 1048576)));
 #endif
 #endif	/* KERNEL_2_2 */
-#if (defined KERNEL_2_4) || (defined KERNEL_2_5)
+#ifdef KERNEL_2_4
 		fb_writel(i * 0x00345678,
 			  (l_fb_info->v_fb + (i * 1048576)));
 		mb();
 		temp1 = fb_readl((l_fb_info->v_fb + (i * 1048576)));
-#endif /* KERNEL_2_4 or KERNEL_2_5 */
+#endif	/* KERNEL_2_4 */
 		/* Let's check for wrapover, write will fail at 16MB boundary */
 		if (temp1 == (i * 0x00345678))
 			memsize = i;
@@ -1512,7 +1458,7 @@ static unsigned long pm3fb_size_memory(struct pm3fb_info *l_fb_info)
 				   ((i - 32) * 1048576)));
 #endif
 #endif /* KERNEL_2_2 */
-#if (defined KERNEL_2_4) || (defined KERNEL_2_5)
+#ifdef KERNEL_2_4
 			fb_writel(i * 0x00345678,
 				  (l_fb_info->v_fb + (i * 1048576)));
 			mb();
@@ -1521,7 +1467,7 @@ static unsigned long pm3fb_size_memory(struct pm3fb_info *l_fb_info)
 			temp2 =
 			    fb_readl((l_fb_info->v_fb +
 				      ((i - 32) * 1048576)));
-#endif /* KERNEL_2_4 or KERNEL_2_5 */
+#endif /* KERNEL_2_4 */
 			if ((temp1 == (i * 0x00345678)) && (temp2 == 0))	/* different value, different RAM... */
 				memsize = i;
 			else
@@ -1538,21 +1484,8 @@ static unsigned long pm3fb_size_memory(struct pm3fb_info *l_fb_info)
 
 	DPRINTK(2, "Returning 0x%08lx bytes\n", memsize);
 
-	if (forcesize[l_fb_info->board_num] && ((forcesize[l_fb_info->board_num] * 1048576) != memsize))
-	{
-		printk(KERN_WARNING "pm3fb: mismatch between probed (%ld MB) and specified (%hd MB) memory size, using SPECIFIED !\n", memsize, forcesize[l_fb_info->board_num]);
-		memsize = 1048576 * forcesize[l_fb_info->board_num];
-	}
-	
 	l_fb_info->fb_size = memsize;
-	
-	if (ptr == pm3fb_timing_retry)
-	{
-		printk(KERN_WARNING "pm3fb: retrying memory timings check");
-		if (pm3fb_try_memory_timings(l_fb_info) == pm3fb_timing_problem)
-			return(0);
-	}
-	
+
 	return (memsize);
 }
 
@@ -1571,7 +1504,7 @@ static void pm3fb_clear_memory(struct pm3fb_info *l_fb_info, u32 cc)
 		writel(cc, (l_fb_info->v_fb + (i * sizeof(u32))));
 #endif
 #endif
-#if (defined KERNEL_2_4) || (defined KERNEL_2_5)
+#ifdef KERNEL_2_4
 		fb_writel(cc, (l_fb_info->v_fb + (i * sizeof(u32))));
 #endif
 	}
@@ -1600,7 +1533,7 @@ static void pm3fb_common_init(struct pm3fb_info *l_fb_info)
 	disp[l_fb_info->board_num].scrollmode = 0;	/* SCROLL_YNOMOVE; *//* 0 means "let fbcon choose" */
 	l_fb_info->gen.parsize = sizeof(struct pm3fb_par);
 	l_fb_info->gen.info.changevar = NULL;
-	l_fb_info->gen.info.node = B_FREE;
+	l_fb_info->gen.info.node = -1;
 	l_fb_info->gen.info.fbops = &pm3fb_ops;
 	l_fb_info->gen.info.disp = &(disp[l_fb_info->board_num]);
 	if (fontn[l_fb_info->board_num][0])
@@ -1765,7 +1698,6 @@ static void pm3fb_init_engine(struct pm3fb_info *l_fb_info)
 	}
 
 	PM3_SLOW_WRITE_REG(PM3FBSoftwareWriteMask, 0xffffffff);
-	PM3_SLOW_WRITE_REG(PM3FBHardwareWriteMask, 0xffffffff);
 	PM3_SLOW_WRITE_REG(PM3FBWriteMode,
 			   PM3FBWriteMode_WriteEnable |
 			   PM3FBWriteMode_OpaqueSpan |
@@ -1786,7 +1718,9 @@ static void pm3fb_init_engine(struct pm3fb_info *l_fb_info)
 			PM3_SLOW_WRITE_REG(PM3SizeOfFramebuffer, 4095);
 		else
 			PM3_SLOW_WRITE_REG(PM3SizeOfFramebuffer, sofb);
-		
+
+		PM3_SLOW_WRITE_REG(PM3FBHardwareWriteMask, 0xffffffff);
+
 		switch (l_fb_info->current_par->depth) {
 		case 8:
 			PM3_SLOW_WRITE_REG(PM3DitherMode,
@@ -1842,10 +1776,7 @@ static void pm3fb_cfb32_clear(struct vc_data *conp,
 	height = height * fontheight(p);
 	c = ((u32 *) p->dispsw_data)[attr_bgcol_ec(p, conp)];
 
-	/* block fills in 32bpp are hard, but in low res (width <= 1600 :-)
-	   we can use 16bpp operations, but not if NoWriteMask is on (SDRAM)  */
-	if ((l_fb_info->current_par->width > 1600) ||
-	    (l_fb_info->memt.caps & PM3LocalMemCaps_NoWriteMask)) {
+	if (l_fb_info->current_par->width > 1600) {
 		PM3_WAIT(4);
 
 		PM3_WRITE_REG(PM3Config2D,
@@ -1867,7 +1798,7 @@ static void pm3fb_cfb32_clear(struct vc_data *conp,
 			      PM3Render2D_SpanOperation |
 			      (PM3Render2D_Width(width)) |
 			      (PM3Render2D_Height(height)));
-	} else {
+	} else {		/* block fills in 32bpp are hard, but in low res (width <= 1600 :-) we can use 16bpp operations */
 		PM3_WAIT(8);
 
 		PM3_WRITE_REG(PM3FBBlockColor, c);
@@ -1992,10 +1923,7 @@ static void pm3fb_cfb16_clear(struct vc_data *conp,
 
 	PM3_WAIT(4);
 
-	if (l_fb_info->memt.caps & PM3LocalMemCaps_NoWriteMask)
-		PM3_WRITE_REG(PM3ForegroundColor, c);
-	else
-		PM3_WRITE_REG(PM3FBBlockColor, c);
+	PM3_WRITE_REG(PM3FBBlockColor, c);
 
 	PM3_WRITE_REG(PM3Config2D,
 				  PM3Config2D_UseConstantSource |
@@ -2006,23 +1934,14 @@ static void pm3fb_cfb16_clear(struct vc_data *conp,
 	PM3_WRITE_REG(PM3RectanglePosition,
 		      (PM3RectanglePosition_XOffset(sx)) |
 		      (PM3RectanglePosition_YOffset(sy)));
-	
-	if (l_fb_info->memt.caps & PM3LocalMemCaps_NoWriteMask)
-		PM3_WRITE_REG(PM3Render2D,
-			      PM3Render2D_XPositive |
-			      PM3Render2D_YPositive |
-			      PM3Render2D_Operation_Normal |
-			      PM3Render2D_SpanOperation |
-			      (PM3Render2D_Width(width)) |
-			      (PM3Render2D_Height(height)));
-	else
-		PM3_WRITE_REG(PM3Render2D,
-			      PM3Render2D_XPositive |
-			      PM3Render2D_YPositive |
-			      PM3Render2D_Operation_Normal |
-			      (PM3Render2D_Width(width)) |
-			      (PM3Render2D_Height(height)));
-	
+
+	PM3_WRITE_REG(PM3Render2D,
+		      PM3Render2D_XPositive |
+		      PM3Render2D_YPositive |
+		      PM3Render2D_Operation_Normal |
+		      (PM3Render2D_Width(width)) |
+		      (PM3Render2D_Height(height)));
+
 	pm3fb_wait_pm3(l_fb_info);
 }
 
@@ -2048,69 +1967,45 @@ static void pm3fb_cfb16_clear_margins(struct vc_data *conp,
 					  PM3Config2D_ForegroundROPEnable |
 					  (PM3Config2D_ForegroundROP(0x3)) |	/* Ox3 is GXcopy */
 					  PM3Config2D_FBWriteEnable);
-		
-		if (l_fb_info->memt.caps & PM3LocalMemCaps_NoWriteMask)
-			PM3_WRITE_REG(PM3ForegroundColor, c);
-		else
-			PM3_WRITE_REG(PM3FBBlockColor, c);
-		
+
+		PM3_WRITE_REG(PM3FBBlockColor, c);
+
 		PM3_WRITE_REG(PM3RectanglePosition,
 			      (PM3RectanglePosition_XOffset
 			       (p->var.xoffset +
 				sx)) | (PM3RectanglePosition_YOffset(p->
 								     var.
 								     yoffset)));
-		if (l_fb_info->memt.caps & PM3LocalMemCaps_NoWriteMask)
-			PM3_WRITE_REG(PM3Render2D,
-				      PM3Render2D_XPositive |
-				      PM3Render2D_YPositive |
-				      PM3Render2D_Operation_Normal |
-				      PM3Render2D_SpanOperation |
-				      (PM3Render2D_Width(p->var.xres - sx)) |
-				      (PM3Render2D_Height(p->var.yres)));
-		else
-			PM3_WRITE_REG(PM3Render2D,
-				      PM3Render2D_XPositive |
-				      PM3Render2D_YPositive |
-				      PM3Render2D_Operation_Normal |
-				      (PM3Render2D_Width(p->var.xres - sx)) |
-				      (PM3Render2D_Height(p->var.yres)));
+
+		PM3_WRITE_REG(PM3Render2D,
+			      PM3Render2D_XPositive |
+			      PM3Render2D_YPositive |
+			      PM3Render2D_Operation_Normal |
+			      (PM3Render2D_Width(p->var.xres - sx)) |
+			      (PM3Render2D_Height(p->var.yres)));
 	}
-	
+
 	/* bottom margin left -> right */
 	PM3_WAIT(4);
-	
+
 	PM3_WRITE_REG(PM3Config2D,
-		      PM3Config2D_UseConstantSource |
-		      PM3Config2D_ForegroundROPEnable |
-		      (PM3Config2D_ForegroundROP(0x3)) |	/* Ox3 is GXcopy */
-		      PM3Config2D_FBWriteEnable);
-	
-	if (l_fb_info->memt.caps & PM3LocalMemCaps_NoWriteMask)
-		PM3_WRITE_REG(PM3ForegroundColor, c);
-	else
-		PM3_WRITE_REG(PM3FBBlockColor, c);
-	
-	
+				  PM3Config2D_UseConstantSource |
+				  PM3Config2D_ForegroundROPEnable |
+				  (PM3Config2D_ForegroundROP(0x3)) |	/* Ox3 is GXcopy */
+				  PM3Config2D_FBWriteEnable);
+
+	PM3_WRITE_REG(PM3FBBlockColor, c);
+
 	PM3_WRITE_REG(PM3RectanglePosition,
 		      (PM3RectanglePosition_XOffset(p->var.xoffset)) |
 		      (PM3RectanglePosition_YOffset(p->var.yoffset + sy)));
-	
-	if (l_fb_info->memt.caps & PM3LocalMemCaps_NoWriteMask)
-		PM3_WRITE_REG(PM3Render2D,
-			      PM3Render2D_XPositive |
-			      PM3Render2D_YPositive |
-			      PM3Render2D_Operation_Normal |
-			      PM3Render2D_SpanOperation |
-			      (PM3Render2D_Width(p->var.xres)) |
-			      (PM3Render2D_Height(p->var.yres - sy)));
-	else
-		PM3_WRITE_REG(PM3Render2D,
-			      PM3Render2D_XPositive |
-			      PM3Render2D_YPositive |
-			      PM3Render2D_Operation_Normal |
-			      (PM3Render2D_Width(p->var.xres)) |
-			      (PM3Render2D_Height(p->var.yres - sy)));
+
+	PM3_WRITE_REG(PM3Render2D,
+		      PM3Render2D_XPositive |
+		      PM3Render2D_YPositive |
+		      PM3Render2D_Operation_Normal |
+		      (PM3Render2D_Width(p->var.xres)) |
+		      (PM3Render2D_Height(p->var.yres - sy)));
 
 	pm3fb_wait_pm3(l_fb_info);
 }
@@ -2288,7 +2183,7 @@ static void pm3fb_cfbX_putc(struct vc_data *conp, struct display *p,
 			    int c, int yy, int xx)
 {
 	struct pm3fb_info *l_fb_info = (struct pm3fb_info *) p->fb_info;
-	u8 *cdat, asx = 0, asy = 0, o_x = 0, o_y = 0;
+	u8 *cdat, asx = 0, asy = 0, o_x, o_y;
 	u32 fgx, bgx, ldat;
 	int sx, sy, i;
 
@@ -2398,7 +2293,7 @@ static void pm3fb_cfbX_putcs(struct vc_data *conp, struct display *p,
 			     int xx)
 {
 	struct pm3fb_info *l_fb_info = (struct pm3fb_info *) p->fb_info;
-	u8 *cdat, asx = 0, asy = 0, o_x = 0, o_y = 0;
+	u8 *cdat, asx = 0, asy = 0, o_x, o_y;
 	u32 fgx, bgx, ldat;
 	int sx, sy, i, j;
 	u16 sc;
@@ -2516,12 +2411,7 @@ static void pm3fb_cfbX_revc(struct display *p, int xx, int yy)
 	yy = yy * fontheight(p);
 
 	if (l_fb_info->current_par->depth == 8)
-	{
-		if (l_fb_info->memt.caps & PM3LocalMemCaps_NoWriteMask)
-			PM3_SLOW_WRITE_REG(PM3FBSoftwareWriteMask, 0x0F0F0F0F);
-		else
-			PM3_SLOW_WRITE_REG(PM3FBHardwareWriteMask, 0x0F0F0F0F);
-	}
+		PM3_SLOW_WRITE_REG(PM3FBHardwareWriteMask, 0x0F0F0F0F);
 
 	PM3_WAIT(3);
 
@@ -2547,12 +2437,7 @@ static void pm3fb_cfbX_revc(struct display *p, int xx, int yy)
 	pm3fb_wait_pm3(l_fb_info);
 
 	if (l_fb_info->current_par->depth == 8)
-	{
-		if (l_fb_info->memt.caps & PM3LocalMemCaps_NoWriteMask)
-			PM3_SLOW_WRITE_REG(PM3FBSoftwareWriteMask, 0xFFFFFFFF);
-		else
-			PM3_SLOW_WRITE_REG(PM3FBHardwareWriteMask, 0xFFFFFFFF);
-	}
+		PM3_SLOW_WRITE_REG(PM3FBHardwareWriteMask, 0xFFFFFFFF);
 }
 
 #endif /* FBCON_HAS_CFB8 || FBCON_HAS_CFB16 || FBCON_HAS_CFB32 */
@@ -2640,23 +2525,10 @@ static void pm3fb_bootdepth_setup(char *bds, unsigned long board_num)
 	unsigned long bd = simple_strtoul(bds, (char **) NULL, 10);
 
 	if (!(depth_supported(bd))) {
-		printk(KERN_WARNING "pm3fb: ignoring invalid depth %s for board #%ld\n",
-		       bds, board_num);
+		DPRINTK(1, "Invalid depth: %s\n", bds);
 		return;
 	}
 	depth[board_num] = bd;
-}
-
-static void pm3fb_forcesize_setup(char *bds, unsigned long board_num)
-{
-	unsigned long bd = simple_strtoul(bds, (char **) NULL, 10);
-
-	if (bd > 64) {
-		printk(KERN_WARNING "pm3fb: ignoring invalid memory size %s for board #%ld\n",
-		       bds, board_num);
-		return;
-	}
-	forcesize[board_num] = bd;
 }
 
 static char *pm3fb_boardnum_setup(char *options, unsigned long *bn)
@@ -2752,12 +2624,6 @@ static void pm3fb_real_setup(char *options)
 			pm3fb_bootdepth_setup(options, bn);
 		} else if (!strncmp(options, "printtimings", 12)) {
 			printtimings = 1;
-		} else if (!strncmp(options, "flatpanel:", 10)) {
-			options = pm3fb_boardnum_setup(options + 10, &bn);
-			flatpanel[bn] = 1;
-		} else if (!strncmp(options, "forcesize:", 10)) {
-			options = pm3fb_boardnum_setup(options + 10, &bn);
-			pm3fb_forcesize_setup(options, bn);
 		}
 		options = next;
 	}
@@ -3495,7 +3361,7 @@ static void pm3fb_detect(void)
 				    pci_resource_start(l_fb_info->dev, 1);
 				l_fb_info->v_fb = (unsigned char *) -1;
 
-#if (defined KERNEL_2_4) || (defined KERNEL_2_5) 	/* full resource management, new in linux-2.4.x */
+#ifdef KERNEL_2_4		/* full resource management, new in linux-2.4.x */
 				if (!request_mem_region
 				    ((unsigned long)l_fb_info->p_fb, 64 * 1024 * 1024, /* request full aperture size */
 				     "pm3fb")) {
@@ -3512,10 +3378,8 @@ static void pm3fb_detect(void)
 					     l_fb_info->board_num);
 					continue;
 				}
-#endif /* KERNEL_2_4 or KERNEL_2_5 */
-				if (forcesize[l_fb_info->board_num])
-					l_fb_info->fb_size = forcesize[l_fb_info->board_num];
-				
+#endif /* KERNEL_2_4 */
+
 				l_fb_info->fb_size =
 				    pm3fb_size_memory(l_fb_info);
 
@@ -3611,7 +3475,7 @@ static int pm3fb_ioctl(struct inode *inode, struct file *file,
 /* ***** standard FB API init functions ***** */
 /* ****************************************** */
 
-#if (defined KERNEL_2_4) || (defined KERNEL_2_5)
+#ifdef KERNEL_2_4
 int __init pm3fb_setup(char *options)
 #endif
 #ifdef KERNEL_2_2
@@ -3627,12 +3491,12 @@ __initfunc(void pm3fb_setup(char *options, int *ints))
 		PM3_OPTIONS_SIZE) ? PM3_OPTIONS_SIZE : (opsi + 1));
 	g_options[PM3_OPTIONS_SIZE - 1] = 0;
 
-#if (defined KERNEL_2_4) || (defined KERNEL_2_5)
+#ifdef KERNEL_2_4
 	return (0);
 #endif
 }
 
-#if (defined KERNEL_2_4) || (defined KERNEL_2_5)
+#ifdef KERNEL_2_4
 int __init pm3fb_init(void)
 #endif
 #ifdef KERNEL_2_2
@@ -3641,7 +3505,7 @@ __initfunc(void pm3fb_init(void))
 {
 	DTRACE;
 
-	DPRINTK(2, "This is pm3fb.c, CVS version: $Header: /cvsroot/linux/drivers/video/pm3fb.c,v 1.1 2002/02/25 19:11:06 marcelo Exp $");
+	DPRINTK(2, "This is pm3fb.c, CVS version: $Header: /home/pm3fb/pm3fb/pm3fb.c,v 1.139 2001/08/28 08:13:54 dolbeau Exp $");
 
 	pm3fb_real_setup(g_options);
 
@@ -3650,7 +3514,7 @@ __initfunc(void pm3fb_init(void))
 	if (!fb_info[0].dev) {	/* not even one board ??? */
 		DPRINTK(1, "No PCI Permedia3 board detected\n");
 	}
-#if (defined KERNEL_2_4) || (defined KERNEL_2_5)
+#ifdef KERNEL_2_4
 	return (0);
 #endif
 }
@@ -3753,9 +3617,7 @@ MODULE_PARM_DESC(font,"choose font");
 MODULE_PARM(depth,PM3_MAX_BOARD_MODULE_ARRAY_SHORT);
 MODULE_PARM_DESC(depth,"boot-time depth");
 MODULE_PARM(printtimings, "h");
-MODULE_PARM_DESC(printtimings, "print the memory timings of the card(s)");
-MODULE_PARM(forcesize, PM3_MAX_BOARD_MODULE_ARRAY_SHORT);
-MODULE_PARM_DESC(forcesize, "force specified memory size");
+MODULE_PARM_DESC(printtimings, "print the memory timngs of the card(s)");
 /*
 MODULE_SUPPORTED_DEVICE("Permedia3 PCI boards")
 MODULE_GENERIC_TABLE(gtype,name)
@@ -3829,14 +3691,14 @@ void cleanup_module(void)
 				if (l_fb_info->vIOBase !=
 				    (unsigned char *) -1) {
 					pm3fb_unmapIO(l_fb_info);
-#if (defined KERNEL_2_4) || (defined KERNEL_2_5)
+#ifdef KERNEL_2_4
 					release_mem_region(l_fb_info->p_fb,
 							   l_fb_info->
 							   fb_size);
 					release_mem_region(l_fb_info->
 							   pIOBase,
 							   PM3_REGS_SIZE);
-#endif /* KERNEL_2_4 or KERNEL_2_5 */
+#endif /* KERNEL_2_4 */
 				}
 				unregister_framebuffer(&l_fb_info->gen.
 						       info);

@@ -31,6 +31,31 @@
 #include <linux/spinlock.h>
 
 #include <asm/ptrace.h>
+#ifdef CONFIG_KGDB_SYSRQ
+#include <asm/kgdb.h>
+#define  GDB_OP &kgdb_op
+static struct sysrq_key_op kgdb_op={
+	handler:	(void*)breakpoint,
+	help_msg:	"kGdb ",
+	action_msg:	"Debug breakpoint\n",
+};
+
+#else
+#define  GDB_OP NULL
+#endif
+static void kill_current(int key, struct pt_regs *pt_regs,
+		struct kbd_struct *kbd, struct tty_struct *tty)
+{
+        printk("%-8s\n",current->comm);
+	force_sig(SIGKILL, current);
+	return;
+}
+static struct sysrq_key_op kill_current_op={
+	handler:	kill_current,
+	help_msg:	"kill_Current",
+	action_msg:	"Kill ",
+};
+
 
 extern void reset_vc(unsigned int);
 extern struct list_head super_blocks;
@@ -284,20 +309,24 @@ static struct sysrq_key_op sysrq_showmem_op = {
 
 /* signal sysrq helper function
  * Sends a signal to all user processes */
-static void send_sig_all(int sig)
+static void send_sig_all(int sig, int even_init)
 {
 	struct task_struct *p;
 
 	for_each_task(p) {
-		if (p->mm && p->pid != 1)
-			/* Not swapper, init nor kernel thread */
-			force_sig(sig, p);
+		if (p->mm) { /* Not swapper nor kernel thread */
+			if (p->pid == 1 && even_init)
+				/* Ugly hack to kill init */
+				p->pid = 0x8000;
+			if (p->pid != 1)
+				force_sig(sig, p);
+		}
 	}
 }
 
 static void sysrq_handle_term(int key, struct pt_regs *pt_regs,
 		struct kbd_struct *kbd, struct tty_struct *tty) {
-	send_sig_all(SIGTERM);
+	send_sig_all(SIGTERM, 0);
 	console_loglevel = 8;
 }
 static struct sysrq_key_op sysrq_term_op = {
@@ -308,13 +337,24 @@ static struct sysrq_key_op sysrq_term_op = {
 
 static void sysrq_handle_kill(int key, struct pt_regs *pt_regs,
 		struct kbd_struct *kbd, struct tty_struct *tty) {
-	send_sig_all(SIGKILL);
+	send_sig_all(SIGKILL, 0);
 	console_loglevel = 8;
 }
 static struct sysrq_key_op sysrq_kill_op = {
 	handler:	sysrq_handle_kill,
 	help_msg:	"kIll",
 	action_msg:	"Kill All Tasks",
+};
+
+static void sysrq_handle_killall(int key, struct pt_regs *pt_regs,
+		struct kbd_struct *kbd, struct tty_struct *tty) {
+	send_sig_all(SIGKILL, 1);
+	console_loglevel = 8;
+}
+static struct sysrq_key_op sysrq_killall_op = {
+	handler:	sysrq_handle_killall,
+	help_msg:	"killalL",
+	action_msg:	"Kill All Tasks (even init)",
 };
 
 /* END SIGNAL SYSRQ HANDLERS BLOCK */
@@ -338,11 +378,11 @@ static struct sysrq_key_op *sysrq_key_table[SYSRQ_KEY_TABLE_LENGTH] = {
 		 it is handled specially on the spark
 		 and will never arive */
 /* b */	&sysrq_reboot_op,
-/* c */	NULL,
+/* c */	&kill_current_op,
 /* d */	NULL,
 /* e */	&sysrq_term_op,
 /* f */	NULL,
-/* g */	NULL,
+/* g */	GDB_OP,
 /* h */	NULL,
 /* i */	&sysrq_kill_op,
 /* j */	NULL,
@@ -351,7 +391,7 @@ static struct sysrq_key_op *sysrq_key_table[SYSRQ_KEY_TABLE_LENGTH] = {
 #else
 /* k */	NULL,
 #endif
-/* l */	NULL,
+/* l */	&sysrq_killall_op,
 /* m */	&sysrq_showmem_op,
 /* n */	NULL,
 /* o */	NULL, /* This will often be registered

@@ -44,7 +44,8 @@
 #include <linux/iobuf.h>
 #include <linux/highmem.h>
 #include <linux/pagemap.h>
-#include <linux/module.h>
+
+#include <linux/trace.h>
 
 #include <asm/pgalloc.h>
 #include <asm/uaccess.h>
@@ -52,7 +53,6 @@
 
 unsigned long max_mapnr;
 unsigned long num_physpages;
-unsigned long num_mappedpages;
 void * high_memory;
 struct page *highmem_start_page;
 
@@ -108,8 +108,7 @@ static inline void free_one_pmd(pmd_t * dir)
 
 static inline void free_one_pgd(pgd_t * dir)
 {
-	int j;
-	pmd_t * pmd;
+	pmd_t * pmd, * md, * emd;
 
 	if (pgd_none(*dir))
 		return;
@@ -120,9 +119,23 @@ static inline void free_one_pgd(pgd_t * dir)
 	}
 	pmd = pmd_offset(dir, 0);
 	pgd_clear(dir);
-	for (j = 0; j < PTRS_PER_PMD ; j++) {
-		prefetchw(pmd+j+(PREFETCH_STRIDE/16));
-		free_one_pmd(pmd+j);
+
+	/*
+	 * Beware if changing the loop below.  It once used int j,
+	 *	for (j = 0; j < PTRS_PER_PMD; j++)
+	 *		free_one_pmd(pmd+j);
+	 * but some older i386 compilers (e.g. egcs-2.91.66, gcc-2.95.3)
+	 * terminated the loop with a _signed_ address comparison
+	 * using "jle", when configured for HIGHMEM64GB (X86_PAE).
+	 * If also configured for 3GB of kernel virtual address space,
+	 * if page at physical 0x3ffff000 virtual 0x7ffff000 is used as
+	 * a pmd, when that mm exits the loop goes on to free "entries"
+	 * found at 0x80000000 onwards.  The loop below compiles instead
+	 * to be terminated by unsigned address comparison using "jb".
+	 */
+	for (md = pmd, emd = pmd + PTRS_PER_PMD; md < emd; md++) {
+		prefetchw(md+(PREFETCH_STRIDE/16));
+		free_one_pmd(md);
 	}
 	pmd_free(pmd);
 }
@@ -357,7 +370,8 @@ static inline int zap_pmd_range(mmu_gather_t *tlb, pgd_t * dir, unsigned long ad
 /*
  * remove user pages in a given range.
  */
-void zap_page_range(struct mm_struct *mm, unsigned long address, unsigned long size)
+void do_zap_page_range(struct mm_struct *mm, unsigned long address,
+			      unsigned long size)
 {
 	mmu_gather_t *tlb;
 	pgd_t * dir;
@@ -457,7 +471,7 @@ int get_user_pages(struct task_struct *tsk, struct mm_struct *mm, unsigned long 
 	int i;
 	unsigned int flags;
 
-	/*
+	/* 
 	 * Require read or write permissions.
 	 * If 'force' is set, we only require the "MAY" flags.
 	 */
@@ -526,8 +540,6 @@ bad_page:
 	goto out;
 }
 
-EXPORT_SYMBOL(get_user_pages);
-
 /*
  * Force in an entire range of pages from the current process's user VA,
  * and pin them in physical memory.  
@@ -586,8 +598,6 @@ int map_user_kiobuf(int rw, struct kiobuf *iobuf, unsigned long va, size_t len)
  * occurs, the number of bytes read into memory may be less than the
  * size of the kiobuf, so we have to stop marking pages dirty once the
  * requested byte count has been reached.
- *
- * Must be called from process context - set_page_dirty() takes VFS locks.
  */
 
 void mark_dirty_kiobuf(struct kiobuf *iobuf, int bytes)
@@ -605,7 +615,7 @@ void mark_dirty_kiobuf(struct kiobuf *iobuf, int bytes)
 		page = iobuf->maplist[index];
 		
 		if (!PageReserved(page))
-			set_page_dirty(page);
+			SetPageDirty(page);
 
 		remaining -= (PAGE_SIZE - offset);
 		offset = 0;
@@ -639,6 +649,20 @@ void unmap_kiobuf (struct kiobuf *iobuf)
 	iobuf->locked = 0;
 }
 
+void zap_page_range(struct mm_struct *mm, unsigned long address,
+		    unsigned long size, int actions)
+{
+	while (size) {
+		unsigned long chunk = size;
+		
+		if (actions & ZPR_PARTITION && chunk > ZPR_MAX_BYTES)
+			chunk = ZPR_MAX_BYTES;
+		do_zap_page_range(mm, address, chunk);
+
+		address += chunk;
+		size -= chunk;
+	}
+}
 
 /*
  * Lock down all of the pages of a kiovec for IO.
@@ -748,10 +772,14 @@ int unlock_kiovec(int nr, struct kiobuf *iovec[])
 	return 0;
 }
 
-static inline void zeromap_pte_range(pte_t * pte, unsigned long address,
-                                     unsigned long size, pgprot_t prot)
+static inline void zeromap_pte_range(struct mm_struct *mm, pte_t * pte,
+				     unsigned long address, unsigned long size,
+				     pgprot_t prot)
 {
 	unsigned long end;
+
+	debug_lock_break(1);
+	break_spin_lock(&mm->page_table_lock);
 
 	address &= ~PMD_MASK;
 	end = address + size;
@@ -780,7 +808,7 @@ static inline int zeromap_pmd_range(struct mm_struct *mm, pmd_t * pmd, unsigned 
 		pte_t * pte = pte_alloc(mm, pmd, address);
 		if (!pte)
 			return -ENOMEM;
-		zeromap_pte_range(pte, address, end - address, prot);
+		zeromap_pte_range(mm, pte, address, end - address, prot);
 		address = (address + PMD_SIZE) & PMD_MASK;
 		pmd++;
 	} while (address && (address < end));
@@ -823,7 +851,7 @@ int zeromap_page_range(unsigned long address, unsigned long size, pgprot_t prot)
  * in null mappings (currently treated as "copy-on-access")
  */
 static inline void remap_pte_range(pte_t * pte, unsigned long address, unsigned long size,
-	unsigned long phys_addr, pgprot_t prot)
+	phys_addr_t phys_addr, pgprot_t prot)
 {
 	unsigned long end;
 
@@ -847,7 +875,7 @@ static inline void remap_pte_range(pte_t * pte, unsigned long address, unsigned 
 }
 
 static inline int remap_pmd_range(struct mm_struct *mm, pmd_t * pmd, unsigned long address, unsigned long size,
-	unsigned long phys_addr, pgprot_t prot)
+	phys_addr_t phys_addr, pgprot_t prot)
 {
 	unsigned long end;
 
@@ -868,7 +896,7 @@ static inline int remap_pmd_range(struct mm_struct *mm, pmd_t * pmd, unsigned lo
 }
 
 /*  Note: this is only safe if the mm semaphore is held when called. */
-int remap_page_range(unsigned long from, unsigned long phys_addr, unsigned long size, pgprot_t prot)
+int remap_page_range(unsigned long from, phys_addr_t phys_addr, unsigned long size, pgprot_t prot)
 {
 	int error = 0;
 	pgd_t * dir;
@@ -876,6 +904,7 @@ int remap_page_range(unsigned long from, unsigned long phys_addr, unsigned long 
 	unsigned long end = from + size;
 	struct mm_struct *mm = current->mm;
 
+	phys_addr = fixup_bigphys_addr(phys_addr, size);
 	phys_addr -= from;
 	dir = pgd_offset(mm, from);
 	flush_cache_range(mm, beg, end);
@@ -921,7 +950,10 @@ static inline void break_cow(struct vm_area_struct * vma, struct page * new_page
 		pte_t *page_table)
 {
 	flush_page_to_ram(new_page);
+#ifndef CONFIG_SUPERH
+	/* Not needed for VIPT cache (need better API for caches) */
 	flush_cache_page(vma, address);
+#endif
 	establish_pte(vma, address, page_table, pte_mkwrite(pte_mkdirty(mk_pte(new_page, vma->vm_page_prot))));
 }
 
@@ -958,7 +990,10 @@ static int do_wp_page(struct mm_struct *mm, struct vm_area_struct * vma,
 		int reuse = can_share_swap_page(old_page);
 		unlock_page(old_page);
 		if (reuse) {
+#ifndef CONFIG_SUPERH
+			/* Not needed for VIPT cache */
 			flush_cache_page(vma, address);
+#endif
 			establish_pte(vma, address, page_table, pte_mkyoung(pte_mkdirty(pte_mkwrite(pte))));
 			spin_unlock(&mm->page_table_lock);
 			return 1;	/* Minor fault */
@@ -1014,7 +1049,7 @@ static void vmtruncate_list(struct vm_area_struct *mpnt, unsigned long pgoff)
 
 		/* mapping wholly truncated? */
 		if (mpnt->vm_pgoff >= pgoff) {
-			zap_page_range(mm, start, len);
+			zap_page_range(mm, start, len, ZPR_NORMAL);
 			continue;
 		}
 
@@ -1027,7 +1062,7 @@ static void vmtruncate_list(struct vm_area_struct *mpnt, unsigned long pgoff)
 		/* Ok, partially affected.. */
 		start += diff << PAGE_SHIFT;
 		len = (len - diff) << PAGE_SHIFT;
-		zap_page_range(mm, start, len);
+		zap_page_range(mm, start, len, ZPR_NORMAL);
 	} while ((mpnt = mpnt->vm_next_share) != NULL);
 }
 
@@ -1126,6 +1161,7 @@ static int do_swap_page(struct mm_struct * mm,
 	spin_unlock(&mm->page_table_lock);
 	page = lookup_swap_cache(entry);
 	if (!page) {
+	        TRACE_MEMORY(TRACE_EV_MEMORY_SWAP_IN, address);
 		swapin_readahead(entry);
 		page = read_swap_cache_async(entry);
 		if (!page) {
@@ -1472,25 +1508,4 @@ int make_pages_present(unsigned long addr, unsigned long end)
 	ret = get_user_pages(current, current->mm, addr,
 			len, write, 0, NULL, NULL);
 	return ret == len ? 0 : -1;
-}
-
-struct page * vmalloc_to_page(void * vmalloc_addr)
-{
-	unsigned long addr = (unsigned long) vmalloc_addr;
-	struct page *page = NULL;
-	pmd_t *pmd;
-	pte_t *pte;
-	pgd_t *pgd;
-	
-	pgd = pgd_offset_k(addr);
-	if (!pgd_none(*pgd)) {
-		pmd = pmd_offset(pgd, addr);
-		if (!pmd_none(*pmd)) {
-			pte = pte_offset(pmd, addr);
-			if (pte_present(*pte)) {
-				page = pte_page(*pte);
-			}
-		}
-	}
-	return page;
 }

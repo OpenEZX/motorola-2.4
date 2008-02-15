@@ -9,9 +9,8 @@
 #ifndef _ASM_BITOPS_H
 #define _ASM_BITOPS_H
 
-#include <linux/config.h>
 #include <linux/types.h>
-#include <asm/byteorder.h>		/* sigh ... */
+#include <linux/byteorder/swab.h>		/* sigh ... */
 
 #ifndef __KERNEL__
 #error "Don't do this, sucker ..."
@@ -19,6 +18,7 @@
 
 #include <asm/system.h>
 #include <asm/sgidefs.h>
+#include <asm/mipsregs.h>
 
 /*
  * set_bit - Atomically set a bit in memory
@@ -85,8 +85,8 @@ static inline void clear_bit(unsigned long nr, volatile void *addr)
 		: "ir" (~(1UL << (nr & 0x3f))), "m" (*m));
 }
 
-#define smp_mb__before_clear_bit()	smp_mb()
-#define smp_mb__after_clear_bit()	smp_mb()
+#define smp_mb__before_clear_bit()	barrier()
+#define smp_mb__after_clear_bit()	barrier()
 
 /*
  * change_bit - Toggle a bit in memory
@@ -132,7 +132,7 @@ static inline void __change_bit(int nr, volatile void * addr)
  * @nr: Bit to set
  * @addr: Address to count from
  *
- * This operation is atomic and cannot be reordered.
+ * This operation is atomic and cannot be reordered.  
  * It also implies a memory barrier.
  */
 static inline unsigned long test_and_set_bit(unsigned long nr,
@@ -148,9 +148,6 @@ static inline unsigned long test_and_set_bit(unsigned long nr,
 		"scd\t%2, %1\n\t"
 		"beqz\t%2, 1b\n\t"
 		" and\t%2, %0, %3\n\t"
-#ifdef CONFIG_SMP
-		"sync\n\t"
-#endif
 		".set\treorder"
 		: "=&r" (temp), "=m" (*m), "=&r" (res)
 		: "r" (1UL << (nr & 0x3f)), "m" (*m)
@@ -164,7 +161,7 @@ static inline unsigned long test_and_set_bit(unsigned long nr,
  * @nr: Bit to set
  * @addr: Address to count from
  *
- * This operation is non-atomic and can be reordered.
+ * This operation is non-atomic and can be reordered.  
  * If two examples of this operation race, one can appear to succeed
  * but actually fail.  You must protect multiple accesses with a lock.
  */
@@ -186,7 +183,7 @@ static inline int __test_and_set_bit(int nr, volatile void *addr)
  * @nr: Bit to set
  * @addr: Address to count from
  *
- * This operation is atomic and cannot be reordered.
+ * This operation is atomic and cannot be reordered.  
  * It also implies a memory barrier.
  */
 static inline unsigned long test_and_clear_bit(unsigned long nr,
@@ -203,9 +200,6 @@ static inline unsigned long test_and_clear_bit(unsigned long nr,
 		"scd\t%2, %1\n\t"
 		"beqz\t%2, 1b\n\t"
 		" and\t%2, %0, %3\n\t"
-#ifdef CONFIG_SMP
-		"sync\n\t"
-#endif
 		".set\treorder"
 		: "=&r" (temp), "=m" (*m), "=&r" (res)
 		: "r" (1UL << (nr & 0x3f)), "m" (*m)
@@ -219,7 +213,7 @@ static inline unsigned long test_and_clear_bit(unsigned long nr,
  * @nr: Bit to set
  * @addr: Address to count from
  *
- * This operation is non-atomic and can be reordered.
+ * This operation is non-atomic and can be reordered.  
  * If two examples of this operation race, one can appear to succeed
  * but actually fail.  You must protect multiple accesses with a lock.
  */
@@ -241,7 +235,7 @@ static inline int __test_and_clear_bit(int nr, volatile void * addr)
  * @nr: Bit to set
  * @addr: Address to count from
  *
- * This operation is atomic and cannot be reordered.
+ * This operation is atomic and cannot be reordered.  
  * It also implies a memory barrier.
  */
 static inline unsigned long test_and_change_bit(unsigned long nr,
@@ -257,9 +251,6 @@ static inline unsigned long test_and_change_bit(unsigned long nr,
 		"scd\t%2, %1\n\t"
 		"beqz\t%2, 1b\n\t"
 		" and\t%2, %0, %3\n\t"
-#ifdef CONFIG_SMP
-		"sync\n\t"
-#endif
 		".set\treorder"
 		: "=&r" (temp), "=m" (*m), "=&r" (res)
 		: "r" (1UL << (nr & 0x3f)), "m" (*m)
@@ -273,7 +264,7 @@ static inline unsigned long test_and_change_bit(unsigned long nr,
  * @nr: Bit to set
  * @addr: Address to count from
  *
- * This operation is non-atomic and can be reordered.
+ * This operation is non-atomic and can be reordered.  
  * If two examples of this operation race, one can appear to succeed
  * but actually fail.  You must protect multiple accesses with a lock.
  */
@@ -400,19 +391,20 @@ static inline int find_next_zero_bit (void * addr, int size, int offset)
  *
  * Undefined if no zero exists, so code should check against ~0UL first.
  */
-static __inline__ unsigned long ffz(unsigned long word)
+static inline unsigned long ffz(unsigned long word)
 {
-	int b = 0, s;
+	unsigned long k;
 
 	word = ~word;
-        s = 32; if (word << 32 != 0) s = 0; b += s; word >>= s;
-        s = 16; if (word << 48 != 0) s = 0; b += s; word >>= s;
-        s =  8; if (word << 56 != 0) s = 0; b += s; word >>= s;
-        s =  4; if (word << 60 != 0) s = 0; b += s; word >>= s;
-        s =  2; if (word << 62 != 0) s = 0; b += s; word >>= s;
-        s =  1; if (word << 63 != 0) s = 0; b += s;
+	k = 63;
+	if (word & 0x00000000ffffffffUL) { k -= 32; word <<= 32; }
+	if (word & 0x0000ffff00000000UL) { k -= 16; word <<= 16; }
+	if (word & 0x00ff000000000000UL) { k -= 8;  word <<= 8;  }
+	if (word & 0x0f00000000000000UL) { k -= 4;  word <<= 4;  }
+	if (word & 0x3000000000000000UL) { k -= 2;  word <<= 2;  }
+	if (word & 0x4000000000000000UL) { k -= 1; }
 
-	return b;
+	return k;
 }
 
 #ifdef __KERNEL__
@@ -599,7 +591,7 @@ found_middle:
 #define ext2_find_first_zero_bit(addr, size) find_first_zero_bit((addr), (size))
 #define ext2_find_next_zero_bit(addr, size, offset) \
                 find_next_zero_bit((addr), (size), (offset))
-
+ 
 #endif /* !(__MIPSEB__) */
 
 /*

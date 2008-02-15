@@ -12,10 +12,11 @@
 #include <linux/completion.h>
 #include <linux/personality.h>
 #include <linux/tty.h>
-#include <linux/namespace.h>
 #ifdef CONFIG_BSD_PROCESS_ACCT
 #include <linux/acct.h>
 #endif
+
+#include <linux/trace.h>
 
 #include <asm/uaccess.h>
 #include <asm/pgtable.h>
@@ -152,15 +153,20 @@ static inline int has_stopped_jobs(int pgrp)
 
 /*
  * When we die, we re-parent all our children.
- * Try to give them to another thread in our thread
+ * Try to give them to another thread in our process
  * group, and if no such member exists, give it to
  * the global child reaper process (ie "init")
  */
 static inline void forget_original_parent(struct task_struct * father)
 {
-	struct task_struct * p;
+	struct task_struct * p, *reaper;
 
 	read_lock(&tasklist_lock);
+
+	/* Next in our thread group */
+	reaper = next_thread(father);
+	if (reaper == father)
+		reaper = child_reaper;
 
 	for_each_task(p) {
 		if (p->p_opptr == father) {
@@ -169,7 +175,10 @@ static inline void forget_original_parent(struct task_struct * father)
 			p->self_exec_id++;
 
 			/* Make sure we're not reparenting to ourselves */
-			p->p_opptr = child_reaper;
+			if (p == reaper)
+				p->p_opptr = child_reaper;
+			else
+				p->p_opptr = reaper;
 
 			if (p->pdeath_signal) send_sig(p->pdeath_signal, p, 0);
 		}
@@ -196,6 +205,8 @@ static inline void close_files(struct files_struct * files)
 			}
 			i++;
 			set >>= 1;
+			debug_lock_break(1);
+			conditional_schedule();
 		}
 	}
 }
@@ -309,12 +320,12 @@ static inline void __exit_mm(struct task_struct * tsk)
 	mm_release();
 	if (mm) {
 		atomic_inc(&mm->mm_count);
-		BUG_ON(mm != tsk->active_mm);
+		if (mm != tsk->active_mm) BUG();
 		/* more a memory barrier than a real lock */
 		task_lock(tsk);
 		tsk->mm = NULL;
-		task_unlock(tsk);
 		enter_lazy_tlb(mm, current, smp_processor_id());
+		task_unlock(tsk);
 		mmput(mm);
 	}
 }
@@ -343,7 +354,7 @@ static void exit_notify(void)
 	 * is about to become orphaned.
 	 */
 	 
-	t = current->p_pptr;
+	t = current->p_opptr;
 	
 	if ((t->pgrp != current->pgrp) &&
 	    (t->session == current->session) &&
@@ -435,17 +446,23 @@ NORET_TYPE void do_exit(long code)
 	tsk->flags |= PF_EXITING;
 	del_timer_sync(&tsk->real_timer);
 
+	if (unlikely(preempt_get_count()))
+		printk(KERN_INFO "note: %s[%d] exited with preempt_count %d\n",
+				current->comm, current->pid,
+				preempt_get_count());
+
 fake_volatile:
 #ifdef CONFIG_BSD_PROCESS_ACCT
 	acct_process(code);
 #endif
 	__exit_mm(tsk);
 
+	TRACE_PROCESS(TRACE_EV_PROCESS_EXIT, 0, 0);
+
 	lock_kernel();
 	sem_exit();
 	__exit_files(tsk);
 	__exit_fs(tsk);
-	exit_namespace(tsk);
 	exit_sighand(tsk);
 	exit_thread();
 
@@ -497,6 +514,8 @@ asmlinkage long sys_wait4(pid_t pid,unsigned int * stat_addr, int options, struc
 
 	if (options & ~(WNOHANG|WUNTRACED|__WNOTHREAD|__WCLONE|__WALL))
 		return -EINVAL;
+
+	TRACE_PROCESS(TRACE_EV_PROCESS_WAIT, pid, 0);
 
 	add_wait_queue(&current->wait_chldexit,&wait);
 repeat:
@@ -556,7 +575,7 @@ repeat:
 					REMOVE_LINKS(p);
 					p->p_pptr = p->p_opptr;
 					SET_LINKS(p);
-					do_notify_parent(p, SIGCHLD);
+					do_notify_parent(p, p->exit_signal);
 					write_unlock_irq(&tasklist_lock);
 				} else
 					release_task(p);
@@ -587,7 +606,7 @@ end_wait4:
 	return retval;
 }
 
-#if !defined(__alpha__) && !defined(__ia64__)
+#if !defined(__alpha__) && !defined(__ia64__) && !defined(__arm__)
 
 /*
  * sys_waitpid() remains for compatibility. waitpid() should be

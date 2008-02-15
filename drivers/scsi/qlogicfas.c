@@ -271,11 +271,11 @@ static int	ql_wai(void)
 int	i,k;
 	k = 0;
 	i = jiffies + WATCHDOG;
-	while (time_before(jiffies, i) && !qabort && !((k = inb(qbase + 4)) & 0xe0)) {
+	while ( i > jiffies && !qabort && !((k = inb(qbase + 4)) & 0xe0)) {
 		barrier();
 		cpu_relax();
 	}
-	if (time_after_eq(jiffies, i))
+	if (i <= jiffies)
 		return (DID_TIME_OUT);
 	if (qabort)
 		return (qabort == 1 ? DID_ABORT : DID_RESET);
@@ -405,8 +405,8 @@ rtrc(2)
 	}
 /*** Enter Status (and Message In) Phase ***/
 	k = jiffies + WATCHDOG;
-	while ( time_before(jiffies, k) && !qabort && !(inb(qbase + 4) & 6));	/* wait for status phase */
-	if ( time_after_eq(jiffies, k) ) {
+	while ( k > jiffies && !qabort && !(inb(qbase + 4) & 6));	/* wait for status phase */
+	if ( k <= jiffies ) {
 		ql_zap();
 		return (DID_TIME_OUT << 16);
 	}

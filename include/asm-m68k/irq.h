@@ -83,7 +83,7 @@ extern void sys_free_irq(unsigned int, void *);
  * mechanism like all other architectures - SA_INTERRUPT and SA_SHIRQ
  * are your friends.
  */
-#ifndef MACH_AMIGA_ONLY
+#ifndef CONFIG_AMIGA
 #define IRQ_FLG_LOCK	(0x0001)	/* handler is not replaceable	*/
 #define IRQ_FLG_REPLACE	(0x0002)	/* replace existing handler	*/
 #define IRQ_FLG_FAST	(0x0004)

@@ -353,21 +353,18 @@ static int __init ni65_probe1(struct net_device *dev,int ioaddr)
 	unsigned long flags;
 
 	for(i=0;i<NUM_CARDS;i++) {
-		if(!request_region(ioaddr, cards[i].total_size, cards[i].cardname))
+		if(check_region(ioaddr, cards[i].total_size))
 			continue;
 		if(cards[i].id_offset >= 0) {
 			if(inb(ioaddr+cards[i].id_offset+0) != cards[i].id0 ||
 				 inb(ioaddr+cards[i].id_offset+1) != cards[i].id1) {
-				 release_region(ioaddr, cards[i].total_size);
 				 continue;
 			}
 		}
 		if(cards[i].vendor_id) {
 			for(j=0;j<3;j++)
-				if(inb(ioaddr+cards[i].addr_offset+j) != cards[i].vendor_id[j]) {
-					release_region(ioaddr, cards[i].total_size);
+				if(inb(ioaddr+cards[i].addr_offset+j) != cards[i].vendor_id[j])
 					continue;
-			  }
 		}
 		break;
 	}
@@ -377,10 +374,8 @@ static int __init ni65_probe1(struct net_device *dev,int ioaddr)
 	for(j=0;j<6;j++)
 		dev->dev_addr[j] = inb(ioaddr+cards[i].addr_offset+j);
 
-	if( (j=ni65_alloc_buffer(dev)) < 0) {
-		release_region(ioaddr, cards[i].total_size);
+	if( (j=ni65_alloc_buffer(dev)) < 0)
 		return j;
-	}
 	p = (struct priv *) dev->priv;
 	p->cmdr_addr = ioaddr + cards[i].cmd_offset;
 	p->cardno = i;
@@ -391,7 +386,6 @@ static int __init ni65_probe1(struct net_device *dev,int ioaddr)
 	if( (j=readreg(CSR0)) != 0x4) {
 		 printk(KERN_ERR "can't RESET card: %04x\n",j);
 		 ni65_free_buffer(p);
-		 release_region(ioaddr, cards[p->cardno].total_size);
 		 return -EAGAIN;
 	}
 
@@ -443,7 +437,6 @@ static int __init ni65_probe1(struct net_device *dev,int ioaddr)
 			if(i == 5) {
 				printk("Can't detect DMA channel!\n");
 				ni65_free_buffer(p);
-				release_region(ioaddr, cards[p->cardno].total_size);
 				return -EAGAIN;
 			}
 			dev->dma = dmatab[i];
@@ -462,7 +455,6 @@ static int __init ni65_probe1(struct net_device *dev,int ioaddr)
 			{
 				printk("Failed to detect IRQ line!\n");
 				ni65_free_buffer(p);
-				release_region(ioaddr, cards[p->cardno].total_size);
 				return -EAGAIN;
 			}
 			printk("IRQ %d (autodetected).\n",dev->irq);
@@ -475,9 +467,13 @@ static int __init ni65_probe1(struct net_device *dev,int ioaddr)
 	{
 		printk("%s: Can't request dma-channel %d\n",dev->name,(int) dev->dma);
 		ni65_free_buffer(p);
-		release_region(ioaddr, cards[p->cardno].total_size);
 		return -EAGAIN;
 	}
+
+	/*
+	 * Grab the region so we can find another board.
+	 */
+	request_region(ioaddr,cards[p->cardno].total_size,cards[p->cardno].cardname);
 
 	dev->base_addr = ioaddr;
 
@@ -1105,7 +1101,7 @@ static int ni65_send_packet(struct sk_buff *skb, struct net_device *dev)
 	{
 		short len = ETH_ZLEN < skb->len ? skb->len : ETH_ZLEN;
 		struct tmd *tmdp;
-		unsigned long flags;
+		long flags;
 
 #ifdef XMT_VIA_SKB
 		if( (unsigned long) (skb->data + skb->len) > 0x1000000) {

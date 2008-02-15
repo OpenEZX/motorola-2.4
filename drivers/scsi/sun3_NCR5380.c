@@ -647,7 +647,10 @@ __inline__ void NCR5380_print_phase(struct Scsi_Host *instance) { };
 
 static volatile int main_running = 0;
 static struct tq_struct NCR5380_tqueue = {
-    routine:	(void (*)(void*))NCR5380_main	/* must have (void *) arg... */
+//    NULL,		/* next */
+    sync: 0,			/* sync */
+    routine: (void (*)(void*))NCR5380_main,  /* routine, must have (void *) arg... */
+    data: NULL		/* data */
 };
 
 static __inline__ void queue_main(void)
@@ -1216,9 +1219,9 @@ static void NCR5380_dma_complete( struct Scsi_Host *instance )
 
     if((sun3scsi_dma_finish(hostdata->connected->request.cmd))) {
 	    printk("scsi%d: overrun in UDC counter -- not prepared to deal with this!\n", HOSTNO);
-	    printk("please e-mail sammy@sammy.net with a description of how this\n");
+	    printk("please e-mail sammy@oh.verio.com with a description of how this\n");
 	    printk("error was produced.\n");
-	    BUG();
+	    machine_halt();
     }
 
     /* make sure we're not stuck in a data phase */
@@ -1229,9 +1232,9 @@ static void NCR5380_dma_complete( struct Scsi_Host *instance )
 	    printk("scsi%d: bus stuck in data phase -- probably a
  single byte overrun!\n", HOSTNO); 
 	    printk("not prepared for this error!\n");
-	    printk("please e-mail sammy@sammy.net with a description of how this\n");
+	    printk("please e-mail sammy@oh.verio.com with a description of how this\n");
 	    printk("error was produced.\n");
-	    BUG();
+	    machine_halt();
     }
 
 
@@ -1919,7 +1922,7 @@ static int NCR5380_transfer_dma( struct Scsi_Host *instance,
     /* sanity check */
     if(!sun3_dma_setup_done) {
 	 printk("scsi%d: transfer_dma without setup!\n", HOSTNO);
-	 BUG();
+	 machine_halt();
     }
 
     hostdata->dma_len = c;

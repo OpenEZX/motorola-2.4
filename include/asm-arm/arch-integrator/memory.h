@@ -21,9 +21,11 @@
 #define __ASM_ARCH_MMU_H
 
 /*
- * Task size: 3GB
+ * We don't have highmem on ARM (for now), so TASK_SIZE is always
+ * going to be equals to the kernel base.
  */
-#define TASK_SIZE	(0xc0000000UL)
+
+#define TASK_SIZE	((unsigned long)(CONFIG_KERNEL_START & 0xffc00000))
 #define TASK_SIZE_26	(0x04000000UL)
 
 /*
@@ -32,10 +34,8 @@
  */
 #define TASK_UNMAPPED_BASE (TASK_SIZE / 3)
 
-/*
- * Page offset: 3GB
- */
-#define PAGE_OFFSET	(0xc0000000UL)
+#define PAGE_OFFSET	((unsigned long)(CONFIG_KERNEL_START & 0xffc00000))
+
 #define PHYS_OFFSET	(0x00000000UL)
 
 /*

@@ -1,5 +1,5 @@
 /*
- * BK Id: %F% %I% %G% %U% %#%
+ * BK Id: SCCS/s.ppc_asm.h 1.29 11/08/01 09:41:38 paulus
  */
 /*
  * include/asm-ppc/ppc_asm.h
@@ -115,6 +115,7 @@ END_FTR_SECTION_IFCLR(CPU_FTR_601)
 	bdnz	0b
 #endif
 
+#ifndef CONFIG_PPC_ISERIES
 /*
  * On APUS (Amiga PowerPC cpu upgrade board), we don't know the
  * physical base address of RAM at compile time.
@@ -132,6 +133,20 @@ END_FTR_SECTION_IFCLR(CPU_FTR_601)
 	.align  1;				\
 	.long   0b;				\
 	.previous
+#else  /* CONFIG_PPC_ISERIES */
+
+#define tophys(rd,rs)				\
+	mr	rd,rs
+
+#define tovirt(rd,rs)				\
+	mr	rd,rs
+
+/* Macros to adjust thread priority for iSeries hardware multi-threading */
+#define HMT_LOW		or 1,1,1
+#define HMT_MEDIUM	or 2,2,2
+#define HMT_HIGH	or 3,3,3
+
+#endif /* CONFIG_PPC_ISERIES */
 
 /*
  * On 64-bit cpus, we use the rfid instruction instead of rfi, but
@@ -154,6 +169,25 @@ END_FTR_SECTION_IFCLR(CPU_FTR_601)
 #define MTMSRD(r)	mtmsr	r
 #define CLR_TOP32(r)
 #endif /* CONFIG_PPC64BRIDGE */
+
+#ifdef CONFIG_PPC_ISERIES
+#define HMT_LOW		or	1,1,1
+#define HMT_MEDIUM	or	2,2,2
+#define HMT_HIGH  	or	3,3,3
+#else /* CONFIG_PPC_ISERIES */
+#define HMT_LOW		/* nothing */
+#define HMT_MEDIUM	/* nothing */
+#define HMT_HIGH	/* nothing */
+
+#endif /* CONFIG_PPC_ISERIES */
+
+#ifdef CONFIG_IBM405_ERR77
+#define PPC405_ERR77(ra,rb)	dcbt	ra, rb;
+#define	PPC405_ERR77_SYNC	sync;
+#else
+#define PPC405_ERR77(ra,rb)
+#define PPC405_ERR77_SYNC
+#endif
 
 /* The boring bits... */
 

@@ -16,7 +16,6 @@
 #include <linux/config.h>
 #include <asm/processor.h>
 #include <linux/threads.h>
-#include <linux/slab.h>
 
 #define pgd_quicklist (S390_lowcore.cpu_data.pgd_quick)
 #define pmd_quicklist (S390_lowcore.cpu_data.pmd_quick)
@@ -37,7 +36,7 @@ extern __inline__ pgd_t *get_pgd_slow (void)
 	pgd_t *ret;
         int i;
 
-	ret = (pgd_t *) __get_free_pages(GFP_KERNEL, 1);
+	ret = (pgd_t *) __get_free_pages(GFP_KERNEL, 2);
 	if (ret != NULL)
 	        for (i = 0; i < PTRS_PER_PGD; i++) 
 	                pgd_clear(ret + i);
@@ -51,7 +50,7 @@ extern __inline__ pgd_t *get_pgd_fast (void)
 	if (ret != NULL) {
 		pgd_quicklist = (unsigned long *)(*ret);
 		ret[0] = ret[1];
-		pgtable_cache_size -= 2;
+		pgtable_cache_size -= 4;
 	}
 	return (pgd_t *) ret;
 }
@@ -70,17 +69,20 @@ extern __inline__ void free_pgd_fast (pgd_t *pgd)
 {
 	*(unsigned long *) pgd = (unsigned long) pgd_quicklist;
 	pgd_quicklist = (unsigned long *) pgd;
-	pgtable_cache_size += 2;
+	pgtable_cache_size += 4;
 }
 
 extern __inline__ void free_pgd_slow (pgd_t *pgd)
 {
-	free_pages((unsigned long) pgd, 1);
+        free_pages((unsigned long) pgd, 2);
 }
 
 #define pgd_free(pgd)		free_pgd_fast(pgd)
 
-extern pmd_t *pgd_populate(struct mm_struct *mm, pgd_t *pgd, pmd_t *pmd);
+extern inline void pgd_populate(struct mm_struct *mm, pgd_t *pgd, pmd_t *pmd)
+{
+	pgd_val(*pgd) = _PGD_ENTRY | __pa(pmd);
+}
 
 /*
  * page middle directory allocation/free routines.
@@ -90,7 +92,7 @@ extern inline pmd_t * pmd_alloc_one(struct mm_struct *mm, unsigned long vmaddr)
 	pmd_t *pmd;
         int i;
 
-	pmd = (pmd_t *) __get_free_pages(GFP_KERNEL, 1);
+	pmd = (pmd_t *) __get_free_pages(GFP_KERNEL, 2);
 	if (pmd != NULL) {
 		for (i=0; i < PTRS_PER_PMD; i++)
 			pmd_clear(pmd+i);
@@ -106,25 +108,21 @@ pmd_alloc_one_fast(struct mm_struct *mm, unsigned long address)
 	if (ret != NULL) {
 		pmd_quicklist = (unsigned long *)(*ret);
 		ret[0] = ret[1];
-		pgtable_cache_size -= 2;
+		pgtable_cache_size -= 4;
 	}
 	return (pmd_t *) ret;
 }
 
-extern void pmd_free_order2(pmd_t *);
 extern __inline__ void pmd_free_fast (pmd_t *pmd)
 {
-	if (test_bit(PG_arch_1, &virt_to_page(pmd)->flags) == 0) {
-		*(unsigned long *) pmd = (unsigned long) pmd_quicklist;
-		pmd_quicklist = (unsigned long *) pmd;
-		pgtable_cache_size += 2;
-	} else
-		pmd_free_order2(pmd);
+	*(unsigned long *) pmd = (unsigned long) pmd_quicklist;
+	pmd_quicklist = (unsigned long *) pmd;
+	pgtable_cache_size += 4;
 }
 
 extern __inline__ void pmd_free_slow (pmd_t *pmd)
 {
-	free_pages((unsigned long) pmd, 1);
+	free_pages((unsigned long) pmd, 2);
 }
 
 #define pmd_free(pmd)		pmd_free_fast(pmd)

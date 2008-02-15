@@ -8,6 +8,7 @@
 #ifndef _SPARC_PCONF_H
 #define _SPARC_PCONF_H
 
+#include <linux/fs.h>
 #include <linux/limits.h>
 
 #define _PCONF_LINK       1 /* Max number of links to an object        */

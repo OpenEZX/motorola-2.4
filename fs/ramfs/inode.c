@@ -37,6 +37,7 @@
 
 static struct super_operations ramfs_ops;
 static struct address_space_operations ramfs_aops;
+static struct file_operations ramfs_dir_operations;
 static struct file_operations ramfs_file_operations;
 static struct inode_operations ramfs_dir_inode_operations;
 
@@ -119,7 +120,7 @@ struct inode *ramfs_get_inode(struct super_block *sb, int mode, int dev)
 			break;
 		case S_IFDIR:
 			inode->i_op = &ramfs_dir_inode_operations;
-			inode->i_fop = &dcache_dir_ops;
+			inode->i_fop = &ramfs_dir_operations;
 			break;
 		case S_IFLNK:
 			inode->i_op = &page_symlink_inode_operations;
@@ -278,6 +279,12 @@ static struct file_operations ramfs_file_operations = {
 	fsync:		ramfs_sync_file,
 };
 
+static struct file_operations ramfs_dir_operations = {
+	read:		generic_read_dir,
+	readdir:	dcache_readdir,
+	fsync:		ramfs_sync_file,
+};
+
 static struct inode_operations ramfs_dir_inode_operations = {
 	create:		ramfs_create,
 	lookup:		ramfs_lookup,
@@ -318,7 +325,6 @@ static struct super_block *ramfs_read_super(struct super_block * sb, void * data
 }
 
 static DECLARE_FSTYPE(ramfs_fs_type, "ramfs", ramfs_read_super, FS_LITTER);
-static DECLARE_FSTYPE(rootfs_fs_type, "rootfs", ramfs_read_super, FS_NOMOUNT|FS_LITTER);
 
 static int __init init_ramfs_fs(void)
 {
@@ -332,11 +338,5 @@ static void __exit exit_ramfs_fs(void)
 
 module_init(init_ramfs_fs)
 module_exit(exit_ramfs_fs)
-
-int __init init_rootfs(void)
-{
-	return register_filesystem(&rootfs_fs_type);
-}
-
 MODULE_LICENSE("GPL");
 

@@ -864,10 +864,7 @@ static ssize_t pt_read(struct file * filp, char * buf,
 		    n -= k;
 		    b = k;
 		    if (b > count) b = count;
-		    if (copy_to_user(buf + t, PT.bufptr, b)) {
-	    		pi_disconnect(PI);
-			return -EFAULT;
-		    }
+		    copy_to_user(buf+t,PT.bufptr,b);
 		    t += b;
 		    count -= b;
 	        }
@@ -951,10 +948,7 @@ static ssize_t pt_write(struct file * filp, const char * buf,
 		    if (k > PT_BUFSIZE) k = PT_BUFSIZE;
 		    b = k;
 		    if (b > count) b = count;
-		    if (copy_from_user(PT.bufptr, buf + t, b)) {
-			pi_disconnect(PI);
-			return -EFAULT;
-		    }
+		    copy_from_user(PT.bufptr,buf+t,b);
                     pi_write_block(PI,PT.bufptr,k);
 		    t += b;
 		    count -= b;

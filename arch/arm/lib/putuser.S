@@ -47,9 +47,17 @@ __put_user_2:
 	ldr	r2, [r2, #TSK_ADDR_LIMIT]
 	sub	r2, r2, #2
 	cmp	r0, r2
+#ifndef __ARMEB__
 2:	strlsbt	r1, [r0], #1
 	movls	r1, r1, lsr #8
 3:	strlsbt	r1, [r0]
+#else
+2:	movls	r2, r1
+	movls	r1, r1, lsr #8
+	strlsbt r1, [r0], #1
+	movls	r1, r2
+3:	strlsbt	r1, [r0]
+#endif
 	movls	r0, #0
 	movls	pc, lr
 	b	__put_user_bad

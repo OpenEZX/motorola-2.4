@@ -248,8 +248,7 @@ static int rt_cache_get_info(char *buffer, char **start, off_t offset,
 				r->u.dst.__use,
 				0,
 				(unsigned long)r->rt_src,
-				(r->u.dst.advmss ?
-				 (int) r->u.dst.advmss + 40 : 0),
+				(int)r->u.dst.advmss + 40,
 				r->u.dst.window,
 				(int)((r->u.dst.rtt >> 3) + r->u.dst.rttvar),
 				r->key.tos,
@@ -287,7 +286,7 @@ static int rt_cache_stat_get_info(char *buffer, char **start, off_t offset, int 
         for (lcpu = 0; lcpu < smp_num_cpus; lcpu++) {
                 i = cpu_logical_map(lcpu);
 
-		len += sprintf(buffer+len, "%08x  %08x %08x %08x %08x %08x %08x %08x  %08x %08x %08x %08x %08x %08x %08x \n",
+		len += sprintf(buffer+len, "%08x  %08x %08x %08x %08x %08x %08x %08x  %08x %08x %08x\n",
 			       dst_entries,		       
 			       rt_cache_stat[i].in_hit,
 			       rt_cache_stat[i].in_slow_tot,
@@ -299,13 +298,7 @@ static int rt_cache_stat_get_info(char *buffer, char **start, off_t offset, int 
 
 			       rt_cache_stat[i].out_hit,
 			       rt_cache_stat[i].out_slow_tot,
-			       rt_cache_stat[i].out_slow_mc, 
-
-			       rt_cache_stat[i].gc_total,
-			       rt_cache_stat[i].gc_ignored,
-			       rt_cache_stat[i].gc_goal_miss,
-			       rt_cache_stat[i].gc_dst_overflow
-
+			       rt_cache_stat[i].out_slow_mc
 			);
 	}
 	len -= offset;
@@ -506,14 +499,9 @@ static int rt_garbage_collect(void)
 	 * Garbage collection is pretty expensive,
 	 * do not make it too frequently.
 	 */
-
-	rt_cache_stat[smp_processor_id()].gc_total++;
-
 	if (now - last_gc < ip_rt_gc_min_interval &&
-	    atomic_read(&ipv4_dst_ops.entries) < ip_rt_max_size) {
-		rt_cache_stat[smp_processor_id()].gc_ignored++;
+	    atomic_read(&ipv4_dst_ops.entries) < ip_rt_max_size)
 		goto out;
-	}
 
 	/* Calculate number of entries, which we want to expire now. */
 	goal = atomic_read(&ipv4_dst_ops.entries) -
@@ -579,8 +567,6 @@ static int rt_garbage_collect(void)
 		     We will not spin here for long time in any case.
 		 */
 
-		rt_cache_stat[smp_processor_id()].gc_goal_miss++;
-
 		if (expire == 0)
 			break;
 
@@ -597,8 +583,7 @@ static int rt_garbage_collect(void)
 	if (atomic_read(&ipv4_dst_ops.entries) < ip_rt_max_size)
 		goto out;
 	if (net_ratelimit())
-		printk(KERN_WARNING "dst cache overflow\n");
-	rt_cache_stat[smp_processor_id()].gc_dst_overflow++;
+		printk("dst cache overflow\n");
 	return 1;
 
 work_done:
@@ -672,7 +657,7 @@ restart:
 			}
 
 			if (net_ratelimit())
-				printk(KERN_WARNING "Neighbour table overflow.\n");
+				printk("Neighbour table overflow.\n");
 			rt_drop(rt);
 			return -ENOBUFS;
 		}
@@ -682,8 +667,8 @@ restart:
 #if RT_CACHE_DEBUG >= 2
 	if (rt->u.rt_next) {
 		struct rtable *trt;
-		printk(KERN_DEBUG "rt_cache @%02x: %u.%u.%u.%u", hash,
-		       NIPQUAD(rt->rt_dst));
+		printk("rt_cache @%02x: %u.%u.%u.%u", hash,
+				NIPQUAD(rt->rt_dst));
 		for (trt = rt->u.rt_next; trt; trt = trt->u.rt_next)
 			printk(" . %u.%u.%u.%u", NIPQUAD(trt->rt_dst));
 		printk("\n");
@@ -1247,7 +1232,7 @@ static int ip_route_input_mc(struct sk_buff *skb, u32 daddr, u32 saddr,
 		return -EINVAL;
 
 	if (MULTICAST(saddr) || BADCLASS(saddr) || LOOPBACK(saddr) ||
-	    skb->protocol != htons(ETH_P_IP))
+	    skb->protocol != __constant_htons(ETH_P_IP))
 		goto e_inval;
 
 	if (ZERONET(saddr)) {
@@ -1458,7 +1443,7 @@ int ip_route_input_slow(struct sk_buff *skb, u32 daddr, u32 saddr,
 	     inet_addr_onlink(out_dev, saddr, FIB_RES_GW(res))))
 		flags |= RTCF_DOREDIRECT;
 
-	if (skb->protocol != htons(ETH_P_IP)) {
+	if (skb->protocol != __constant_htons(ETH_P_IP)) {
 		/* Not IP (i.e. ARP). Do not create route, if it is
 		 * invalid for proxy arp. DNAT routes are always valid.
 		 */
@@ -1523,7 +1508,7 @@ done:
 out:	return err;
 
 brd_input:
-	if (skb->protocol != htons(ETH_P_IP))
+	if (skb->protocol != __constant_htons(ETH_P_IP))
 		goto e_inval;
 
 	if (ZERONET(saddr))
@@ -2157,7 +2142,7 @@ int inet_rtm_getroute(struct sk_buff *in_skb, struct nlmsghdr* nlh, void *arg)
 		err = -ENODEV;
 		if (!dev)
 			goto out;
-		skb->protocol	= htons(ETH_P_IP);
+		skb->protocol	= __constant_htons(ETH_P_IP);
 		skb->dev	= dev;
 		local_bh_disable();
 		err = ip_route_input(skb, dst, src, rtm->rtm_tos, dev);
@@ -2419,40 +2404,47 @@ ctl_table ipv4_route_table[] = {
 #ifdef CONFIG_NET_CLS_ROUTE
 struct ip_rt_acct *ip_rt_acct;
 
-/* This code sucks.  But you should have seen it before! --RR */
-
-/* IP route accounting ptr for this logical cpu number. */
-#define IP_RT_ACCT_CPU(i) (ip_rt_acct + cpu_logical_map(i) * 256)
-
 static int ip_rt_acct_read(char *buffer, char **start, off_t offset,
 			   int length, int *eof, void *data)
 {
-	unsigned int i;
+	*start = buffer;
 
 	if ((offset & 3) || (length & 3))
 		return -EIO;
-
-	if (offset >= sizeof(struct ip_rt_acct) * 256) {
-		*eof = 1;
-		return 0;
-	}
 
 	if (offset + length >= sizeof(struct ip_rt_acct) * 256) {
 		length = sizeof(struct ip_rt_acct) * 256 - offset;
 		*eof = 1;
 	}
+	if (length > 0) {
+		u32 *dst = (u32*)buffer;
+		u32 *src = (u32*)(((u8*)ip_rt_acct) + offset);
 
-	/* Copy first cpu. */
-	*start = buffer;
-	memcpy(buffer, IP_RT_ACCT_CPU(0), length);
+		memcpy(dst, src, length);
 
-	/* Add the other cpus in, one int at a time */
-	for (i = 1; i < smp_num_cpus; i++) {
-		unsigned int j;
-		for (j = 0; j < length/4; j++)
-			((u32*)buffer)[j] += ((u32*)IP_RT_ACCT_CPU(i))[j];
+#ifdef CONFIG_SMP
+		if (smp_num_cpus > 1 || cpu_logical_map(0) != 0) {
+			int i;
+			int cnt = length / 4;
+
+			for (i = 0; i < smp_num_cpus; i++) {
+				int cpu = cpu_logical_map(i);
+				int k;
+
+				if (cpu == 0)
+					continue;
+
+				src = (u32*)(((u8*)ip_rt_acct) + offset +
+					cpu * 256 * sizeof(struct ip_rt_acct));
+
+				for (k = 0; k < cnt; k++)
+					dst[k] += src[k];
+			}
+		}
+#endif
+		return length;
 	}
-	return length;
+	return 0;
 }
 #endif
 
@@ -2462,7 +2454,7 @@ void __init ip_rt_init(void)
 
 #ifdef CONFIG_NET_CLS_ROUTE
 	for (order = 0;
-	     (PAGE_SIZE << order) < 256 * sizeof(struct ip_rt_acct) * NR_CPUS; order++)
+	     (PAGE_SIZE << order) < 256 * sizeof(ip_rt_acct) * NR_CPUS; order++)
 		/* NOTHING */;
 	ip_rt_acct = (struct ip_rt_acct *)__get_free_pages(GFP_KERNEL, order);
 	if (!ip_rt_acct)
@@ -2495,7 +2487,7 @@ void __init ip_rt_init(void)
 	if (!rt_hash_table)
 		panic("Failed to allocate IP route cache hash table\n");
 
-	printk(KERN_INFO "IP: routing cache hash table of %u buckets, %ldKbytes\n",
+	printk("IP: routing cache hash table of %u buckets, %ldKbytes\n",
 	       rt_hash_mask,
 	       (long) (rt_hash_mask * sizeof(struct rt_hash_bucket)) / 1024);
 

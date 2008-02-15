@@ -1,28 +1,73 @@
 /*******************************************************************************
 
+  This software program is available to you under a choice of one of two
+  licenses. You may choose to be licensed under either the GNU General Public
+  License 2.0, June 1991, available at http://www.fsf.org/copyleft/gpl.html,
+  or the Intel BSD + Patent License, the text of which follows:
   
-  Copyright(c) 1999 - 2002 Intel Corporation. All rights reserved.
+  Recipient has requested a license and Intel Corporation ("Intel") is willing
+  to grant a license for the software entitled Linux Base Driver for the
+  Intel(R) PRO/1000 Family of Adapters (e1000) (the "Software") being provided
+  by Intel Corporation. The following definitions apply to this license:
   
-  This program is free software; you can redistribute it and/or modify it 
-  under the terms of the GNU General Public License as published by the Free 
-  Software Foundation; either version 2 of the License, or (at your option) 
-  any later version.
+  "Licensed Patents" means patent claims licensable by Intel Corporation which
+  are necessarily infringed by the use of sale of the Software alone or when
+  combined with the operating system referred to below.
   
-  This program is distributed in the hope that it will be useful, but WITHOUT 
-  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or 
-  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for 
-  more details.
+  "Recipient" means the party to whom Intel delivers this Software.
   
-  You should have received a copy of the GNU General Public License along with
-  this program; if not, write to the Free Software Foundation, Inc., 59 
-  Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+  "Licensee" means Recipient and those third parties that receive a license to
+  any operating system available under the GNU General Public License 2.0 or
+  later.
   
-  The full GNU General Public License is included in this distribution in the
-  file called LICENSE.
+  Copyright (c) 1999 - 2002 Intel Corporation.
+  All rights reserved.
   
-  Contact Information:
-  Linux NICS <linux.nics@intel.com>
-  Intel Corporation, 5200 N.E. Elam Young Parkway, Hillsboro, OR 97124-6497
+  The license is provided to Recipient and Recipient's Licensees under the
+  following terms.
+  
+  Redistribution and use in source and binary forms of the Software, with or
+  without modification, are permitted provided that the following conditions
+  are met:
+  
+  Redistributions of source code of the Software may retain the above
+  copyright notice, this list of conditions and the following disclaimer.
+  
+  Redistributions in binary form of the Software may reproduce the above
+  copyright notice, this list of conditions and the following disclaimer in
+  the documentation and/or materials provided with the distribution.
+  
+  Neither the name of Intel Corporation nor the names of its contributors
+  shall be used to endorse or promote products derived from this Software
+  without specific prior written permission.
+  
+  Intel hereby grants Recipient and Licensees a non-exclusive, worldwide,
+  royalty-free patent license under Licensed Patents to make, use, sell, offer
+  to sell, import and otherwise transfer the Software, if any, in source code
+  and object code form. This license shall include changes to the Software
+  that are error corrections or other minor changes to the Software that do
+  not add functionality or features when the Software is incorporated in any
+  version of an operating system that has been distributed under the GNU
+  General Public License 2.0 or later. This patent license shall apply to the
+  combination of the Software and any operating system licensed under the GNU
+  General Public License 2.0 or later if, at the time Intel provides the
+  Software to Recipient, such addition of the Software to the then publicly
+  available versions of such operating systems available under the GNU General
+  Public License 2.0 or later (whether in gold, beta or alpha form) causes
+  such combination to be covered by the Licensed Patents. The patent license
+  shall not apply to any other combinations which include the Software. NO
+  hardware per se is licensed hereunder.
+  
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MECHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL INTEL OR IT CONTRIBUTORS BE LIABLE FOR ANY
+  DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+  (INCLUDING, BUT NOT LIMITED, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+  ANY LOSS OF USE; DATA, OR PROFITS; OR BUSINESS INTERUPTION) HOWEVER CAUSED
+  AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY OR
+  TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 *******************************************************************************/
 
@@ -47,66 +92,9 @@ static void e1000_lower_ee_clk(struct e1000_hw *hw, uint32_t *eecd);
 static void e1000_shift_out_ee_bits(struct e1000_hw *hw, uint16_t data, uint16_t count);
 static uint16_t e1000_shift_in_ee_bits(struct e1000_hw *hw);
 static void e1000_setup_eeprom(struct e1000_hw *hw);
-static void e1000_clock_eeprom(struct e1000_hw *hw);
-static void e1000_cleanup_eeprom(struct e1000_hw *hw);
 static void e1000_standby_eeprom(struct e1000_hw *hw);
 static int32_t e1000_id_led_init(struct e1000_hw * hw);
 
-/******************************************************************************
- * Set the mac type member in the hw struct.
- * 
- * hw - Struct containing variables accessed by shared code
- *****************************************************************************/
-int32_t
-e1000_set_mac_type(struct e1000_hw *hw)
-{
-    DEBUGFUNC("e1000_set_mac_type");
-
-    switch (hw->device_id) {
-    case E1000_DEV_ID_82542:
-        switch (hw->revision_id) {
-        case E1000_82542_2_0_REV_ID:
-            hw->mac_type = e1000_82542_rev2_0;
-            break;
-        case E1000_82542_2_1_REV_ID:
-            hw->mac_type = e1000_82542_rev2_1;
-            break;
-        default:
-            /* Invalid 82542 revision ID */
-            return -E1000_ERR_MAC_TYPE;
-        }
-        break;
-    case E1000_DEV_ID_82543GC_FIBER:
-    case E1000_DEV_ID_82543GC_COPPER:
-        hw->mac_type = e1000_82543;
-        break;
-    case E1000_DEV_ID_82544EI_COPPER:
-    case E1000_DEV_ID_82544EI_FIBER:
-    case E1000_DEV_ID_82544GC_COPPER:
-    case E1000_DEV_ID_82544GC_LOM:
-        hw->mac_type = e1000_82544;
-        break;
-    case E1000_DEV_ID_82540EM:
-    case E1000_DEV_ID_82540EM_LOM:
-    case E1000_DEV_ID_82540EP:
-    case E1000_DEV_ID_82540EP_LOM:
-    case E1000_DEV_ID_82540EP_LP:
-        hw->mac_type = e1000_82540;
-        break;
-    case E1000_DEV_ID_82545EM_COPPER:
-    case E1000_DEV_ID_82545EM_FIBER:
-        hw->mac_type = e1000_82545;
-        break;
-    case E1000_DEV_ID_82546EB_COPPER:
-    case E1000_DEV_ID_82546EB_FIBER:
-        hw->mac_type = e1000_82546;
-        break;
-    default:
-        /* Should never have loaded on this device */
-        return -E1000_ERR_MAC_TYPE;
-    }
-    return E1000_SUCCESS;
-}
 /******************************************************************************
  * Reset the transmit and receive units; mask and clear all interrupts.
  *
@@ -221,8 +209,8 @@ e1000_init_hw(struct e1000_hw *hw)
     /* Initialize Identification LED */
     ret_val = e1000_id_led_init(hw);
     if(ret_val < 0) {
-        DEBUGOUT("Error Initializing Identification LED\n");
-        return ret_val;
+	DEBUGOUT("Error Initializing Identification LED\n");
+	return ret_val;
     }
     
     /* Set the Media Type and exit with error if it is not valid. */
@@ -296,8 +284,6 @@ e1000_init_hw(struct e1000_hw *hw)
             PCIX_COMMAND_MMRBC_SHIFT;
         stat_mmrbc = (pcix_stat_hi_word & PCIX_STATUS_HI_MMRBC_MASK) >>
             PCIX_STATUS_HI_MMRBC_SHIFT;
-        if(stat_mmrbc == PCIX_STATUS_HI_MMRBC_4K)
-            stat_mmrbc = PCIX_STATUS_HI_MMRBC_2K;
         if(cmd_mmrbc > stat_mmrbc) {
             pcix_cmd_word &= ~PCIX_COMMAND_MMRBC_MASK;
             pcix_cmd_word |= stat_mmrbc << PCIX_COMMAND_MMRBC_SHIFT;
@@ -307,13 +293,6 @@ e1000_init_hw(struct e1000_hw *hw)
 
     /* Call a subroutine to configure the link and setup flow control. */
     ret_val = e1000_setup_link(hw);
-
-    /* Set the transmit descriptor write-back policy */
-    if(hw->mac_type > e1000_82544) {
-        ctrl = E1000_READ_REG(hw, TXDCTL);
-        ctrl = (ctrl & ~E1000_TXDCTL_WTHRESH) | E1000_TXDCTL_FULL_TX_DESC_WB;
-        E1000_WRITE_REG(hw, TXDCTL, ctrl);
-    }
 
     /* Clear all of the statistics registers (clear on read).  It is
      * important that we do this after we have tried to establish link
@@ -440,6 +419,7 @@ e1000_setup_link(struct e1000_hw *hw)
  * Sets up link for a fiber based adapter
  *
  * hw - Struct containing variables accessed by shared code
+ * ctrl - Current value of the device control register
  *
  * Manipulates Physical Coding Sublayer functions in order to configure
  * link. Assumes the hardware has been previously reset and the transmitter
@@ -570,6 +550,7 @@ e1000_setup_fiber_link(struct e1000_hw *hw)
 * Detects which PHY is present and the speed and duplex
 *
 * hw - Struct containing variables accessed by shared code
+* ctrl - current value of the device control register
 ******************************************************************************/
 static int32_t 
 e1000_setup_copper_link(struct e1000_hw *hw)
@@ -658,17 +639,14 @@ e1000_setup_copper_link(struct e1000_hw *hw)
         return -E1000_ERR_PHY;
     }
     phy_data |= M88E1000_EPSCR_TX_CLK_25;
-
-    if (hw->phy_revision < M88E1011_I_REV_4) {
-        /* Configure Master and Slave downshift values */
-        phy_data &= ~(M88E1000_EPSCR_MASTER_DOWNSHIFT_MASK |
-                      M88E1000_EPSCR_SLAVE_DOWNSHIFT_MASK);
-        phy_data |= (M88E1000_EPSCR_MASTER_DOWNSHIFT_1X |
-                     M88E1000_EPSCR_SLAVE_DOWNSHIFT_1X);
-        if(e1000_write_phy_reg(hw, M88E1000_EXT_PHY_SPEC_CTRL, phy_data) < 0) {
-            DEBUGOUT("PHY Write Error\n");
-            return -E1000_ERR_PHY;
-        }
+    /* Configure Master and Slave downshift values */
+    phy_data &= ~(M88E1000_EPSCR_MASTER_DOWNSHIFT_MASK |
+                  M88E1000_EPSCR_SLAVE_DOWNSHIFT_MASK);
+    phy_data |= (M88E1000_EPSCR_MASTER_DOWNSHIFT_1X |
+                 M88E1000_EPSCR_SLAVE_DOWNSHIFT_1X);
+    if(e1000_write_phy_reg(hw, M88E1000_EXT_PHY_SPEC_CTRL, phy_data) < 0) {
+        DEBUGOUT("PHY Write Error\n");
+        return -E1000_ERR_PHY;
     }
 
     /* SW Reset the PHY so all changes take effect */
@@ -1014,6 +992,7 @@ e1000_phy_force_speed_duplex(struct e1000_hw *hw)
     /* Write the configured values back to the Device Control Reg. */
     E1000_WRITE_REG(hw, CTRL, ctrl);
 
+    /* Write the MII Control Register with the new PHY configuration. */
     if(e1000_read_phy_reg(hw, M88E1000_PHY_SPEC_CTRL, &phy_data) < 0) {
         DEBUGOUT("PHY Read Error\n");
         return -E1000_ERR_PHY;
@@ -1028,11 +1007,9 @@ e1000_phy_force_speed_duplex(struct e1000_hw *hw)
         return -E1000_ERR_PHY;
     }
     DEBUGOUT1("M88E1000 PSCR: %x \n", phy_data);
-
+    
     /* Need to reset the PHY or these changes will be ignored */
     mii_ctrl_reg |= MII_CR_RESET;
-
-    /* Write back the modified PHY MII control register. */
     if(e1000_write_phy_reg(hw, PHY_CTRL, mii_ctrl_reg) < 0) {
         DEBUGOUT("PHY Write Error\n");
         return -E1000_ERR_PHY;
@@ -2107,8 +2084,7 @@ e1000_detect_gig_phy(struct e1000_hw *hw)
         return -E1000_ERR_PHY;
     }
     hw->phy_id |= (uint32_t) (phy_id_low & PHY_REVISION_MASK);
-    hw->phy_revision = (uint32_t) phy_id_low & ~PHY_REVISION_MASK;
-
+    
     switch(hw->mac_type) {
     case e1000_82543:
         if(hw->phy_id == M88E1000_E_PHY_ID) match = TRUE;
@@ -2250,7 +2226,7 @@ e1000_raise_ee_clk(struct e1000_hw *hw,
                    uint32_t *eecd)
 {
     /* Raise the clock input to the EEPROM (by setting the SK bit), and then
-     * wait <delay> microseconds.
+     * wait 50 microseconds.
      */
     *eecd = *eecd | E1000_EECD_SK;
     E1000_WRITE_REG(hw, EECD, *eecd);
@@ -2339,11 +2315,11 @@ e1000_shift_in_ee_bits(struct e1000_hw *hw)
     uint32_t i;
     uint16_t data;
 
-    /* In order to read a register from the EEPROM, we need to shift 'count'
-     * bits in from the EEPROM. Bits are "shifted in" by raising the clock
-     * input to the EEPROM (setting the SK bit), and then reading the value of
-     * the "DO" bit.  During this "shifting in" process the "DI" bit should
-     * always be clear.
+    /* In order to read a register from the EEPROM, we need to shift 16 bits 
+     * in from the EEPROM. Bits are "shifted in" by raising the clock input to
+     * the EEPROM (setting the SK bit), and then reading the value of the "DO"
+     * bit.  During this "shifting in" process the "DI" bit should always be 
+     * clear..
      */
 
     eecd = E1000_READ_REG(hw, EECD);
@@ -3055,12 +3031,12 @@ e1000_id_led_init(struct e1000_hw * hw)
     const uint32_t ledctl_off = E1000_LEDCTL_MODE_LED_OFF;
     uint16_t eeprom_data, i, temp;
     const uint16_t led_mask = 0x0F;
-        
+	
     DEBUGFUNC("e1000_id_led_init");
     
     if(hw->mac_type < e1000_82540) {
-        /* Nothing to do */
-        return 0;
+	/* Nothing to do */
+	return 0;
     }
     
     ledctl = E1000_READ_REG(hw, LEDCTL);
@@ -3077,39 +3053,39 @@ e1000_id_led_init(struct e1000_hw * hw)
     for(i = 0; i < 4; i++) {
         temp = (eeprom_data >> (i << 2)) & led_mask;
         switch(temp) {
-        case ID_LED_ON1_DEF2:
-        case ID_LED_ON1_ON2:
-        case ID_LED_ON1_OFF2:
+	case ID_LED_ON1_DEF2:
+	case ID_LED_ON1_ON2:
+	case ID_LED_ON1_OFF2:
             hw->ledctl_mode1 &= ~(ledctl_mask << (i << 3));
             hw->ledctl_mode1 |= ledctl_on << (i << 3);
             break;
-        case ID_LED_OFF1_DEF2:
-        case ID_LED_OFF1_ON2:
-        case ID_LED_OFF1_OFF2:
+	case ID_LED_OFF1_DEF2:
+	case ID_LED_OFF1_ON2:
+	case ID_LED_OFF1_OFF2:
             hw->ledctl_mode1 &= ~(ledctl_mask << (i << 3));
             hw->ledctl_mode1 |= ledctl_off << (i << 3);
             break;
-        default:
-            /* Do nothing */
-            break;
-        }
-        switch(temp) {
-        case ID_LED_DEF1_ON2:
-        case ID_LED_ON1_ON2:
-        case ID_LED_OFF1_ON2:
+	default:
+	    /* Do nothing */
+	    break;
+	}
+	switch(temp) {
+	case ID_LED_DEF1_ON2:
+	case ID_LED_ON1_ON2:
+	case ID_LED_OFF1_ON2:
             hw->ledctl_mode2 &= ~(ledctl_mask << (i << 3));
             hw->ledctl_mode2 |= ledctl_on << (i << 3);
             break;
-        case ID_LED_DEF1_OFF2:
-        case ID_LED_ON1_OFF2:
-        case ID_LED_OFF1_OFF2:
+	case ID_LED_DEF1_OFF2:
+	case ID_LED_ON1_OFF2:
+	case ID_LED_OFF1_OFF2:
             hw->ledctl_mode2 &= ~(ledctl_mask << (i << 3));
             hw->ledctl_mode2 |= ledctl_off << (i << 3);
             break;
-        default:
-            /* Do nothing */
-            break;
-        }
+	default:
+	    /* Do nothing */
+	    break;
+	}
     }
     return 0;
 }
@@ -3148,9 +3124,6 @@ e1000_setup_led(struct e1000_hw *hw)
         ledctl |= (E1000_LEDCTL_MODE_LED_OFF << E1000_LEDCTL_LED0_MODE_SHIFT);
         E1000_WRITE_REG(hw, LEDCTL, ledctl);
         break;
-    case E1000_DEV_ID_82540EP:
-    case E1000_DEV_ID_82540EP_LOM:
-    case E1000_DEV_ID_82540EP_LP:
     case E1000_DEV_ID_82540EM:
     case E1000_DEV_ID_82540EM_LOM:
     case E1000_DEV_ID_82545EM_COPPER:
@@ -3184,9 +3157,6 @@ e1000_cleanup_led(struct e1000_hw *hw)
     case E1000_DEV_ID_82544GC_LOM:
         /* No cleanup necessary */
         break;
-    case E1000_DEV_ID_82540EP:
-    case E1000_DEV_ID_82540EP_LOM:
-    case E1000_DEV_ID_82540EP_LP:
     case E1000_DEV_ID_82540EM:
     case E1000_DEV_ID_82540EM_LOM:
     case E1000_DEV_ID_82545EM_COPPER:
@@ -3237,9 +3207,6 @@ e1000_led_on(struct e1000_hw *hw)
         ctrl |= E1000_CTRL_SWDPIO0;
         E1000_WRITE_REG(hw, CTRL, ctrl);
         break;
-    case E1000_DEV_ID_82540EP:
-    case E1000_DEV_ID_82540EP_LOM:
-    case E1000_DEV_ID_82540EP_LP:
     case E1000_DEV_ID_82540EM:
     case E1000_DEV_ID_82540EM_LOM:
     case E1000_DEV_ID_82545EM_COPPER:
@@ -3287,9 +3254,6 @@ e1000_led_off(struct e1000_hw *hw)
         ctrl |= E1000_CTRL_SWDPIO0;
         E1000_WRITE_REG(hw, CTRL, ctrl);
         break;
-    case E1000_DEV_ID_82540EP:
-    case E1000_DEV_ID_82540EP_LOM:
-    case E1000_DEV_ID_82540EP_LP:
     case E1000_DEV_ID_82540EM:
     case E1000_DEV_ID_82540EM_LOM:
     case E1000_DEV_ID_82545EM_COPPER:

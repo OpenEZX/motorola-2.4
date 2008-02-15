@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2001, 2002, MontaVista Software Inc.
+ * Copyright 2001 MontaVista Software Inc.
  * Author: Jun Sun, jsun@mvista.com or jsun@junsun.net
  *
  * include/asm-mips/time.h
@@ -23,7 +23,7 @@
 #include <linux/linkage.h>              /* for asmlinkage */
 #include <linux/rtc.h>                  /* for struct rtc_time */
 
-/*
+/* 
  * RTC ops.  By default, they point a no-RTC functions.
  *	rtc_get_time - mktime(year, mon, day, hour, min, sec) in seconds.
  *	rtc_set_time - reverse the above translation and set time to RTC.
@@ -39,7 +39,7 @@ extern int (*rtc_set_time)(unsigned long);
 extern void to_tm(unsigned long tim, struct rtc_time * tm);
 
 /*
- * do_gettimeoffset(). By default, this func pointer points to
+ * do_gettimeoffset(). By default, this func pointer points to 
  * do_null_gettimeoffset(), which leads to the same resolution as HZ.
  * Higher resolution versions are vailable, which gives ~1us resolution.
  */
@@ -59,12 +59,6 @@ extern void timer_interrupt(int irq, void *dev_id, struct pt_regs *regs);
  * the corresponding low-level timer interrupt routine.
  */
 asmlinkage void ll_timer_interrupt(int irq, struct pt_regs *regs);
-
-/*
- * profiling and process accouting is done separately in local_timer_interrupt
- */
-void local_timer_interrupt(int irq, void *dev_id, struct pt_regs *regs);
-asmlinkage void ll_local_timer_interrupt(int irq, struct pt_regs *regs);
 
 /*
  * board specific routines required by time_init().

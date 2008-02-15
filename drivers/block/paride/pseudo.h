@@ -56,7 +56,7 @@ static void ps_set_intr( void (*continuation)(void),
 			 int (*ready)(void),
 			 int timeout, int nice )
 
-{       unsigned long	flags;
+{       long	flags;
 
 	spin_lock_irqsave(&ps_spinlock,flags);
 
@@ -86,7 +86,7 @@ static void ps_set_intr( void (*continuation)(void),
 static void ps_tq_int( void *data )
 
 {       void (*con)(void);
-	unsigned long flags;
+	long flags;
 
 	spin_lock_irqsave(&ps_spinlock,flags);
 
@@ -121,7 +121,7 @@ static void ps_tq_int( void *data )
 static void ps_timer_int( unsigned long data)
 
 {       void (*con)(void);
-	unsigned long	flags;
+	long	flags;
 
 	spin_lock_irqsave(&ps_spinlock,flags);
 

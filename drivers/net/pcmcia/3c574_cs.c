@@ -86,8 +86,6 @@ earlier 3Com products.
 #include <linux/skbuff.h>
 #include <linux/if_arp.h>
 #include <linux/ioport.h>
-#include <linux/ethtool.h>
-#include <asm/uaccess.h>
 
 #include <pcmcia/version.h>
 #include <pcmcia/cs_types.h>
@@ -1191,26 +1189,6 @@ static int el3_rx(struct net_device *dev, int worklimit)
 	return worklimit;
 }
 
-static int netdev_ethtool_ioctl(struct net_device *dev, void *useraddr)
-{
-	u32 ethcmd;
-		
-	if (copy_from_user(&ethcmd, useraddr, sizeof(ethcmd)))
-		return -EFAULT;
-	
-	switch (ethcmd) {
-	case ETHTOOL_GDRVINFO: {
-		struct ethtool_drvinfo info = {ETHTOOL_GDRVINFO};
-		strncpy(info.driver, "3c574_cs", sizeof(info.driver)-1);
-		if (copy_to_user(useraddr, &info, sizeof(info)))
-			return -EFAULT;
-		return 0;
-	}
-	}
-	
-	return -EOPNOTSUPP;
-}
-
 /* Provide ioctl() calls to examine the MII xcvr state. */
 static int el3_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 {
@@ -1224,14 +1202,12 @@ static int el3_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 		  data[0], data[1], data[2], data[3]);
 
     switch(cmd) {
-	case SIOCETHTOOL:
-		return netdev_ethtool_ioctl(dev, (void *)rq->ifr_data);
 	case SIOCDEVPRIVATE:		/* Get the address of the PHY in use. */
 		data[0] = phy;
 	case SIOCDEVPRIVATE+1:		/* Read the specified MII register. */
 		{
 			int saved_window;
-			unsigned long flags;
+			long flags;
 
 			save_flags(flags);
 			cli();
@@ -1245,7 +1221,7 @@ static int el3_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 	case SIOCDEVPRIVATE+2:		/* Write the specified MII register */
 		{
 			int saved_window;
-			unsigned long flags;
+			long flags;
 
 			if (!capable(CAP_NET_ADMIN))
 				return -EPERM;

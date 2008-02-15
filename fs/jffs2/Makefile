@@ -1,7 +1,7 @@
 #
 # Makefile for the linux Journalling Flash FileSystem (JFFS) routines.
 #
-# $Id: Makefile,v 1.25.2.1 2002/10/11 09:04:44 dwmw2 Exp $
+# $Id: Makefile,v 1.26 2002/01/11 10:47:14 dwmw2 Exp $
 #
 # Note! Dependencies are done automagically by 'make dep', which also
 # removes any old dependencies. DON'T put your own dependencies here
@@ -12,6 +12,9 @@
 
 COMPR_OBJS	:= compr.o compr_rubin.o compr_rtime.o pushpull.o \
 			compr_zlib.o
+ifndef CONFIG_ZLIB
+COMPR_OBJS	+= zlib.o
+endif
 JFFS2_OBJS	:= crc32.o dir.o file.o ioctl.o nodelist.o malloc.o \
 	read.o nodemgmt.o readinode.o super.o write.o scan.o gc.o \
 	symlink.o build.o erase.o background.o

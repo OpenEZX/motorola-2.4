@@ -11,9 +11,9 @@
 
 #include <linux/config.h>
 
-#ifndef __ASSEMBLY__
+#if _LANGUAGE_C
 #include <linux/types.h>
-#endif /* !__ASSEMBLY__ */
+#endif /* _LANGUAGE_C */
 
 #include <asm/addrspace.h>
 #include <asm/reg.h>
@@ -26,7 +26,7 @@
 #endif
 
 
-#ifndef __ASSEMBLY__
+#if _LANGUAGE_C
 
 #if defined(CONFIG_SGI_IO)	/* FIXME */
 #define PS_UINT_CAST		(__psunsigned_t)
@@ -38,13 +38,13 @@
 
 #define HUBREG_CAST		(volatile hubreg_t *)
 
-#else /* __ASSEMBLY__ */
+#elif _LANGUAGE_ASSEMBLY
 
 #define PS_UINT_CAST
 #define UINT64_CAST
 #define HUBREG_CAST
 
-#endif /* __ASSEMBLY__ */
+#endif
 
 
 #define NASID_GET_META(_n)	((_n) >> NASID_LOCAL_BITS)
@@ -278,7 +278,7 @@
 					      0x800000 + (_x)))
 #endif /* CONFIG_SGI_IP27 */
 
-#ifndef __ASSEMBLY__
+#if _LANGUAGE_C
 
 #define HUB_L(_a)			*(_a)
 #define	HUB_S(_a, _d)			*(_a) = (_d)
@@ -290,7 +290,7 @@
 #define REMOTE_HUB_PI_L(_n, _sn, _r)	HUB_L(REMOTE_HUB_PI_ADDR((_n), (_sn), (_r)))
 #define REMOTE_HUB_PI_S(_n, _sn, _r, _d) HUB_S(REMOTE_HUB_PI_ADDR((_n), (_sn), (_r)), (_d))
 
-#endif /* !__ASSEMBLY__ */
+#endif /* _LANGUAGE_C */
 
 /*
  * The following macros are used to get to a hub/bridge register, given
@@ -367,7 +367,7 @@
 #define	KLI_KERN_XP		8
 #define	KLI_KERN_PARTID		9
 
-#ifndef __ASSEMBLY__
+#if _LANGUAGE_C
 
 #define KLD_BASE(nasid)		((kldir_ent_t *) KLDIR_ADDR(nasid))
 #define KLD_LAUNCH(nasid)	(KLD_BASE(nasid) + KLI_LAUNCH)
@@ -453,7 +453,7 @@
 
 #define GPDA_ADDR(nasid)	TO_NODE_CAC(nasid, GPDA_OFFSET)
 
-#endif /* !__ASSEMBLY__ */
+#endif /* _LANGUAGE_C */
 
 
 #endif /* _ASM_SN_ADDRS_H */

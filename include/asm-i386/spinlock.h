@@ -5,9 +5,7 @@
 #include <asm/rwlock.h>
 #include <asm/page.h>
 #include <linux/config.h>
-
-extern int printk(const char * fmt, ...)
-	__attribute__ ((format (printf, 1, 2)));
+#include <linux/stringify.h>
 
 /* It seems that people are forgetting to
  * initialize their spinlocks properly, tsk tsk.
@@ -49,20 +47,23 @@ typedef struct {
  * We make no fairness assumptions. They have a cost.
  */
 
-#define spin_is_locked(x)	(*(volatile signed char *)(&(x)->lock) <= 0)
+#define spin_is_locked(x)	(*(volatile char *)(&(x)->lock) <= 0)
 #define spin_unlock_wait(x)	do { barrier(); } while(spin_is_locked(x))
 
 #define spin_lock_string \
 	"\n1:\t" \
 	"lock ; decb %0\n\t" \
 	"js 2f\n" \
-	LOCK_SECTION_START("") \
+	".subsection 1\n" \
+	".ifndef _text_lock_" __stringify(KBUILD_BASENAME) "\n" \
+	"_text_lock_" __stringify(KBUILD_BASENAME) ":\n" \
+	".endif\n" \
 	"2:\t" \
 	"cmpb $0,%0\n\t" \
 	"rep;nop\n\t" \
 	"jle 2b\n\t" \
 	"jmp 1b\n" \
-	LOCK_SECTION_END
+	".subsection 0\n"
 
 /*
  * This works. Despite all the confusion.
@@ -77,7 +78,7 @@ typedef struct {
 		:"=m" (lock->lock) : : "memory"
 
 
-static inline void spin_unlock(spinlock_t *lock)
+static inline void _raw_spin_unlock(spinlock_t *lock)
 {
 #if SPINLOCK_DEBUG
 	if (lock->magic != SPINLOCK_MAGIC)
@@ -97,7 +98,7 @@ static inline void spin_unlock(spinlock_t *lock)
 		:"=q" (oldval), "=m" (lock->lock) \
 		:"0" (oldval) : "memory"
 
-static inline void spin_unlock(spinlock_t *lock)
+static inline void _raw_spin_unlock(spinlock_t *lock)
 {
 	char oldval = 1;
 #if SPINLOCK_DEBUG
@@ -113,7 +114,7 @@ static inline void spin_unlock(spinlock_t *lock)
 
 #endif
 
-static inline int spin_trylock(spinlock_t *lock)
+static inline int _raw_spin_trylock(spinlock_t *lock)
 {
 	char oldval;
 	__asm__ __volatile__(
@@ -123,7 +124,7 @@ static inline int spin_trylock(spinlock_t *lock)
 	return oldval > 0;
 }
 
-static inline void spin_lock(spinlock_t *lock)
+static inline void _raw_spin_lock(spinlock_t *lock)
 {
 #if SPINLOCK_DEBUG
 	__label__ here;
@@ -179,7 +180,7 @@ typedef struct {
  */
 /* the spinlock helpers are in arch/i386/kernel/semaphore.c */
 
-static inline void read_lock(rwlock_t *rw)
+static inline void _raw_read_lock(rwlock_t *rw)
 {
 #if SPINLOCK_DEBUG
 	if (rw->magic != RWLOCK_MAGIC)
@@ -188,7 +189,7 @@ static inline void read_lock(rwlock_t *rw)
 	__build_read_lock(rw, "__read_lock_failed");
 }
 
-static inline void write_lock(rwlock_t *rw)
+static inline void _raw_write_lock(rwlock_t *rw)
 {
 #if SPINLOCK_DEBUG
 	if (rw->magic != RWLOCK_MAGIC)
@@ -197,10 +198,10 @@ static inline void write_lock(rwlock_t *rw)
 	__build_write_lock(rw, "__write_lock_failed");
 }
 
-#define read_unlock(rw)		asm volatile("lock ; incl %0" :"=m" ((rw)->lock) : : "memory")
-#define write_unlock(rw)	asm volatile("lock ; addl $" RW_LOCK_BIAS_STR ",%0":"=m" ((rw)->lock) : : "memory")
+#define _raw_read_unlock(rw)		asm volatile("lock ; incl %0" :"=m" ((rw)->lock) : : "memory")
+#define _raw_write_unlock(rw)	asm volatile("lock ; addl $" RW_LOCK_BIAS_STR ",%0":"=m" ((rw)->lock) : : "memory")
 
-static inline int write_trylock(rwlock_t *lock)
+static inline int _raw_write_trylock(rwlock_t *lock)
 {
 	atomic_t *count = (atomic_t *)lock;
 	if (atomic_sub_and_test(RW_LOCK_BIAS, count))

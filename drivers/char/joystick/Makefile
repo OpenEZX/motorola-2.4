@@ -6,7 +6,7 @@ O_TARGET	:= js.o
 
 # Objects that export symbols.
 
-export-objs	:= serio.o gameport.o pcigame.o
+export-objs	:= serio.o gameport.o
 
 # I-Force may need both USB and RS-232
 
@@ -64,6 +64,8 @@ obj-$(CONFIG_INPUT_GAMECON)	+= gamecon.o
 obj-$(CONFIG_INPUT_TURBOGRAFX)	+= turbografx.o
 
 obj-$(CONFIG_INPUT_AMIJOY)	+= amijoy.o
+
+obj-$(CONFIG_INPUT_MAPLE_CONTROL)+= maplecontrol.o
 
 # The global Rules.make.
 

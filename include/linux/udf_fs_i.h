@@ -15,17 +15,17 @@
  *	Each contributing author retains all rights to their own work.
  */
 
-#ifndef _UDF_FS_I_H
-#define _UDF_FS_I_H 1
+#if !defined(_LINUX_UDF_FS_I_H)
+#define _LINUX_UDF_FS_I_H
 
 #ifdef __KERNEL__
 
-#ifndef _ECMA_167_H
+#ifndef _LINUX_UDF_167_H
 typedef struct
 {
 	__u32 logicalBlockNum;
 	__u16 partitionReferenceNum;
-} __attribute__ ((packed)) lb_addr;
+} lb_addr;
 #endif
 
 struct udf_inode_info
@@ -58,4 +58,4 @@ struct udf_inode_info
 #define UDF_GETVOLIDENT _IOR('l', 0x42, void *)
 #define UDF_RELOCATE_BLOCKS _IOWR('l', 0x43, long)
 
-#endif /* _UDF_FS_I_H */
+#endif /* !defined(_LINUX_UDF_FS_I_H) */

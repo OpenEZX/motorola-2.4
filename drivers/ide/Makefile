@@ -10,7 +10,7 @@
 
 O_TARGET := idedriver.o
 
-export-objs		:= ide.o ide-features.o ide-probe.o ide-taskfile.o ataraid.o
+export-objs		:= ide.o ide-features.o ataraid.o
 list-multi		:= ide-mod.o ide-probe-mod.o
 
 obj-y		:=
@@ -24,7 +24,6 @@ obj-$(CONFIG_BLK_DEV_IDEDISK)   += ide-disk.o
 obj-$(CONFIG_BLK_DEV_IDECD)     += ide-cd.o
 obj-$(CONFIG_BLK_DEV_IDETAPE)   += ide-tape.o
 obj-$(CONFIG_BLK_DEV_IDEFLOPPY) += ide-floppy.o
-
 obj-$(CONFIG_BLK_DEV_IT8172)    += it8172.o
 
 ide-obj-$(CONFIG_BLK_DEV_AEC62XX)	+= aec62xx.o
@@ -34,6 +33,7 @@ ide-obj-$(CONFIG_BLK_DEV_AMD74XX)	+= amd74xx.o
 ide-obj-$(CONFIG_BLK_DEV_BUDDHA)	+= buddha.o
 ide-obj-$(CONFIG_BLK_DEV_CMD640)	+= cmd640.o
 ide-obj-$(CONFIG_BLK_DEV_CMD64X)	+= cmd64x.o
+ide-obj-$(CONFIG_BLK_DEV_CPCI405_IDE)	+= cpci405ide.o
 ide-obj-$(CONFIG_BLK_DEV_CS5530)	+= cs5530.o
 ide-obj-$(CONFIG_BLK_DEV_CY82C693)	+= cy82c693.o
 ide-obj-$(CONFIG_BLK_DEV_DTC2278)	+= dtc2278.o
@@ -49,7 +49,6 @@ ide-obj-$(CONFIG_BLK_DEV_IDEDMA_PCI)	+= ide-dma.o
 ide-obj-$(CONFIG_BLK_DEV_IDEPCI)	+= ide-pci.o
 ide-obj-$(CONFIG_BLK_DEV_ISAPNP)	+= ide-pnp.o
 ide-obj-$(CONFIG_BLK_DEV_IDE_PMAC)	+= ide-pmac.o
-ide-obj-$(CONFIG_BLK_DEV_IDE_SIBYTE)	+= ide-sibyte.o
 ide-obj-$(CONFIG_BLK_DEV_MAC_IDE)	+= macide.o
 ide-obj-$(CONFIG_BLK_DEV_NS87415)	+= ns87415.o
 ide-obj-$(CONFIG_BLK_DEV_OPTI621)	+= opti621.o
@@ -68,16 +67,20 @@ ide-obj-$(CONFIG_BLK_DEV_TRM290)	+= trm290.o
 ide-obj-$(CONFIG_BLK_DEV_UMC8672)	+= umc8672.o
 ide-obj-$(CONFIG_BLK_DEV_VIA82CXXX)	+= via82cxxx.o
 ide-obj-$(CONFIG_BLK_DEV_MPC8xx_IDE)	+= ide-m8xx.o
+ide-obj-$(CONFIG_BLK_DEV_REDWOOD_IDE)	+= stb03xxx.o
+ide-obj-$(CONFIG_IBM_OCP_IDE)		+= ibm_ocp_ide.o
+ide-obj-$(CONFIG_BLK_DEV_REDWOOD6_IDE)	+= ocp_stbxxxxx.o
+ide-obj-$(CONFIG_BLK_DEV_XILLEON)	+= xilleon.o
 
 # The virtualised raid layers MUST come after the ide itself or bad stuff
 # will happen.
-obj-$(CONFIG_BLK_DEV_ATARAID)		+= ataraid.o
+obj-$(CONFIG_BLK_DEV_ATARAID)	+= ataraid.o
 obj-$(CONFIG_BLK_DEV_ATARAID_PDC)	+= pdcraid.o
 obj-$(CONFIG_BLK_DEV_ATARAID_HPT)	+= hptraid.o
 
 ide-obj-$(CONFIG_PROC_FS)		+= ide-proc.o
 
-ide-mod-objs		:= ide.o ide-features.o ide-taskfile.o $(ide-obj-y)
+ide-mod-objs		:= ide.o ide-features.o $(ide-obj-y)
 ide-probe-mod-objs	:= ide-probe.o ide-geometry.o
 
 include $(TOPDIR)/Rules.make

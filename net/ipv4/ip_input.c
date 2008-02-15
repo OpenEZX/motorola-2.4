@@ -224,6 +224,8 @@ static inline int ip_local_deliver_finish(struct sk_buff *skb)
 	nf_debug_ip_local_deliver(skb);
 #endif /*CONFIG_NETFILTER_DEBUG*/
 
+	if (!pskb_may_pull(skb, ihl))
+		goto out;
 	__skb_pull(skb, ihl);
 
 #ifdef CONFIG_NETFILTER
@@ -277,6 +279,7 @@ static inline int ip_local_deliver_finish(struct sk_buff *skb)
 			sock_put(raw_sk);
 		} else if (!flag) {		/* Free and report errors */
 			icmp_send(skb, ICMP_DEST_UNREACH, ICMP_PROT_UNREACH, 0);	
+out:
 			kfree_skb(skb);
 		}
 	}
@@ -343,6 +346,7 @@ static inline int ip_rcv_finish(struct sk_buff *skb)
 			goto drop;
 		iph = skb->nh.iph;
 
+		skb->ip_summed = 0;
 		if (ip_options_compile(NULL, skb))
 			goto inhdr_error;
 

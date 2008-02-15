@@ -48,6 +48,12 @@
 
 #include <linux/pc_keyb.h>
 
+#undef  KBD_REPORT_TIMEOUTS
+#undef  KBD_REPORT_UNKN
+#undef  INITIALIZE_MOUSE
+#undef  DEBUG_KEY_STROKE
+#undef  USE_POLLING_MODE
+
 /* Simple translation table for the SysRq keys */
 
 #ifdef CONFIG_MAGIC_SYSRQ
@@ -69,9 +75,6 @@ static void __aux_write_ack(int val);
 static int aux_reconnect = 0;
 #endif
 
-#ifndef kbd_controller_present
-#define kbd_controller_present()	1
-#endif
 static spinlock_t kbd_controller_lock = SPIN_LOCK_UNLOCKED;
 static unsigned char handle_kbd_event(void);
 
@@ -96,11 +99,17 @@ static int aux_count;
 /* used when we send commands to the mouse that expect an ACK. */
 static unsigned char mouse_reply_expected;
 
-#define AUX_INTS_OFF (KBD_MODE_KCC | KBD_MODE_DISABLE_MOUSE | KBD_MODE_SYS | KBD_MODE_KBD_INT)
-#define AUX_INTS_ON  (KBD_MODE_KCC | KBD_MODE_SYS | KBD_MODE_MOUSE_INT | KBD_MODE_KBD_INT)
-
 #define MAX_RETRIES	60		/* some aux operations take long time*/
 #endif /* CONFIG_PSMOUSE */
+
+
+#ifdef CONFIG_TOSHIBA_RBTX4927
+#define AUX_INTS_OFF ( 0xbd )  /* magic value that helps for tx4927 */
+#define AUX_INTS_ON  ( 0xbf )  /* mouse not supported at this time */
+#else
+#define AUX_INTS_OFF ( KBD_MODE_KCC | KBD_MODE_SYS | KBD_MODE_KBD_INT | KBD_MODE_DISABLE_MOUSE )
+#define AUX_INTS_ON  ( KBD_MODE_KCC | KBD_MODE_SYS | KBD_MODE_KBD_INT | KBD_MODE_MOUSE_INT     )
+#endif
 
 /*
  * Wait for keyboard controller input buffer to drain.
@@ -251,6 +260,44 @@ static unsigned char e0_keys[128] = {
   0, 0, 0, 0, 0, 0, 0, 0			      /* 0x78-0x7f */
 };
 
+
+#ifdef CONFIG_TOSHIBA_RBTX4927
+static unsigned char cfg_8042[32] = {
+	0xbd, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+};
+#endif
+
+#ifdef USE_POLLING_MODE
+#define PC_KEYB_TIMER_INTERVAL 10
+static struct timer_list pc_keyb_timer;
+#endif
+
+#ifdef USE_POLLING_MODE
+static void
+pc_keyb_timer_handler( unsigned long dummy )
+{
+    mod_timer( &pc_keyb_timer, jiffies + PC_KEYB_TIMER_INTERVAL );
+    handle_kbd_event(); 
+  return;
+}
+#endif
+
+#ifdef USE_POLLING_MODE
+static void __init
+pc_keyb_timer_init( void )
+{
+  init_timer( &pc_keyb_timer );
+  pc_keyb_timer.function = pc_keyb_timer_handler;
+  pc_keyb_timer_handler( 0 );
+  printk( "pc_keyb.c using ps/2 polling driver\n" );
+  return;
+}
+#endif
+
+
 int pckbd_setkeycode(unsigned int scancode, unsigned int keycode)
 {
 	if (scancode < SC_LIM || scancode > 255 || keycode > 127)
@@ -387,7 +434,15 @@ int pckbd_translate(unsigned char scancode, unsigned char *keycode,
 	      return 0;
 	  }
  	} else
+	{
 	  *keycode = scancode;
+	  #ifdef DEBUG_KEY_STROKE
+	  {
+	    printk(KERN_INFO "scancode 0x%02x=[%c]\n", scancode, *keycode);
+	  }
+	  #endif
+	}
+
  	return 1;
 }
 
@@ -547,6 +602,11 @@ static int send_data(unsigned char data)
 		reply_expected = 1;
 		kbd_write_output_w(data);
 		for (;;) {
+			#ifdef USE_POLLING_MODE
+			{
+				kb_wait();
+			}
+			#endif
 			if (acknowledge)
 				return 1;
 			if (resend)
@@ -839,6 +899,7 @@ static char * __init initialize_kbd(void)
 	do {
 		kbd_write_output_w(KBD_CMD_RESET);
 		status = kbd_wait_for_input();
+
 		if (status == KBD_REPLY_ACK)
 			break;
 		if (status != KBD_REPLY_RESEND)
@@ -864,10 +925,17 @@ static char * __init initialize_kbd(void)
 	} while (1);
 
 	kbd_write_command_w(KBD_CCMD_WRITE_MODE);
-	kbd_write_output_w(KBD_MODE_KBD_INT
-			      | KBD_MODE_SYS
-			      | KBD_MODE_DISABLE_MOUSE
-			      | KBD_MODE_KCC);
+	kbd_write_output_w( AUX_INTS_OFF );
+
+#ifdef CONFIG_TOSHIBA_RBTX4927
+{
+	int i;
+	for (i = 0x60; i < 0x80; i++) {
+		kbd_write_command_w(i);
+		kbd_write_output_w(cfg_8042[i - 0x60]);
+	}
+}
+#endif
 
 	/* ibm powerpc portables need this to use scan-code set 1 -- Cort */
 	if (!(kbd_write_command_w_and_wait(KBD_CCMD_READ_MODE) & KBD_MODE_KCC))
@@ -898,11 +966,6 @@ static char * __init initialize_kbd(void)
 
 void __init pckbd_init_hw(void)
 {
-	if (!kbd_controller_present()) {
-		kbd_exists = 0;
-		return;
-	}
-
 	kbd_request_region();
 
 	/* Flush any pending input. */
@@ -922,6 +985,12 @@ void __init pckbd_init_hw(void)
 
 	/* Ok, finally allocate the IRQ, and off we go.. */
 	kbd_request_irq(keyboard_interrupt);
+
+        #ifdef USE_POLLING_MODE
+	{
+	  pc_keyb_timer_init();
+	}
+	#endif
 }
 
 #if defined CONFIG_PSMOUSE
@@ -1223,43 +1292,3 @@ static int __init psaux_init(void)
 }
 
 #endif /* CONFIG_PSMOUSE */
-
-
-static int blink_frequency = HZ/2;
-
-/* Tell the user who may be running in X and not see the console that we have 
-   panic'ed. This is to distingush panics from "real" lockups. 
-   Could in theory send the panic message as morse, but that is left as an
-   exercise for the reader.  */ 
-void panic_blink(void)
-{ 
-	static unsigned long last_jiffie;
-	static char led;
-	/* Roughly 1/2s frequency. KDB uses about 1s. Make sure it is 
-	   different. */
-	if (!blink_frequency) 
-		return;
-	if (jiffies - last_jiffie > blink_frequency) {
-		led ^= 0x01 | 0x04;
-		while (kbd_read_status() & KBD_STAT_IBF) mdelay(1); 
-		kbd_write_output(KBD_CMD_SET_LEDS);
-		mdelay(1); 
-		while (kbd_read_status() & KBD_STAT_IBF) mdelay(1); 
-		mdelay(1); 
-		kbd_write_output(led);
-		last_jiffie = jiffies;
-	}
-}  
-
-static int __init panicblink_setup(char *str)
-{
-    int par;
-    if (get_option(&str,&par)) 
-	    blink_frequency = par*(1000/HZ);
-    return 1;
-}
-
-/* panicblink=0 disables the blinking as it caused problems with some console
-   switches. otherwise argument is ms of a blink period. */
-__setup("panicblink=", panicblink_setup);
-

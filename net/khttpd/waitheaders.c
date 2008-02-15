@@ -134,7 +134,7 @@ int WaitForHeaders(const int CPUNR)
 		CurrentRequest = CurrentRequest->Next;
 	}
 
-	LeaveFunction("WaitForHeaders");
+	LeaveFunction("WaitHeaders");
 	return count;
 }
 
@@ -178,12 +178,6 @@ static int DecodeHeader(const int CPUNR, struct http_request *Request)
 	
 	EnterFunction("DecodeHeader");
 	
-	if (Buffer[CPUNR] == NULL) {
-		/* see comments in main.c regarding buffer managemnet - dank */
-		printk(KERN_CRIT "khttpd: lost my buffer");
-		BUG();
-	}
-
 	/* First, read the data */
 
 	msg.msg_name     = 0;

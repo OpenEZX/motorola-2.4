@@ -132,20 +132,20 @@ void cstm_mips_ixx_set_vpp(struct map_info *map,int vpp)
 }
 
 const struct map_info basic_cstm_mips_ixx_map = {
-	NULL,
-	0,
-	0,
-	cstm_mips_ixx_read8,
-	cstm_mips_ixx_read16,
-	cstm_mips_ixx_read32,
-	cstm_mips_ixx_copy_from,
-	cstm_mips_ixx_write8,
-	cstm_mips_ixx_write16,
-	cstm_mips_ixx_write32,
-	cstm_mips_ixx_copy_to,
-        cstm_mips_ixx_set_vpp,
-	0,
-	0
+	name:       NULL,
+	size:       0,
+	buswidth:   0,
+	read8:      cstm_mips_ixx_read8,
+	read16:	    cstm_mips_ixx_read16,
+	read32:	    cstm_mips_ixx_read32,
+	copy_from:  cstm_mips_ixx_copy_from,
+	write8:     cstm_mips_ixx_write8,
+	write16:    cstm_mips_ixx_write16,
+	write32:    cstm_mips_ixx_write32,
+	copy_to:    cstm_mips_ixx_copy_to,
+	set_vpp:    cstm_mips_ixx_set_vpp,
+	map_priv_1: 0,
+	map_priv_2: 0
 };
 
 /* board and partition description */
@@ -164,20 +164,26 @@ struct cstm_mips_ixx_info {
 const struct cstm_mips_ixx_info cstm_mips_ixx_board_desc[PHYSMAP_NUMBER] = 
 {
     {   // 28F128J3A in 2x16 configuration
-        "big flash",     // name
+        "Flash",     // name
 	0x08000000,      // window_addr
 	0x02000000,      // window_size
         4,               // buswidth
-	1,               // num_partitions
+	2,               // num_partitions
     }
 
 };
 static struct mtd_partition cstm_mips_ixx_partitions[PHYSMAP_NUMBER][MAX_PHYSMAP_PARTITIONS] = {
-{   // 28F128J3A in 2x16 configuration
+{
 	{
-		name: "main partition ",
-		size: 0x02000000, // 128 x 2 x 128k byte sectors
+		name: "Kernel",
+		size: 0x00400000,
 		offset: 0,
+		//mask_flags: MTD_WRITEABLE,  /* force read-only */
+	},
+	{
+		name: "User FS",
+		size:	MTDPART_SIZ_FULL,
+		offset:	MTDPART_OFS_APPEND,
 	},
 },
 };
@@ -197,7 +203,7 @@ const struct cstm_mips_ixx_info cstm_mips_ixx_board_desc[PHYSMAP_NUMBER] =
 static struct mtd_partition cstm_mips_ixx_partitions[PHYSMAP_NUMBER][MAX_PHYSMAP_PARTITIONS] = {
 { 
 	{
-		name: "main partition",
+		name: "User FS",
 		size:  CONFIG_MTD_CSTM_MIPS_IXX_LEN,
 		offset: 0,
 	},
@@ -218,7 +224,7 @@ int __init init_cstm_mips_ixx(void)
 	for (i=0;i<PHYSMAP_NUMBER;i++) {
 		printk(KERN_NOTICE "cstm_mips_ixx flash device: %lx at %lx\n", cstm_mips_ixx_board_desc[i].window_size, cstm_mips_ixx_board_desc[i].window_addr);
                 memcpy((char *)&cstm_mips_ixx_map[i],(char *)&basic_cstm_mips_ixx_map,sizeof(struct map_info));
-		cstm_mips_ixx_map[i].map_priv_1 = (unsigned long)ioremap(cstm_mips_ixx_board_desc[i].window_addr, cstm_mips_ixx_board_desc[i].window_size);
+		cstm_mips_ixx_map[i].map_priv_1 = (unsigned long)ioremap_nocache(cstm_mips_ixx_board_desc[i].window_addr, cstm_mips_ixx_board_desc[i].window_size);
 		if (!cstm_mips_ixx_map[i].map_priv_1) {
 			printk(KERN_WARNING "Failed to ioremap\n");
 			return -EIO;
@@ -295,6 +301,7 @@ void setup_ITE_IVR_flash()
 		*(__u32 *)CC_GPACR = 0xfffc;
 #else
 		*(__u32 *)CC_FC_FCR = 0x77;
+		*(__u32 *)CC_GPACR = 0xfffc;
 #endif
 		/* turn bursting off */
 		*(__u32 *)CC_FC_DCR = 0x0;

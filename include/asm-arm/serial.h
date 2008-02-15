@@ -20,4 +20,19 @@
 	STD_SERIAL_PORT_DEFNS		\
 	EXTRA_SERIAL_PORT_DEFNS
 
+extern void ffuart_gpio_init(void);
+extern int stop_ffuart(void);
+
+typedef enum {
+	DC_DISABLE,
+	DC_ENABLE,
+	DC_STANDBY
+} DC_state;
+
+extern DC_state dc_state;
+
+extern int dc_disable(void);
+extern int dc_enable(void);
+extern int dc_standby(void);
+
 #endif

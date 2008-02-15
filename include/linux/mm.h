@@ -15,7 +15,6 @@
 
 extern unsigned long max_mapnr;
 extern unsigned long num_physpages;
-extern unsigned long num_mappedpages;
 extern void * high_memory;
 extern int page_cluster;
 /* The inactive_clean lists are per zone. */
@@ -25,6 +24,7 @@ extern struct list_head inactive_list;
 #include <asm/page.h>
 #include <asm/pgtable.h>
 #include <asm/atomic.h>
+#include <asm/mmu.h>
 
 /*
  * Linux kernel virtual memory manager primitives.
@@ -103,8 +103,9 @@ struct vm_area_struct {
 #define VM_DONTCOPY	0x00020000      /* Do not copy this vma on fork */
 #define VM_DONTEXPAND	0x00040000	/* Cannot expand with mremap() */
 #define VM_RESERVED	0x00080000	/* Don't unmap it from swap_out */
+#define VM_ACCOUNT	0x00100000	/* Is a VM accounted object */
 
-#define VM_STACK_FLAGS	0x00000177
+#define VM_STACK_FLAGS	(0x00000177 | VM_ACCOUNT)
 
 #define VM_READHINTMASK			(VM_SEQ_READ | VM_RAND_READ)
 #define VM_ClearReadHint(v)		(v)->vm_flags &= ~VM_READHINTMASK
@@ -122,6 +123,9 @@ extern int vm_max_readahead;
  */
 extern pgprot_t protection_map[16];
 
+#define ZPR_MAX_BYTES 256*PAGE_SIZE
+#define ZPR_NORMAL 0 /* perform zap_page_range request in one walk */
+#define ZPR_PARTITION 1 /* partition into a series of smaller operations */
 
 /*
  * These are the virtual MM functions - opening of an area, closing and
@@ -160,23 +164,12 @@ typedef struct page {
 					   updated asynchronously */
 	struct list_head lru;		/* Pageout list, eg. active_list;
 					   protected by pagemap_lru_lock !! */
+	wait_queue_head_t wait;		/* Page locked?  Stand in line... */
 	struct page **pprev_hash;	/* Complement to *next_hash. */
 	struct buffer_head * buffers;	/* Buffer maps us to a disk block. */
-
-	/*
-	 * On machines where all RAM is mapped into kernel address space,
-	 * we can simply calculate the virtual address. On machines with
-	 * highmem some memory is mapped into kernel virtual memory
-	 * dynamically, so we need a place to store that address.
-	 * Note that this field could be 16 bits on x86 ... ;)
-	 *
-	 * Architectures with slow multiplication can define
-	 * WANT_PAGE_VIRTUAL in asm/page.h
-	 */
-#if defined(CONFIG_HIGHMEM) || defined(WANT_PAGE_VIRTUAL)
 	void *virtual;			/* Kernel virtual address (NULL if
 					   not kmapped, ie. highmem) */
-#endif /* CONFIG_HIGMEM || WANT_PAGE_VIRTUAL */
+	struct zone_struct *zone;	/* Memory zone we are in. */
 } mem_map_t;
 
 /*
@@ -251,7 +244,7 @@ typedef struct page {
  * - private pages which have been modified may need to be swapped out
  *   to swap space and (later) to be read back into memory.
  * During disk I/O, PG_locked is used. This bit is set before I/O
- * and reset when I/O completes. page_waitqueue(page) is a wait queue of all
+ * and reset when I/O completes. page->wait is a wait queue of all
  * tasks waiting for the I/O on this page to complete.
  * PG_uptodate tells whether the page's contents is valid.
  * When a read completes, the page becomes uptodate, unless a disk I/O
@@ -313,61 +306,7 @@ typedef struct page {
 #define SetPageChecked(page)	set_bit(PG_checked, &(page)->flags)
 #define PageLaunder(page)	test_bit(PG_launder, &(page)->flags)
 #define SetPageLaunder(page)	set_bit(PG_launder, &(page)->flags)
-#define ClearPageLaunder(page)	clear_bit(PG_launder, &(page)->flags)
-
-/*
- * The zone field is never updated after free_area_init_core()
- * sets it, so none of the operations on it need to be atomic.
- */
-#define NODE_SHIFT 4
-#define ZONE_SHIFT (BITS_PER_LONG - 8)
-
-struct zone_struct;
-extern struct zone_struct *zone_table[];
-
-static inline zone_t *page_zone(struct page *page)
-{
-	return zone_table[page->flags >> ZONE_SHIFT];
-}
-
-static inline void set_page_zone(struct page *page, unsigned long zone_num)
-{
-	page->flags &= ~(~0UL << ZONE_SHIFT);
-	page->flags |= zone_num << ZONE_SHIFT;
-}
-
-/*
- * In order to avoid #ifdefs within C code itself, we define
- * set_page_address to a noop for non-highmem machines, where
- * the field isn't useful.
- * The same is true for page_address() in arch-dependent code.
- */
-#if defined(CONFIG_HIGHMEM) || defined(WANT_PAGE_VIRTUAL)
-
-#define set_page_address(page, address)			\
-	do {						\
-		(page)->virtual = (address);		\
-	} while(0)
-
-#else /* CONFIG_HIGHMEM || WANT_PAGE_VIRTUAL */
-#define set_page_address(page, address)  do { } while(0)
-#endif /* CONFIG_HIGHMEM || WANT_PAGE_VIRTUAL */
-
-/*
- * Permanent address of a page. Obviously must never be
- * called on a highmem page.
- */
-#if defined(CONFIG_HIGHMEM) || defined(WANT_PAGE_VIRTUAL)
-
-#define page_address(page) ((page)->virtual)
-
-#else /* CONFIG_HIGHMEM || WANT_PAGE_VIRTUAL */
-
-#define page_address(page)						\
-	__va( (((page) - page_zone(page)->zone_mem_map) << PAGE_SHIFT)	\
-			+ page_zone(page)->zone_start_paddr)
-
-#endif /* CONFIG_HIGHMEM || WANT_PAGE_VIRTUAL */
+#define DelallocPage(page)	((page)->buffers && test_bit(BH_Delay, &(page)->buffers->b_state))
 
 extern void FASTCALL(set_page_dirty(struct page *));
 
@@ -460,6 +399,8 @@ extern void FASTCALL(free_pages(unsigned long addr, unsigned int order));
 #define __free_page(page) __free_pages((page), 0)
 #define free_page(addr) free_pages((addr),0)
 
+extern int start_aggressive_readahead(int);
+
 extern void show_free_areas(void);
 extern void show_free_areas_node(pg_data_t *pgdat);
 
@@ -471,9 +412,9 @@ struct file *shmem_file_setup(char * name, loff_t size);
 extern void shmem_lock(struct file * file, int lock);
 extern int shmem_zero_setup(struct vm_area_struct *);
 
-extern void zap_page_range(struct mm_struct *mm, unsigned long address, unsigned long size);
+extern void zap_page_range(struct mm_struct *mm, unsigned long address, unsigned long size, int actions);
 extern int copy_page_range(struct mm_struct *dst, struct mm_struct *src, struct vm_area_struct *vma);
-extern int remap_page_range(unsigned long from, unsigned long to, unsigned long size, pgprot_t prot);
+extern int remap_page_range(unsigned long from, phys_addr_t to, unsigned long size, pgprot_t prot);
 extern int zeromap_page_range(unsigned long from, unsigned long size, pgprot_t prot);
 
 extern int vmtruncate(struct inode * inode, loff_t offset);
@@ -556,7 +497,7 @@ out:
 	return ret;
 }
 
-extern int do_munmap(struct mm_struct *, unsigned long, size_t);
+extern int do_munmap(struct mm_struct *, unsigned long, size_t, int);
 
 extern unsigned long do_brk(unsigned long, unsigned long);
 
@@ -624,33 +565,8 @@ static inline unsigned int pf_gfp_mask(unsigned int gfp_mask)
 	return gfp_mask;
 }
 	
-/* vma is the first one with  address < vma->vm_end,
- * and even  address < vma->vm_start. Have to extend vma. */
-static inline int expand_stack(struct vm_area_struct * vma, unsigned long address)
-{
-	unsigned long grow;
-
-	/*
-	 * vma->vm_start/vm_end cannot change under us because the caller is required
-	 * to hold the mmap_sem in write mode. We need to get the spinlock only
-	 * before relocating the vma range ourself.
-	 */
-	address &= PAGE_MASK;
- 	spin_lock(&vma->vm_mm->page_table_lock);
-	grow = (vma->vm_start - address) >> PAGE_SHIFT;
-	if (vma->vm_end - address > current->rlim[RLIMIT_STACK].rlim_cur ||
-	    ((vma->vm_mm->total_vm + grow) << PAGE_SHIFT) > current->rlim[RLIMIT_AS].rlim_cur) {
-		spin_unlock(&vma->vm_mm->page_table_lock);
-		return -ENOMEM;
-	}
-	vma->vm_start = address;
-	vma->vm_pgoff -= grow;
-	vma->vm_mm->total_vm += grow;
-	if (vma->vm_flags & VM_LOCKED)
-		vma->vm_mm->locked_vm += grow;
-	spin_unlock(&vma->vm_mm->page_table_lock);
-	return 0;
-}
+/* Do stack extension */	
+extern int expand_stack(struct vm_area_struct * vma, unsigned long address);
 
 /* Look up the first VMA which satisfies  addr < vm_end,  NULL if none. */
 extern struct vm_area_struct * find_vma(struct mm_struct * mm, unsigned long addr);
@@ -669,8 +585,6 @@ static inline struct vm_area_struct * find_vma_intersection(struct mm_struct * m
 }
 
 extern struct vm_area_struct *find_extend_vma(struct mm_struct *mm, unsigned long addr);
-
-extern struct page * vmalloc_to_page(void *addr);
 
 #endif /* __KERNEL__ */
 

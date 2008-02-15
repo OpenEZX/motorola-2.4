@@ -16,7 +16,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
  *
- * $Id: sc520cdp.c,v 1.11 2002/03/08 16:34:35 rkaiser Exp $
+ * $Id: sc520cdp.c,v 1.9 2001/10/02 15:05:14 dwmw2 Exp $
  *
  *
  * The SC520CDP is an evaluation board for the Elan SC520 processor available
@@ -25,14 +25,13 @@
  * For details see http://www.amd.com/products/epd/desiging/evalboards/18.elansc520/520_cdp_brief/index.html
  */
 
-#include <linux/config.h>
 #include <linux/module.h>
 #include <linux/types.h>
 #include <linux/kernel.h>
 #include <asm/io.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/map.h>
-#include <linux/mtd/concat.h>
+
 
 /*
 ** The Embedded Systems BIOS decodes the first FLASH starting at
@@ -140,7 +139,7 @@ static struct map_info sc520cdp_map[] = {
 		map_priv_2: WINDOW_ADDR_0
 	},
 	{
-		name: "SC520CDP Flash Bank #1",
+		name: "User FS",
 		size: WINDOW_SIZE_1,
 		buswidth: 4,
 		read8: sc520cdp_read8,
@@ -172,7 +171,6 @@ static struct map_info sc520cdp_map[] = {
 #define NUM_FLASH_BANKS	(sizeof(sc520cdp_map)/sizeof(struct map_info))
 
 static struct mtd_info *mymtd[NUM_FLASH_BANKS];
-static struct mtd_info *merged_mtd;
 
 #ifdef REPROGRAM_PAR
 
@@ -309,26 +307,19 @@ static int __init init_sc520cdp(void)
 		}
 		mymtd[i] = do_map_probe("cfi_probe", &sc520cdp_map[i]);
 		if(!mymtd[i])
-			mymtd[i] = do_map_probe("jedec_probe", &sc520cdp_map[i]);
+			mymtd[i] = do_map_probe("jedec", &sc520cdp_map[i]);
 		if(!mymtd[i])
 			mymtd[i] = do_map_probe("map_rom", &sc520cdp_map[i]);
 
 		if (mymtd[i]) {
 			mymtd[i]->module = THIS_MODULE;
+			add_mtd_device(mymtd[i]);
 			++devices_found;
 		}
 		else {
 			iounmap((void *)sc520cdp_map[i].map_priv_1);
 		}
 	}
-	if(devices_found >= 2) {
-		/* Combine the two flash banks into a single MTD device & register it: */
-		merged_mtd = mtd_concat_create(mymtd, 2, "SC520CDP Flash Banks #0 and #1");
-		if(merged_mtd)
-			add_mtd_device(merged_mtd);
-	}
-	if(devices_found == 3) /* register the third (DIL-Flash) device */
-		add_mtd_device(mymtd[2]);
 	return(devices_found ? 0 : -ENXIO);
 }
 
@@ -336,16 +327,11 @@ static void __exit cleanup_sc520cdp(void)
 {
 	int i;
 	
-	if (merged_mtd) {
-		del_mtd_device(merged_mtd);
-		mtd_concat_destroy(merged_mtd);
-	}
-	if (mymtd[2])
-		del_mtd_device(mymtd[2]);
-
 	for (i = 0; i < NUM_FLASH_BANKS; i++) {
-		if (mymtd[i])
+		if (mymtd[i]) {
+			del_mtd_device(mymtd[i]);
 			map_destroy(mymtd[i]);
+		}
 		if (sc520cdp_map[i].map_priv_1) {
 			iounmap((void *)sc520cdp_map[i].map_priv_1);
 			sc520cdp_map[i].map_priv_1 = 0;

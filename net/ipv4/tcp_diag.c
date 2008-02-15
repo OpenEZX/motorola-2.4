@@ -69,8 +69,7 @@ static int tcpdiag_fill(struct sk_buff *skb, struct sock *sk,
 	r->id.tcpdiag_src[0] = sk->rcv_saddr;
 	r->id.tcpdiag_dst[0] = sk->daddr;
 	r->id.tcpdiag_if = sk->bound_dev_if;
-	r->id.tcpdiag_cookie[0] = (u32)(unsigned long)sk;
-	r->id.tcpdiag_cookie[1] = (u32)(((unsigned long)sk >> 31) >> 1);
+	*((struct sock **)&r->id.tcpdiag_cookie) = sk;
 
 	if (r->tcpdiag_state == TCP_TIME_WAIT) {
 		struct tcp_tw_bucket *tw = (struct tcp_tw_bucket*)sk;
@@ -230,8 +229,7 @@ static int tcpdiag_get_exact(struct sk_buff *in_skb, struct nlmsghdr *nlh)
 	err = -ESTALE;
 	if ((req->id.tcpdiag_cookie[0] != TCPDIAG_NOCOOKIE ||
 	     req->id.tcpdiag_cookie[1] != TCPDIAG_NOCOOKIE) &&
-	    ((u32)(unsigned long)sk != req->id.tcpdiag_cookie[0] ||
-	     (u32)((((unsigned long)sk) >> 31) >> 1) != req->id.tcpdiag_cookie[1]))
+	    sk != *((struct sock **)&req->id.tcpdiag_cookie[0]))
 		goto out;
 
 	err = -ENOMEM;
@@ -348,7 +346,7 @@ int tcpdiag_bc_run(char *bc, int len, struct sock *sk)
 				break;
 			if (sk->family == AF_INET6 && cond->family == AF_INET) {
 				if (addr[0] == 0 && addr[1] == 0 &&
-				    addr[2] == htonl(0xffff) &&
+				    addr[2] == __constant_htonl(0xffff) &&
 				    bitstring_match(addr+3, cond->addr, cond->prefix_len))
 					break;
 			}

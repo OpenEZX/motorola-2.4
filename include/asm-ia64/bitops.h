@@ -57,10 +57,10 @@ __set_bit (int nr, volatile void *addr)
 }
 
 /*
- * clear_bit() has "acquire" semantics.
+ * clear_bit() doesn't provide any barrier for the compiler.
  */
 #define smp_mb__before_clear_bit()	smp_mb()
-#define smp_mb__after_clear_bit()	do { /* skip */; } while (0)
+#define smp_mb__after_clear_bit()	smp_mb()
 
 /**
  * clear_bit - Clears a bit in memory
@@ -325,7 +325,7 @@ hweight64 (unsigned long x)
 /*
  * Find next zero bit in a bitmap reasonably efficiently..
  */
-static inline unsigned long
+static inline int
 find_next_zero_bit (void *addr, unsigned long size, unsigned long offset)
 {
 	unsigned long *p = ((unsigned long *) addr) + (offset >> 6);
@@ -357,8 +357,6 @@ find_next_zero_bit (void *addr, unsigned long size, unsigned long offset)
 	tmp = *p;
 found_first:
 	tmp |= ~0UL << size;
-	if (tmp == ~0UL)		/* any bits zero? */
-		return result + size;	/* nope */
 found_middle:
 	return result + ffz(tmp);
 }

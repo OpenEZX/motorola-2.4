@@ -1,3 +1,2 @@
 
-#define __HAVE_ARCH_MEMSET
-extern void * memset(void *, int, size_t);
+/* This left blank until we do parisc optimizations */

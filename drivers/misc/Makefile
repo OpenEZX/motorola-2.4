@@ -11,6 +11,16 @@
 
 O_TARGET := misc.o
 
+export-objs			:= ezx-ts.o log.o
+
+obj-$(CONFIG_MCP_UCB1200_TS)	+= ezx-ts.o
+obj-$(CONFIG_MCP_UCB1400_TS)	+= ezx-ts.o
+
+obj-$(CONFIG_PANIC_LOG)		+= log.o
+ifeq ($(CONFIG_PANIC_LOG),y)
+obj-$(CONFIG_ARCH_LUBBOCK)	+= ezx-log.o
+endif
+
 include $(TOPDIR)/Rules.make
 
 fastdep:

@@ -4,12 +4,14 @@
  * License.  See the file "COPYING" in the main directory of this archive
  * for more details.
  *
- * Copyright (C) 1992 - 1997, 2000-2002 Silicon Graphics, Inc. All rights reserved.
+ * Copyright (C) 1992 - 1997, 2000 Silicon Graphics, Inc.
+ * Copyright (C) 2000 by Colin Ngam
  */
 
-#ifndef _ASM_IA64_SN_SN1_BEDROCK_H
-#define _ASM_IA64_SN_SN1_BEDROCK_H
+#ifndef _ASM_SN_SN1_BEDROCK_H
+#define _ASM_SN_SN1_BEDROCK_H
 
+#include <linux/config.h>
 
 /* The secret password; used to release protection */
 #define HUB_PASSWORD		0x53474972756c6573ull
@@ -22,6 +24,7 @@
 
 #define MAX_HUB_PATH		80
 
+#if defined(CONFIG_SGI_IP35) || defined(CONFIG_IA64_SGI_SN1) || defined(CONFIG_IA64_GENERIC)
 #include <asm/sn/arch.h>
 #include <asm/sn/sn1/addrs.h>
 #include <asm/sn/sn1/hubpi.h>
@@ -37,13 +40,19 @@
 #include <asm/sn/sn1/hublb_next.h>
 #include <asm/sn/sn1/hubxb_next.h>
 
+#else /* ! CONFIG_SGI_IP35 || CONFIG_IA64_SGI_SN1 */
+
+<< BOMB! CONFIG_SGI_IP35 is only defined for IP35 >>
+
+#endif /* defined(CONFIG_SGI_IP35) */
+
 /* Translation of uncached attributes */
 #define	UATTR_HSPEC	0
 #define	UATTR_IO	1
 #define	UATTR_MSPEC	2
 #define	UATTR_UNCAC	3
 
-#if __ASSEMBLY__
+#if _LANGUAGE_ASSEMBLY
 
 /*
  * Get nasid into register, r (uses at)
@@ -54,9 +63,9 @@
 	and	r, LRI_NODEID_MASK;			\
 	dsrl	r, LRI_NODEID_SHFT
 
-#endif /* __ASSEMBLY__ */
+#endif /* _LANGUAGE_ASSEMBLY */
 
-#ifndef __ASSEMBLY__
+#if _LANGUAGE_C
 
 #include <asm/sn/xtalk/xwidget.h>
 
@@ -69,6 +78,6 @@ int hub_check_pci_equiv(void *addra, void *addrb);
 void capture_hub_stats(cnodeid_t, struct nodepda_s *);
 void init_hub_stats(cnodeid_t, struct nodepda_s *);
 
-#endif /* __ASSEMBLY__ */
+#endif /* _LANGUAGE_C */
 
-#endif /* _ASM_IA64_SN_SN1_BEDROCK_H */
+#endif /* _ASM_SN_SN1_BEDROCK_H */

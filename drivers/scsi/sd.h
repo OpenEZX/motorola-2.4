@@ -23,6 +23,8 @@
 #include <linux/genhd.h>
 #endif
 
+extern struct hd_struct *sd;
+
 typedef struct scsi_disk {
 	unsigned capacity;	/* size in blocks */
 	Scsi_Device *device;
@@ -43,6 +45,7 @@ extern kdev_t sd_find_target(void *host, int tgt);
 #define N_SD_MAJORS	8
 
 #define SD_MAJOR_MASK	(N_SD_MAJORS - 1)
+#define SD_PARTITION(i)		(((MAJOR(i) & SD_MAJOR_MASK) << 8) | (MINOR(i) & 255))
 
 #endif
 

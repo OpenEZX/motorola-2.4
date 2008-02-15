@@ -13,6 +13,7 @@
 
 #include <asm/pgtable.h>
 #include <asm/uaccess.h>
+#include <asm/hardirq.h>
 
 /*
  * Make sure that the compiler and target are compatible.
@@ -34,10 +35,16 @@ DEFN("TSK_SIGPENDING",		OFF_TSK(sigpending));
 DEFN("TSK_ADDR_LIMIT",		OFF_TSK(addr_limit));
 DEFN("TSK_NEED_RESCHED",	OFF_TSK(need_resched));
 DEFN("TSK_PTRACE",		OFF_TSK(ptrace));
+
 DEFN("TSK_USED_MATH",		OFF_TSK(used_math));
 
 DEFN("TSS_SAVE",		OFF_TSK(thread.save));
 DEFN("TSS_FPESAVE",		OFF_TSK(thread.fpstate.soft.save));
+
+#ifdef CONFIG_PREEMPT
+DEFN("TSK_PREEMPT",		OFF_TSK(preempt_count));
+DEFN("IRQSTAT_BH_COUNT",	(unsigned long)&(((irq_cpustat_t *)0)->__local_bh_count));
+#endif
 
 #ifdef CONFIG_CPU_32
 DEFN("TSS_DOMAIN",		OFF_TSK(thread.domain));

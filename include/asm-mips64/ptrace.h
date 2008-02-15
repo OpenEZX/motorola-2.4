@@ -9,6 +9,8 @@
 #ifndef _ASM_PTRACE_H
 #define _ASM_PTRACE_H
 
+#include <linux/types.h>
+
 /* 0 - 31 are integer registers, 32 - 63 are fp registers.  */
 #define FPR_BASE	32
 #define PC		64
@@ -19,7 +21,7 @@
 #define FPC_CSR		69
 #define FPC_EIR		70
 
-#ifndef __ASSEMBLY__
+#ifndef _LANGUAGE_ASSEMBLY
 
 #define abi64_no_regargs						\
 	unsigned long __dummy0,						\
@@ -52,7 +54,7 @@ struct pt_regs {
 	unsigned long cp0_cause;
 };
 
-#endif /* !__ASSEMBLY__ */
+#endif /* !(_LANGUAGE_ASSEMBLY__) */
 
 /* Arbitrarily choose the same ptrace numbers as used by the Sparc code. */
 /* #define PTRACE_GETREGS		12 */
@@ -62,21 +64,21 @@ struct pt_regs {
 /* #define PTRACE_GETFPXREGS		18 */
 /* #define PTRACE_SETFPXREGS		19 */
 
-#define PTRACE_SETOPTIONS	21
+#define PTRACE_OLDSETOPTIONS	21
 
-/* options set using PTRACE_SETOPTIONS */
-#define PTRACE_O_TRACESYSGOOD	0x00000001
-
-#ifdef __ASSEMBLY__
+#ifdef _LANGUAGE_ASSEMBLY
 #include <asm/offset.h>
-#endif /* !__ASSEMBLY__ */
+#endif /* (_LANGUAGE_ASSEMBLY__) */
 
 #ifdef __KERNEL__
 
-#ifndef __ASSEMBLY__
+#ifndef _LANGUAGE_ASSEMBLY
 #define instruction_pointer(regs) ((regs)->cp0_epc)
 
-#endif /* !__ASSEMBLY__ */
+extern void (*_show_regs)(struct pt_regs *);
+#define show_regs(regs)	_show_regs(regs)
+
+#endif /* !(_LANGUAGE_ASSEMBLY__) */
 
 #endif
 

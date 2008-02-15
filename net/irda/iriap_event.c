@@ -181,7 +181,7 @@ static void state_s_disconnect(struct iriap_cb *self, IRIAP_EVENT event,
 	case IAP_LM_DISCONNECT_INDICATION:
 		break;
 	default:
-		IRDA_DEBUG(0, "%s(), Unknown event %d\n", __FUNCTION__, event);
+		IRDA_DEBUG(0, __FUNCTION__"(), Unknown event %d\n", event);
 		break;
 	}
 }

@@ -1,26 +1,16 @@
 /*
- * linux/drivers/ide/serverworks.c		Version 0.3	26 Oct 2001
+ * linux/drivers/ide/serverworks.c		Version 0.2	17 Oct 2000
  *
- * May be copied or modified under the terms of the GNU General Public License
+ *  Copyright (C) 2000 Cobalt Networks, Inc. <asun@cobalt.com>
+ *  May be copied or modified under the terms of the GNU General Public License
  *
- * Copyright (C) 1998-2000 Michel Aubry
- * Copyright (C) 1998-2000 Andrzej Krzysztofowicz
- * Copyright (C) 1998-2000 Andre Hedrick <andre@linux-ide.org>
- * Portions copyright (c) 2001 Sun Microsystems
+ *  interface borrowed from alim15x3.c:
+ *  Copyright (C) 1998-2000 Michel Aubry, Maintainer
+ *  Copyright (C) 1998-2000 Andrzej Krzysztofowicz, Maintainer
  *
+ *  Copyright (C) 1998-2000 Andre Hedrick <andre@linux-ide.org>
  *
- * RCC/ServerWorks IDE driver for Linux
- *
- *   OSB4: `Open South Bridge' IDE Interface (fn 1)
- *         supports UDMA mode 2 (33 MB/s)
- *
- *   CSB5: `Champion South Bridge' IDE Interface (fn 1)
- *         all revisions support UDMA mode 4 (66 MB/s)
- *         revision A2.0 and up support UDMA mode 5 (100 MB/s)
- *
- *         *** The CSB5 does not provide ANY register ***
- *         *** to detect 80-conductor cable presence. ***
- *
+ *  IDE support for the ServerWorks OSB4 IDE chipset
  *
  * here's the default lspci:
  *
@@ -93,15 +83,15 @@
 
 #include "ide_modes.h"
 
-#define DISPLAY_SVWKS_TIMINGS	1
-#undef SVWKS_DEBUG_DRIVE_INFO
+#define SVWKS_DEBUG_DRIVE_INFO		0
+
+#define DISPLAY_SVWKS_TIMINGS
 
 #if defined(DISPLAY_SVWKS_TIMINGS) && defined(CONFIG_PROC_FS)
 #include <linux/stat.h>
 #include <linux/proc_fs.h>
 
 static struct pci_dev *bmide_dev;
-static byte svwks_revision = 0;
 
 static int svwks_get_info(char *, char **, off_t, int);
 extern int (*svwks_display_info)(char *, char **, off_t, int); /* ide-proc.c */
@@ -113,7 +103,7 @@ static int svwks_get_info (char *buffer, char **addr, off_t offset, int count)
 	u32 bibma = pci_resource_start(bmide_dev, 4);
 	u32 reg40, reg44;
 	u16 reg48, reg56;
-	u8  reg54, c0=0, c1=0;
+	u8  c0 = 0, c1 = 0, reg54;
 
 	pci_read_config_dword(bmide_dev, 0x40, &reg40);
 	pci_read_config_dword(bmide_dev, 0x44, &reg44);
@@ -130,23 +120,20 @@ static int svwks_get_info (char *buffer, char **addr, off_t offset, int count)
 
 	switch(bmide_dev->device) {
 		case PCI_DEVICE_ID_SERVERWORKS_CSB5IDE:
-			p += sprintf(p, "\n                            "
-				     "ServerWorks CSB5 Chipset (rev %02x)\n",
-				     svwks_revision);
+			p += sprintf(p, "\n                                ServerWorks CSB5 Chipset.\n");
 			break;
-		case PCI_DEVICE_ID_SERVERWORKS_OSB4IDE:
-			p += sprintf(p, "\n                            "
-				     "ServerWorks OSB4 Chipset (rev %02x)\n",
-				     svwks_revision);
+		case PCI_DEVICE_ID_SERVERWORKS_OSB4:
+			p += sprintf(p, "\n                                ServerWorks OSB4 Chipset.\n");
 			break;
 		default:
-			p += sprintf(p, "\n                            "
-				     "ServerWorks %04x Chipset (rev %02x)\n",
-				     bmide_dev->device, svwks_revision);
+			p += sprintf(p, "\n                                ServerWorks 0x%04x Chipset.\n", bmide_dev->device);
 			break;
 	}
 
 	p += sprintf(p, "------------------------------- General Status ---------------------------------\n");
+#if 0
+	p += sprintf(p, "                                     : %s\n", "str");
+#endif
 	p += sprintf(p, "--------------- Primary Channel ---------------- Secondary Channel -------------\n");
 	p += sprintf(p, "                %sabled                         %sabled\n",
 			(c0&0x80) ? "dis" : " en",
@@ -204,7 +191,11 @@ static int svwks_get_info (char *buffer, char **addr, off_t offset, int count)
 				((reg44&0x00210000)==0x00210000)?"1":
 				((reg44&0x00770000)==0x00770000)?"0":
 				((reg44&0x00FF0000)==0x00FF0000)?"X":"?");
-
+#if 0
+	if (bmide_dev->device == PCI_DEVICE_ID_SERVERWORKS_CSB5IDE)
+		p += sprintf(p, "PIO  enabled:   %s                %s               %s                 %s\n",
+	if (bmide_dev->device == PCI_DEVICE_ID_SERVERWORKS_OSB4)
+#endif
 		p += sprintf(p, "PIO  enabled:   %s                %s               %s                 %s\n",
 			((reg40&0x00002000)==0x00002000)?"4":
 				((reg40&0x00002200)==0x00002200)?"3":
@@ -230,7 +221,7 @@ static int svwks_get_info (char *buffer, char **addr, off_t offset, int count)
 }
 #endif  /* defined(DISPLAY_SVWKS_TIMINGS) && defined(CONFIG_PROC_FS) */
 
-#define SVWKS_CSB5_REVISION_NEW	0x92 /* min PCI_REVISION_ID for UDMA5 (A2.0) */
+static byte svwks_revision = 0;
 
 byte svwks_proc = 0;
 
@@ -301,7 +292,6 @@ static int svwks_tune_chipset (ide_drive_t *drive, byte speed)
 			pio_timing |= pio_modes[speed - XFER_PIO_0];
 			csb5_pio   |= ((speed - XFER_PIO_0) << (4*drive->dn));
 			break;
-
 #ifdef CONFIG_BLK_DEV_IDEDMA
 		case XFER_MW_DMA_2:
 		case XFER_MW_DMA_1:
@@ -317,9 +307,9 @@ static int svwks_tune_chipset (ide_drive_t *drive, byte speed)
 		case XFER_UDMA_2:
 		case XFER_UDMA_1:
 		case XFER_UDMA_0:
-			pio_timing   |= pio_modes[pio];
-			csb5_pio     |= (pio << (4*drive->dn));
-			dma_timing   |= dma_modes[2];
+			pio_timing |= pio_modes[pio];
+			csb5_pio   |= (pio << (4*drive->dn));
+			dma_timing |= dma_modes[2];
 			ultra_timing |= ((udma_modes[speed - XFER_UDMA_0]) << (4*unit));
 			ultra_enable |= (0x01 << drive->dn);
 #endif
@@ -332,9 +322,9 @@ static int svwks_tune_chipset (ide_drive_t *drive, byte speed)
 		drive->name, ultra_timing, dma_timing, pio_timing);
 #endif
 
-#if SVWKS_DEBUG_DRIVE_INFO
+#if OSB4_DEBUG_DRIVE_INFO
 	printk("%s: %s drive%d\n", drive->name, ide_xfer_verbose(speed), drive->dn);
-#endif /* SVWKS_DEBUG_DRIVE_INFO */
+#endif /* OSB4_DEBUG_DRIVE_INFO */
 
 	if (!drive->init_speed)
 		drive->init_speed = speed;
@@ -348,10 +338,11 @@ static int svwks_tune_chipset (ide_drive_t *drive, byte speed)
 	pci_write_config_byte(dev, drive_pci3, ultra_timing);
 	pci_write_config_byte(dev, 0x54, ultra_enable);
 	
-	if (speed > XFER_PIO_4)
+	if (speed > XFER_PIO_4) {
 		outb(inb(dma_base+2)|(1<<(5+unit)), dma_base+2);
-	else
+	} else {
 		outb(inb(dma_base+2) & ~(1<<(5+unit)), dma_base+2);
+	}
 #endif /* CONFIG_BLK_DEV_IDEDMA */
 
 	err = ide_config_drive_speed(drive, speed);
@@ -363,24 +354,25 @@ static void config_chipset_for_pio (ide_drive_t *drive)
 {
 	unsigned short eide_pio_timing[6] = {960, 480, 240, 180, 120, 90};
 	unsigned short xfer_pio = drive->id->eide_pio_modes;
-	byte timing, speed, pio;
+	byte			timing, speed, pio;
 
 	pio = ide_get_best_pio_mode(drive, 255, 5, NULL);
 
 	if (xfer_pio> 4)
 		xfer_pio = 0;
 
-	if (drive->id->eide_pio_iordy > 0)
+	if (drive->id->eide_pio_iordy > 0) {
 		for (xfer_pio = 5;
 			xfer_pio>0 &&
 			drive->id->eide_pio_iordy>eide_pio_timing[xfer_pio];
 			xfer_pio--);
-	else
+	} else {
 		xfer_pio = (drive->id->eide_pio_modes & 4) ? 0x05 :
 			   (drive->id->eide_pio_modes & 2) ? 0x04 :
 			   (drive->id->eide_pio_modes & 1) ? 0x03 :
 			   (drive->id->tPIO & 2) ? 0x02 :
 			   (drive->id->tPIO & 1) ? 0x01 : xfer_pio;
+	}
 
 	timing = (xfer_pio >= pio) ? xfer_pio : pio;
 
@@ -415,10 +407,12 @@ static int config_chipset_for_dma (ide_drive_t *drive)
 {
 	struct hd_driveid *id	= drive->id;
 	struct pci_dev *dev	= HWIF(drive)->pci_dev;
-	byte udma_66	= eighty_ninty_three(drive);
-	int ultra66	= (dev->device == PCI_DEVICE_ID_SERVERWORKS_CSB5IDE) ? 1 : 0;
-	int ultra100 	= (ultra66 && svwks_revision >= SVWKS_CSB5_REVISION_NEW) ? 1 : 0;
-	byte speed;
+	byte udma_66		= eighty_ninty_three(drive);
+	byte			speed;
+
+	int ultra66		= (dev->device == PCI_DEVICE_ID_SERVERWORKS_CSB5IDE) ? 1 : 0;
+	/* need specs to figure out if osb4 is capable of ata/66/100 */
+	int ultra100		= (dev->device == PCI_DEVICE_ID_SERVERWORKS_CSB5IDE) ? 1 : 0;
 
 	if ((id->dma_ultra & 0x0020) && (udma_66) && (ultra100)) {
 		speed = XFER_UDMA_5;
@@ -464,7 +458,7 @@ static int config_drive_xfer_rate (ide_drive_t *drive)
 		}
 		dma_func = ide_dma_off_quietly;
 		if (id->field_valid & 4) {
-			if (id->dma_ultra & 0x003F) {
+			if (id->dma_ultra & 0x002F) {
 				/* Force if Capable UltraDMA */
 				dma_func = config_chipset_for_dma(drive);
 				if ((id->field_valid & 2) &&
@@ -505,41 +499,7 @@ static int svwks_dmaproc(ide_dma_action_t func, ide_drive_t *drive)
 	switch (func) {
 		case ide_dma_check:
 			return config_drive_xfer_rate(drive);
-		case ide_dma_end:
-		{
-			ide_hwif_t *hwif		= HWIF(drive);
-			unsigned long dma_base		= hwif->dma_base;
-	
-			if(inb(dma_base+0x02)&1)
-			{
-#if 0		
-				int i;
-				printk(KERN_ERR "Curious - OSB4 thinks the DMA is still running.\n");
-				for(i=0;i<10;i++)
-				{
-					if(!(inb(dma_base+0x02)&1))
-					{
-						printk(KERN_ERR "OSB4 now finished.\n");
-						break;
-					}
-					udelay(5);
-				}
-#endif		
-				printk(KERN_CRIT "Serverworks OSB4 in impossible state.\n");
-				printk(KERN_CRIT "Disable UDMA or if you are using Seagate then try switching disk types\n");
-				printk(KERN_CRIT "on this controller. Please report this event to osb4-bug@ide.cabal.tm\n");
-#if 0		
-				/* Panic might sys_sync -> death by corrupt disk */
-				panic("OSB4: continuing might cause disk corruption.\n");
-#else
-				printk(KERN_CRIT "OSB4: continuing might cause disk corruption.\n");
-				while(1)
-					cpu_relax();
-#endif				
-			}
-			/* and drop through */
-		}
-		default:
+		default :
 			break;
 	}
 	/* Other cases are done by generic IDE-DMA code. */
@@ -549,43 +509,30 @@ static int svwks_dmaproc(ide_dma_action_t func, ide_drive_t *drive)
 
 unsigned int __init pci_init_svwks (struct pci_dev *dev, const char *name)
 {
-	unsigned int reg;
-	byte btr;
+	unsigned int reg64;
 
-	/* save revision id to determine DMA capability */
 	pci_read_config_byte(dev, PCI_REVISION_ID, &svwks_revision);
 
-	/* force Master Latency Timer value to 64 PCICLKs */
-	pci_write_config_byte(dev, PCI_LATENCY_TIMER, 0x40);
-
-	/* OSB4 : South Bridge and IDE */
 	if (dev->device == PCI_DEVICE_ID_SERVERWORKS_OSB4IDE) {
-		isa_dev = pci_find_device(PCI_VENDOR_ID_SERVERWORKS,
-			  PCI_DEVICE_ID_SERVERWORKS_OSB4, NULL);
-		if (isa_dev) {
-			pci_read_config_dword(isa_dev, 0x64, &reg);
-			reg &= ~0x00002000; /* disable 600ns interrupt mask */
-			reg |=  0x00004000; /* enable UDMA/33 support */
-			pci_write_config_dword(isa_dev, 0x64, reg);
-		}
-	}
+		isa_dev = pci_find_device(PCI_VENDOR_ID_SERVERWORKS, PCI_DEVICE_ID_SERVERWORKS_OSB4, NULL);
 
-	/* setup CSB5 : South Bridge and IDE */
-	else if (dev->device == PCI_DEVICE_ID_SERVERWORKS_CSB5IDE) {
-		/* setup the UDMA Control register
-		 *
-		 * 1. clear bit 6 to enable DMA
-		 * 2. enable DMA modes with bits 0-1
-		 *      00 : legacy
-		 *      01 : udma2
-		 *      10 : udma2/udma4
-		 *      11 : udma2/udma4/udma5
-		 */
-		pci_read_config_byte(dev, 0x5A, &btr);
-		btr &= ~0x40;
-		btr |= (svwks_revision >= SVWKS_CSB5_REVISION_NEW) ? 0x3 : 0x2;
-		pci_write_config_byte(dev, 0x5A, btr);
+		pci_read_config_dword(isa_dev, 0x64, &reg64);
+#ifdef DEBUG
+		printk("%s: reg64 == 0x%08x\n", name, reg64);
+#endif
+
+//		reg64 &= ~0x0000A000;
+//#ifdef CONFIG_SMP
+//		reg64 |= 0x00008000;
+//#endif
+	/* Assume the APIC was set up properly by the BIOS for now . If it
+	   wasnt we need to do a fix up _way_ earlier. Bits 15,10,3 control
+	   APIC enable, routing and decode */
+	   
+		reg64 &= ~0x00002000;	
+		pci_write_config_dword(isa_dev, 0x64, reg64);
 	}
+	pci_write_config_byte(dev, PCI_LATENCY_TIMER, 0x40);
 
 #if defined(DISPLAY_SVWKS_TIMINGS) && defined(CONFIG_PROC_FS)
 	if (!svwks_proc) {
@@ -604,46 +551,26 @@ unsigned int __init pci_init_svwks (struct pci_dev *dev, const char *name)
  * Bit 14 clear = primary IDE channel does not have 80-pin cable.
  * Bit 14 set   = primary IDE channel has 80-pin cable.
  */
+
 static unsigned int __init ata66_svwks_dell (ide_hwif_t *hwif)
 {
-	struct pci_dev *dev = hwif->pci_dev;
-	if (dev->subsystem_vendor == PCI_VENDOR_ID_DELL &&
-	    dev->vendor	== PCI_VENDOR_ID_SERVERWORKS &&
-	    dev->device == PCI_DEVICE_ID_SERVERWORKS_CSB5IDE)
+	struct pci_dev *dev	= hwif->pci_dev;
+	if (dev->subsystem_vendor == PCI_VENDOR_ID_DELL        &&
+	    dev->vendor           == PCI_VENDOR_ID_SERVERWORKS &&
+	    dev->device           == PCI_DEVICE_ID_SERVERWORKS_CSB5IDE)
 		return ((1 << (hwif->channel + 14)) &
 			dev->subsystem_device) ? 1 : 0;
-	return 0;
-}
 
-/* Sun Cobalt Alpine hardware avoids the 80-pin cable
- * detect issue by attaching the drives directly to the board.
- * This check follows the Dell precedent (how scary is that?!)
- *
- * WARNING: this only works on Alpine hardware!
- */
-static unsigned int __init ata66_svwks_cobalt (ide_hwif_t *hwif)
-{
-	struct pci_dev *dev = hwif->pci_dev;
-	if (dev->subsystem_vendor == PCI_VENDOR_ID_SUN &&
-	    dev->vendor	== PCI_VENDOR_ID_SERVERWORKS &&
-	    dev->device == PCI_DEVICE_ID_SERVERWORKS_CSB5IDE)
-		return ((1 << (hwif->channel + 14)) &
-			dev->subsystem_device) ? 1 : 0;
 	return 0;
+
 }
 
 unsigned int __init ata66_svwks (ide_hwif_t *hwif)
 {
-	struct pci_dev *dev = hwif->pci_dev;
-
-	/* Dell PowerEdge */
+	struct pci_dev *dev	= hwif->pci_dev;
 	if (dev->subsystem_vendor == PCI_VENDOR_ID_DELL)
 		return ata66_svwks_dell (hwif);
-
-	/* Cobalt Alpine */
-	if (dev->subsystem_vendor == PCI_VENDOR_ID_SUN)
-		return ata66_svwks_cobalt (hwif);
-
+	
 	return 0;
 }
 
@@ -659,12 +586,12 @@ void __init ide_init_svwks (ide_hwif_t *hwif)
 	hwif->drives[0].autotune = 1;
 	hwif->drives[1].autotune = 1;
 	hwif->autodma = 0;
+	return;
 #else /* CONFIG_BLK_DEV_IDEDMA */
+
 	if (hwif->dma_base) {
-#ifdef CONFIG_IDEDMA_AUTO
 		if (!noautodma)
 			hwif->autodma = 1;
-#endif	
 		hwif->dmaproc = &svwks_dmaproc;
 	} else {
 		hwif->autodma = 0;

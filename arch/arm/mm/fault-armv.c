@@ -9,6 +9,7 @@
  * published by the Free Software Foundation.
  */
 #include <linux/config.h>
+#include <linux/compiler.h>
 #include <linux/signal.h>
 #include <linux/sched.h>
 #include <linux/kernel.h>
@@ -27,6 +28,8 @@
 #include <asm/uaccess.h>
 #include <asm/pgalloc.h>
 #include <asm/pgtable.h>
+#include <asm/unaligned.h>
+#include <asm/kgdb.h>
 
 extern void die_if_kernel(const char *str, struct pt_regs *regs, int err);
 extern void show_pte(struct mm_struct *mm, unsigned long addr);
@@ -62,13 +65,20 @@ do_sect_fault(unsigned long addr, int error_code, struct pt_regs *regs)
  * we don't guarantee that this will be the final version of the
  * interface.
  */
+#if defined(CONFIG_ARCH_IOP3XX) || defined (CONFIG_ARCH_ADIFCC)
+int (*external_fault)(unsigned long addr, unsigned long fsr, struct pt_regs *regs);
+#else
 int (*external_fault)(unsigned long addr, struct pt_regs *regs);
-
+#endif
 static int
 do_external_fault(unsigned long addr, int error_code, struct pt_regs *regs)
 {
 	if (external_fault)
+#if defined(CONFIG_ARCH_IOP3XX) || defined (CONFIG_ARCH_ADIFCC)
+		return external_fault(addr, error_code,  regs);
+#else
 		return external_fault(addr, regs);
+#endif
 	return 1;
 }
 
@@ -112,6 +122,16 @@ do_DataAbort(unsigned long addr, int error_code, struct pt_regs *regs, int fsr)
 {
 	const struct fsr_info *inf = fsr_info + (fsr & 15);
 
+#ifdef CONFIG_KGDB
+	if(kgdb_active() && kgdb_fault_expected)
+		kgdb_handle_bus_error();
+#endif
+
+#if defined(CONFIG_ARCH_IOP3XX) || defined(CONFIG_ARCH_ADIFCC)
+	if(inf->fn == do_external_fault)
+		error_code = fsr;
+#endif
+
 	if (!inf->fn(addr, error_code, regs))
 		return;
 
@@ -119,6 +139,11 @@ do_DataAbort(unsigned long addr, int error_code, struct pt_regs *regs, int fsr)
 		inf->name, fsr, addr);
 	force_sig(inf->sig, current);
 	show_pte(current->mm, addr);
+#ifdef	CONFIG_KGDB
+	if (!user_mode(regs) && kgdb_active()) {
+		do_kgdb(regs, inf->sig);
+	}
+#endif
 	die_if_kernel("Oops", regs, 0);
 }
 

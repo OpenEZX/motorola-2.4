@@ -9,6 +9,7 @@
 #include <linux/wait.h>
 #include <linux/spinlock.h>
 #include <linux/rwsem.h>
+#include <linux/stringify.h>
 
 #include <asm/system.h>
 #include <asm/atomic.h>
@@ -94,10 +95,14 @@ extern inline void down(struct semaphore * sem)
 		"subql #1,%0@\n\t"
 		"jmi 2f\n\t"
 		"1:\n"
-		LOCK_SECTION_START(".even\n\t")
+		".subsection 1\n"
+		".even\n"
+		".ifndef _text_lock_" __stringify(KBUILD_BASENAME) "\n"
+		"_text_lock_" __stringify(KBUILD_BASENAME) ":\n"
+		".endif\n"
 		"2:\tpea 1b\n\t"
 		"jbra __down_failed\n"
-		LOCK_SECTION_END
+		".subsection 0\n"
 		: /* no outputs */
 		: "a" (sem1)
 		: "memory");
@@ -118,10 +123,14 @@ extern inline int down_interruptible(struct semaphore * sem)
 		"jmi 2f\n\t"
 		"clrl %0\n"
 		"1:\n"
-		LOCK_SECTION_START(".even\n\t")
+		".subsection 1\n"
+		".even\n"
+		".ifndef _text_lock_" __stringify(KBUILD_BASENAME) "\n"
+		"_text_lock_" __stringify(KBUILD_BASENAME) ":\n"
+		".endif\n"
 		"2:\tpea 1b\n\t"
 		"jbra __down_failed_interruptible\n"
-		LOCK_SECTION_END
+		".subsection 0\n"
 		: "=d" (result)
 		: "a" (sem1)
 		: "memory");
@@ -143,10 +152,14 @@ extern inline int down_trylock(struct semaphore * sem)
 		"jmi 2f\n\t"
 		"clrl %0\n"
 		"1:\n"
-		LOCK_SECTION_START(".even\n\t")
+		".subsection 1\n"
+		".even\n"
+		".ifndef _text_lock_" __stringify(KBUILD_BASENAME) "\n"
+		"_text_lock_" __stringify(KBUILD_BASENAME) ":\n"
+		".endif\n"
 		"2:\tpea 1b\n\t"
 		"jbra __down_failed_trylock\n"
-		LOCK_SECTION_END
+		".subsection 0\n"
 		: "=d" (result)
 		: "a" (sem1)
 		: "memory");
@@ -172,20 +185,18 @@ extern inline void up(struct semaphore * sem)
 		"addql #1,%0@\n\t"
 		"jle 2f\n"
 		"1:\n"
-		LOCK_SECTION_START(".even\n\t")
+		".subsection 1\n"
+		".even\n"
+		".ifndef _text_lock_" __stringify(KBUILD_BASENAME) "\n"
+		"_text_lock_" __stringify(KBUILD_BASENAME) ":\n"
+		".endif\n"
 		"2:\t"
 		"pea 1b\n\t"
 		"jbra __up_wakeup\n"
-		LOCK_SECTION_END
+		".subsection 0\n"
 		: /* no outputs */
 		: "a" (sem1)
 		: "memory");
-}
-
-
-static inline int sem_getcount(struct semaphore *sem)
-{
-	return atomic_read(&sem->count);
 }
 
 #endif /* __ASSEMBLY__ */

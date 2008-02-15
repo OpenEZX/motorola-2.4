@@ -448,7 +448,10 @@ void ufs_truncate (struct inode * inode)
 		if (IS_SYNC(inode) && (inode->i_state & I_DIRTY))
 			ufs_sync_inode (inode);
 		run_task_queue(&tq_disk);
-		yield();
+		current->policy |= SCHED_YIELD;
+		schedule ();
+
+
 	}
 	offset = inode->i_size & uspi->s_fshift;
 	if (offset) {

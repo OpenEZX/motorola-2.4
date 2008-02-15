@@ -611,8 +611,7 @@ static void sppp_channel_delete(struct channel_data *chan)
 static int cosa_sppp_open(struct net_device *d)
 {
 	struct channel_data *chan = d->priv;
-	int err;
-	unsigned long flags;
+	int err, flags;
 
 	if (!(chan->cosa->firmware_status & COSA_FW_START)) {
 		printk(KERN_NOTICE "%s: start the firmware first (status %d)\n",
@@ -683,7 +682,7 @@ static void cosa_sppp_timeout(struct net_device *dev)
 static int cosa_sppp_close(struct net_device *d)
 {
 	struct channel_data *chan = d->priv;
-	unsigned long flags;
+	int flags;
 
 	netif_stop_queue(d);
 	sppp_close(d);
@@ -780,7 +779,7 @@ static ssize_t cosa_read(struct file *file,
 	char *buf, size_t count, loff_t *ppos)
 {
 	DECLARE_WAITQUEUE(wait, current);
-	unsigned long flags;
+	int flags;
 	struct channel_data *chan = (struct channel_data *)file->private_data;
 	struct cosa_data *cosa = chan->cosa;
 	char *kbuf;
@@ -857,7 +856,7 @@ static ssize_t cosa_write(struct file *file,
 	DECLARE_WAITQUEUE(wait, current);
 	struct channel_data *chan = (struct channel_data *)file->private_data;
 	struct cosa_data *cosa = chan->cosa;
-	unsigned long flags;
+	unsigned int flags;
 	char *kbuf;
 
 	if (!(cosa->firmware_status & COSA_FW_START)) {
@@ -1246,7 +1245,7 @@ static void cosa_disable_rx(struct channel_data *chan)
 static int cosa_start_tx(struct channel_data *chan, char *buf, int len)
 {
 	struct cosa_data *cosa = chan->cosa;
-	unsigned long flags;
+	int flags;
 #ifdef DEBUG_DATA
 	int i;
 
@@ -1272,7 +1271,7 @@ static int cosa_start_tx(struct channel_data *chan, char *buf, int len)
 
 static void put_driver_status(struct cosa_data *cosa)
 {
-	unsigned long flags;
+	unsigned flags=0;
 	int status;
 
 	spin_lock_irqsave(&cosa->lock, flags);
@@ -1340,7 +1339,7 @@ static void put_driver_status_nolock(struct cosa_data *cosa)
  */
 static void cosa_kick(struct cosa_data *cosa)
 {
-	unsigned long flags, flags1;
+	unsigned flags, flags1;
 	char *s = "(probably) IRQ";
 
 	if (test_bit(RXBIT, &cosa->rxtx))

@@ -2,21 +2,11 @@
  *
  * linux/drivers/char/mk712.c
  *
- * Copyright 1999-2002 Transmeta Corporation
+ * Copyright 1999 Transmeta Corporation -- All Rights Reserved
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * This file is part of the Linux kernel and is made available under
+ * the terms of the GNU General Public License, version 2, or at your
+ * option, any later version, incorporated herein by reference.
  *
  * This driver supports the MK712 touch screen.
  * based on busmouse.c, pc_keyb.c, and other mouse drivers
@@ -25,11 +15,10 @@
  * 1999-12-19: added anti-jitter code, report pen-up events, fixed mk712_poll
  *             to use queue_empty, Nathan Laredo
  * 1999-12-20: improved random point rejection, Nathan Laredo
- * 2000-01-05: checked in new anti-jitter code, changed mouse protocol, fixed
+ * 1999-01-05: checked in new anti-jitter code, changed mouse protocol, fixed
  *             queue code, added module options, other fixes, Daniel Quinlan
- * 2002-03-15: Clean up for kernel merge <alan@redhat.com>
- *	       Fixed multi open race, fixed memory checks, fixed resource
- *	       allocation, fixed close/powerdown bug, switched to new init
+ * 2001-01-24: power management: added extern mk712_interrupt_count,
+ *             john@mvista.com
  *
  * ------------------------------------------------------------------------- */
 
@@ -109,6 +98,8 @@ static int mk712_irq = MK712_DEFAULT_IRQ;
 static int mk712_users = 0;
 static spinlock_t mk712_lock = SPIN_LOCK_UNLOCKED;
 static struct mk712_queue *queue; /* mouse data buffer */
+int mk712_interrupt_count = {0};
+EXPORT_SYMBOL(mk712_interrupt_count);
 
 static struct mk712_packet get_from_queue(void)
 {
@@ -268,6 +259,7 @@ static void mk712_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 
         status = inb(mk712_io + MK712_STATUS_LOW);
 
+	++mk712_interrupt_count;	/* NB: counting all interrupts */
 	if (!(status & MK712_CONVERSION_COMPLETE)) {
 #ifdef MK712_FILTER
                 drop_next = 1;
@@ -311,40 +303,39 @@ static void mk712_interrupt(int irq, void *dev_id, struct pt_regs *regs)
         wake_up_interruptible(&queue->proc_list);
 }
 
-static int mk712_open(struct inode *inode, struct file *file) 
-{
+static int mk712_open(struct inode *inode, struct file *file) {
 	unsigned char control;
-	unsigned long flags;
 
 	control = 0;
 
-	spin_lock_irqsave(&mk712_lock, flags);
-	if(!mk712_users++)
-	{
-		outb(0, mk712_io + MK712_CONTROL);
+	if(mk712_users++)
+		return 0;
 
-		control |= (MK712_ENABLE_INT |
-	                    MK712_INT_ON_CONVERSION_COMPLETE |
-	                    MK712_INT_ON_CHANGE_IN_TOUCH_STATUS_B |
-	                    MK712_ENABLE_PERIODIC_CONVERSIONS |
-	                    MK712_POWERDOWN_A);
-		outb(control, mk712_io + MK712_CONTROL);
+	outb(0, mk712_io + MK712_CONTROL);
 
-	        outb(10, mk712_io + MK712_RATE); /* default count = 10 */
+	control |= (MK712_ENABLE_INT |
+                    MK712_INT_ON_CONVERSION_COMPLETE |
+                    MK712_INT_ON_CHANGE_IN_TOUCH_STATUS_B |
+                    MK712_ENABLE_PERIODIC_CONVERSIONS |
+                    MK712_POWERDOWN_A);
+	outb(control, mk712_io + MK712_CONTROL);
 
-		queue->head = queue->tail = 0;          /* Flush input queue */
-	}
-	spin_unlock_irqrestore(&mk712_lock, flags);
+        outb(10, mk712_io + MK712_RATE); /* default count = 10 */
+
+	queue->head = queue->tail = 0;          /* Flush input queue */
+
+	MOD_INC_USE_COUNT;
+
 	return 0;
 }
 
 static int mk712_close(struct inode * inode, struct file * file) {
         /* power down controller */
-        unsigned long flags;
-        spin_lock_irqsave(&mk712_lock, flags);
-	if(--mk712_users==0)
-		outb(0, mk712_io + MK712_CONTROL);
-	spin_unlock_irqrestore(&mk712_lock, flags);
+	outb(0, mk712_io + MK712_CONTROL);
+
+	if(--mk712_users)
+		return 0;
+	MOD_DEC_USE_COUNT;
 	return 0;
 }
 
@@ -360,8 +351,12 @@ static int mk712_ioctl(struct inode *inode, struct file * file,
 	unsigned int cmd, unsigned long arg)
 {
 	if (!inode)
-		BUG();
-	return -ENOTTY;
+		return -EINVAL;
+		
+	switch (cmd)
+	{
+	}
+	return -ENOIOCTLCMD;
 }
 
 
@@ -416,7 +411,6 @@ static ssize_t mk712_write(struct file *file, const char *buffer, size_t count,
 }
 
 struct file_operations mk712_fops = {
-	owner: THIS_MODULE,
 	read: mk712_read,
 	write: mk712_write,
 	poll: mk712_poll,
@@ -434,24 +428,24 @@ int __init mk712_init(void)
 {
 #ifdef MODULE
         if (io)
+        {
                 mk712_io = io;
+        }
         if (irq)
+        {
                 mk712_irq = irq;
+        }
 #endif
 
-	if(!request_region(mk712_io, 8, "mk712_touchscreen"))
+	if(check_region(mk712_io, 8))
 	{
 		printk("mk712: unable to get IO region\n");
 		return -ENODEV;
 	}
+	request_region(mk712_io, 8, "mk712_touchscreen");
 
 	/* set up wait queue */
 	queue = (struct mk712_queue *) kmalloc(sizeof(*queue), GFP_KERNEL);
-	if(queue == NULL)
-	{
-		release_region(mk712_io, 8);
-		return -ENOMEM;
-	}
 	memset(queue, 0, sizeof(*queue));
 	queue->head = queue->tail = 0;
 	init_waitqueue_head(&queue->proc_list);
@@ -468,17 +462,28 @@ int __init mk712_init(void)
 	}
 
         /* register misc device */
-	if(misc_register(&mk712_touchscreen)<0)
-	{
-		release_region(mk712_io, 8);
-		kfree(queue);
-		free_irq(mk712_irq, queue);
-		return -ENODEV;
-	}
+	misc_register(&mk712_touchscreen);
+
 	return 0;
 }
 
-static void __exit mk712_exit(void)
+#ifdef MODULE
+
+MODULE_AUTHOR("Daniel Quinlan");
+MODULE_DESCRIPTION("MK712 touch screen driver");
+MODULE_LICENSE("GPL");
+MODULE_PARM(io, "i");
+MODULE_PARM_DESC(io, "I/O base address of MK712 touch screen controller");
+MODULE_PARM(irq, "i");
+MODULE_PARM_DESC(irq, "IRQ of MK712 touch screen controller");
+
+int init_module(void)
+{
+	printk(KERN_INFO "installing mk712 touchscreen\n");
+	return mk712_init();
+}
+
+void cleanup_module(void)
 {
 	misc_deregister(&mk712_touchscreen);
 	release_region(mk712_io, 8);
@@ -487,19 +492,19 @@ static void __exit mk712_exit(void)
 	printk(KERN_INFO "mk712 touchscreen uninstalled\n");
 }
 
-MODULE_AUTHOR("Daniel Quinlan");
-MODULE_DESCRIPTION("MK712 touch screen driver");
-MODULE_PARM(io, "i");
-MODULE_PARM_DESC(io, "I/O base address of MK712 touch screen controller");
-MODULE_PARM(irq, "i");
-MODULE_PARM_DESC(irq, "IRQ of MK712 touch screen controller");
-MODULE_LICENSE("GPL");
-
-module_init(mk712_init);
-module_exit(mk712_exit);
+#endif
 
 /*
  * Local variables:
- * c-file-style: "linux"
+ * c-indent-level: 8
+ * c-basic-offset: 8
+ * c-brace-imaginary-offset: 0
+ * c-brace-offset: -8
+ * c-argdecl-indent: 8
+ * c-label-offset: -8
+ * c-continued-statement-offset: 8
+ * c-continued-brace-offset: 0
+ * indent-tabs-mode: nil
+ * tab-width: 8
  * End:
  */

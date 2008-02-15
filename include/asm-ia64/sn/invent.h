@@ -4,13 +4,11 @@
  * License.  See the file "COPYING" in the main directory of this archive
  * for more details.
  *
- * Copyright (C) 1992 - 1997, 2000-2002 Silicon Graphics, Inc. All rights reserved.
+ * Copyright (C) 1992 - 1997, 2000 Silicon Graphics, Inc.
+ * Copyright (C) 2000 by Colin Ngam
  */
-#ifndef _ASM_IA64_SN_INVENT_H
-#define _ASM_IA64_SN_INVENT_H
-
-#include <linux/types.h>
-#include <linux/devfs_fs_kernel.h>
+#ifndef _ASM_SN_INVENT_H
+#define _ASM_SN_INVENT_H
 
 /*
  * sys/sn/invent.h --  Kernel Hardware Inventory
@@ -745,4 +743,4 @@ extern void device_controller_num_set(	devfs_handle_t,
 					int);
 extern int device_controller_num_get(	devfs_handle_t);
 #endif /* __KERNEL__ */
-#endif /* _ASM_IA64_SN_INVENT_H */
+#endif /* _ASM_SN_INVENT_H */

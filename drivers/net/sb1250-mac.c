@@ -24,9 +24,6 @@
 */
 
 
-
-#define CONFIG_SBMAC_COALESCE
-
 /* A few user-configurable values.
    These may be modified when a driver module is loaded. */
 
@@ -44,8 +41,6 @@ static int options[MAX_UNITS] = {-1, -1, -1};
 static int full_duplex[MAX_UNITS] = {-1, -1, -1};
 #endif
 
-static int int_pktcnt = 0;
-static int int_timeout = 0;
 
 /* Operational parameters that usually are not changed. */
 
@@ -64,7 +59,7 @@ static int int_timeout = 0;
 #include <linux/timer.h>
 #include <linux/errno.h>
 #include <linux/ioport.h>
-#include <linux/slab.h>
+#include <linux/malloc.h>
 #include <linux/interrupt.h>
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
@@ -79,7 +74,7 @@ static int int_timeout = 0;
 
 /* This is only here until the firmware is ready.  In that case,
    the firmware leaves the ethernet address in the register for us. */
-#ifdef CONFIG_SIBYTE_STANDALONE
+#ifdef CONFIG_SWARM_STANDALONE
 #define SBMAC_ETH0_HWADDR "40:00:00:00:01:00"
 #define SBMAC_ETH1_HWADDR "40:00:00:00:01:01"
 #define SBMAC_ETH2_HWADDR "40:00:00:00:01:02"
@@ -100,15 +95,12 @@ MODULE_PARM(debug, "i");
 MODULE_PARM(options, "1-" __MODULE_STRING(MAX_UNITS) "i");
 MODULE_PARM(full_duplex, "1-" __MODULE_STRING(MAX_UNITS) "i");
 
-MODULE_PARM(int_pktcnt, "i");
-MODULE_PARM(int_timeout, "i");
 
 #include <asm/sibyte/sb1250_defs.h>
 #include <asm/sibyte/sb1250_regs.h>
 #include <asm/sibyte/sb1250_mac.h>
 #include <asm/sibyte/sb1250_dma.h>
 #include <asm/sibyte/sb1250_int.h>
-#include <asm/sibyte/sb1250_scd.h>		/* Only to check SOC part number. */
 
 
 /**********************************************************************
@@ -159,8 +151,7 @@ typedef enum { sbmac_state_uninit, sbmac_state_off, sbmac_state_on,
 
 #define ETHER_ALIGN	2
 #define ETHER_ADDR_LEN	6
-#define ENET_PACKET_SIZE	1518 
-/*#define ENET_PACKET_SIZE	9216 */ 
+#define ENET_PACKET_SIZE	1518
 
 /**********************************************************************
  *  DMA Descriptor structure
@@ -187,13 +178,8 @@ typedef struct sbmacdma_s {
 	
 	struct sbmac_softc *sbdma_eth;	        /* back pointer to associated MAC */
 	int              sbdma_channel;	/* channel number */
-	int		 sbdma_txdir;       /* direction (1=transmit) */
-	int		 sbdma_maxdescr;	/* total # of descriptors in ring */
-#ifdef CONFIG_SBMAC_COALESCE
-        int              sbdma_int_pktcnt;  /* # descriptors rx before interrupt*/
-        int              sbdma_int_timeout; /* # usec rx interrupt */
-#endif
-
+	int		     sbdma_txdir;       /* direction (1=transmit) */
+	int		     sbdma_maxdescr;	/* total # of descriptors in ring */
 	sbmac_port_t     sbdma_config0;	/* DMA config register 0 */
 	sbmac_port_t     sbdma_config1;	/* DMA config register 1 */
 	sbmac_port_t     sbdma_dscrbase;	/* Descriptor base address */
@@ -264,8 +250,6 @@ struct sbmac_softc {
 	
 	sbmacdma_t       sbm_txdma;		/* for now, only use channel 0 */
 	sbmacdma_t       sbm_rxdma;
-	int              rx_hw_checksum;
-	int 		 sbe_idx;
 	
 };
 
@@ -283,7 +267,7 @@ static void sbdma_initctx(sbmacdma_t *d,
 			  int chan,
 			  int txrx,
 			  int maxdescr);
-static void sbdma_channel_start(sbmacdma_t *d, int rxtx);
+static void sbdma_channel_start(sbmacdma_t *d);
 static int sbdma_add_rcvbuffer(sbmacdma_t *d,struct sk_buff *m);
 static int sbdma_add_txbuffer(sbmacdma_t *d,struct sk_buff *m);
 static void sbdma_emptyring(sbmacdma_t *d);
@@ -324,9 +308,6 @@ static void sbmac_mii_write(struct sbmac_softc *s,int phyaddr,int regidx,
  *  Globals
  ********************************************************************* */
 
-static uint64_t sbmac_orig_hwaddr[MAX_UNITS];
-static uint64_t chip_revision;
-
 
 /**********************************************************************
  *  MDIO constants
@@ -347,7 +328,7 @@ static uint64_t chip_revision;
 #define BMCR_DUPLEX    0x0100
 #define BMCR_COLTEST   0x0080
 #define BMCR_SPEED1    0x0040
-#define BMCR_SPEED1000 (BMCR_SPEED1)
+#define BMCR_SPEED1000 (BMCR_SPEED1|BMCR_SPEED0)
 #define BMCR_SPEED100  (BMCR_SPEED0)
 #define BMCR_SPEED10 	0
 
@@ -456,8 +437,6 @@ static uint64_t chip_revision;
 
 #define M_MAC_MDIO_DIR_OUTPUT	0		/* for clarity */
 
-#define ENABLE 		1
-#define DISABLE		0
 
 /**********************************************************************
  *  SBMAC_MII_SYNC(s)
@@ -672,52 +651,6 @@ static void sbdma_initctx(sbmacdma_t *d,
 	d->sbdma_channel   = chan;
 	d->sbdma_txdir     = txrx;
 	
-	/* RMON clearing */
-	s->sbe_idx =(s->sbm_base - A_MAC_BASE_0)/MAC_SPACING;
-
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_TX_BYTES)), 0);
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_COLLISIONS)), 0);
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_LATE_COL)), 0);
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_EX_COL)), 0);
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_FCS_ERROR)), 0);
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_TX_ABORT)), 0);
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_TX_BAD)), 0);
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_TX_GOOD)), 0);
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_TX_RUNT)), 0);
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_TX_OVERSIZE)), 0);
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_RX_BYTES)), 0);
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_RX_MCAST)), 0);
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_RX_BCAST)), 0);
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_RX_BAD)), 0);
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_RX_GOOD)), 0);
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_RX_RUNT)), 0);
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_RX_OVERSIZE)), 0);
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_RX_FCS_ERROR)), 0);
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_RX_LENGTH_ERROR)), 0);
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_RX_CODE_ERROR)), 0);
-	SBMAC_WRITECSR(PKSEG1(
-        A_MAC_REGISTER(s->sbe_idx, R_MAC_RMON_RX_ALIGN_ERROR)), 0);
-
 	/* 
 	 * initialize register pointers 
 	 */
@@ -725,7 +658,7 @@ static void sbdma_initctx(sbmacdma_t *d,
 	d->sbdma_config0 = 
 		PKSEG1(s->sbm_base + R_MAC_DMA_REGISTER(txrx,chan,R_MAC_DMA_CONFIG0));
 	d->sbdma_config1 = 
-		PKSEG1(s->sbm_base + R_MAC_DMA_REGISTER(txrx,chan,R_MAC_DMA_CONFIG1));
+		PKSEG1(s->sbm_base + R_MAC_DMA_REGISTER(txrx,chan,R_MAC_DMA_CONFIG0));
 	d->sbdma_dscrbase = 
 		PKSEG1(s->sbm_base + R_MAC_DMA_REGISTER(txrx,chan,R_MAC_DMA_DSCR_BASE));
 	d->sbdma_dscrcnt = 
@@ -757,32 +690,6 @@ static void sbdma_initctx(sbmacdma_t *d,
 	
 	memset(d->sbdma_ctxtable,0,d->sbdma_maxdescr*sizeof(struct sk_buff *));
 	
-#ifdef CONFIG_SBMAC_COALESCE
-        /*
-         * Setup Rx DMA coalescing defaults
-         */
-
-        if ( txrx == DMA_RX ) {
-		if ( int_pktcnt ) {
-                	d->sbdma_int_pktcnt = int_pktcnt;
-		        }
-		else {
-                	d->sbdma_int_pktcnt = 1;
-		        }
-
-		if ( int_timeout ) {
-		        d->sbdma_int_timeout = int_timeout;
-		        }
-		else {
-		        d->sbdma_int_timeout = 0;
-		    }
-	        }
-        else {
-                d->sbdma_int_pktcnt = 0;
-                d->sbdma_int_timeout = 0;
-	        }
-#endif
-
 }
 
 /**********************************************************************
@@ -792,84 +699,33 @@ static void sbdma_initctx(sbmacdma_t *d,
  *  
  *  Input parameters: 
  *  	   d - DMA channel to init (context must be previously init'd
- *         rxtx - DMA_RX or DMA_TX depending on what type of channel
  *  	   
  *  Return value:
  *  	   nothing
  ********************************************************************* */
 
-static void sbdma_channel_start(sbmacdma_t *d, int rxtx )
+static void sbdma_channel_start(sbmacdma_t *d)
 {
-    /*
-     * Turn on the DMA channel
-     */
+	/*
+	 * Turn on the DMA channel
+	 */
 	
-#ifdef CONFIG_SBMAC_COALESCE
-    if (rxtx == DMA_RX) {
-        SBMAC_WRITECSR(d->sbdma_config1,
-		       V_DMA_INT_TIMEOUT(d->sbdma_int_timeout) |
-		       0);
-        SBMAC_WRITECSR(d->sbdma_config0,
-                       M_DMA_EOP_INT_EN |
-                       V_DMA_RINGSZ(d->sbdma_maxdescr) |
-                       V_DMA_INT_PKTCNT(d->sbdma_int_pktcnt) |
-                       0);
-	}
-    else {
 	SBMAC_WRITECSR(d->sbdma_config1,0);
+	
+	SBMAC_WRITECSR(d->sbdma_dscrbase,d->sbdma_dscrtable_phys);
+	
 	SBMAC_WRITECSR(d->sbdma_config0,
 		       V_DMA_RINGSZ(d->sbdma_maxdescr) |
 		       0);
-	}
-#else
-    SBMAC_WRITECSR(d->sbdma_config1,0);
-    SBMAC_WRITECSR(d->sbdma_config0,
-		   V_DMA_RINGSZ(d->sbdma_maxdescr) |
-		   0);
-#endif
-
-	
-    SBMAC_WRITECSR(d->sbdma_dscrbase,d->sbdma_dscrtable_phys);
-	
-    /*
-     * Initialize ring pointers
-     */
-	
-    d->sbdma_addptr = d->sbdma_dscrtable;
-    d->sbdma_remptr = d->sbdma_dscrtable;
-}
-
-/**********************************************************************
- *  SBDMA_CHANNEL_STOP(d)
- *  
- *  Initialize the hardware registers for a DMA channel.
- *  
- *  Input parameters: 
- *  	   d - DMA channel to init (context must be previously init'd
- *  	   
- *  Return value:
- *  	   nothing
- ********************************************************************* */
-
-static void sbdma_channel_stop(sbmacdma_t *d)
-{
-	/*
-	 * Turn off the DMA channel
-	 */
-	
-	SBMAC_WRITECSR(d->sbdma_config1,0);
-	
-	SBMAC_WRITECSR(d->sbdma_dscrbase,0);
-	
-	SBMAC_WRITECSR(d->sbdma_config0,0);
 	
 	/*
-	 * Zero ring pointers
+	 * Initialize ring pointers
 	 */
 	
-	d->sbdma_addptr = 0;
-	d->sbdma_remptr = 0;
+	d->sbdma_addptr = d->sbdma_dscrtable;
+	d->sbdma_remptr = d->sbdma_dscrtable;
 }
+
 
 static void sbdma_align_skb(struct sk_buff *skb,int power2,int offset)
 {
@@ -932,7 +788,7 @@ static int sbdma_add_rcvbuffer(sbmacdma_t *d,struct sk_buff *sb)
 	 *
 	 *    1. the data does not start in the middle of a cache line.
 	 *    2. The data does not end in the middle of a cache line
-	 *    3. The buffer can be aligned such that the IP addresses are 
+	 * 	  3. The buffer can be aligned such that the IP addresses are 
 	 *       naturally aligned.
 	 *
 	 *  Remember, the SB1250's MAC writes whole cache lines at a time,
@@ -966,18 +822,9 @@ static int sbdma_add_rcvbuffer(sbmacdma_t *d,struct sk_buff *sb)
 	 * fill in the descriptor 
 	 */
 	
-#ifdef CONFIG_SBMAC_COALESCE
-        /*
-         * Do not interrupt per DMA transfer.
-         */
-        dsc->dscr_a = KVTOPHYS(sb_new->tail) |
-                V_DMA_DSCRA_A_SIZE(NUMCACHEBLKS(pktsize+ETHER_ALIGN)) |
-                0;
-#else
 	dsc->dscr_a = KVTOPHYS(sb_new->tail) |
 		V_DMA_DSCRA_A_SIZE(NUMCACHEBLKS(pktsize+ETHER_ALIGN)) |
 		M_DMA_DSCRA_INTERRUPT;
-#endif
 	
 	/* receiving: no options */
 	dsc->dscr_b = 0;
@@ -1232,20 +1079,6 @@ static void sbdma_rx_process(struct sbmac_softc *sc,sbmacdma_t *d)
 			    sc->sbm_stats.rx_bytes += len;
 			    sc->sbm_stats.rx_packets++;
 			    sb->protocol = eth_type_trans(sb,d->sbdma_eth->sbm_dev);
-                            if (sc->rx_hw_checksum == ENABLE) {
-			    /* if the ip checksum is good indicate in skb.
-		                else set CHECKSUM_NONE as device failed to
-					checksum the packet */
-
-			       if (((dsc->dscr_b) |M_DMA_ETHRX_BADTCPCS) ||
-			     	  ((dsc->dscr_a)| M_DMA_ETHRX_BADIP4CS)){
-				  sb->ip_summed = CHECKSUM_NONE;
-			       } else {
-				 printk(KERN_DEBUG "hw checksum fail .\n");
-				 sb->ip_summed = CHECKSUM_UNNECESSARY;
-			       }
-			    } /*rx_hw_checksum */
-
 			    netif_rx(sb);
 			    }
 		}
@@ -1518,14 +1351,8 @@ static void sbmac_channel_start(struct sbmac_softc *s)
 		M_MAC_SS_EN |
 		0;
 	
-	/* 
-	 * Be sure that RD_THRSH+WR_THRSH <= 32
-	 * Use a larger RD_THRSH for gigabit
-	 */
-
 	fifo = V_MAC_TX_WR_THRSH(4) |	/* Must be '4' or '8' */
-		((s->sbm_speed == sbmac_speed_1000)
-		 ? V_MAC_TX_RD_THRSH(28) : V_MAC_TX_RD_THRSH(4)) |
+		V_MAC_TX_RD_THRSH(4) |
 		V_MAC_TX_RL_THRSH(4) |
 		V_MAC_RX_PL_THRSH(4) |
 		V_MAC_RX_RD_THRSH(4) |	/* Must be '4' */
@@ -1612,8 +1439,8 @@ static void sbmac_channel_start(struct sbmac_softc *s)
 	 * Initialize DMA channels (rings should be ok now)
 	 */
 	
-	sbdma_channel_start(&(s->sbm_rxdma), DMA_RX);
-	sbdma_channel_start(&(s->sbm_txdma), DMA_TX);
+	sbdma_channel_start(&(s->sbm_rxdma));
+	sbdma_channel_start(&(s->sbm_txdma));
 	
 	/*
 	 * Configure the speed, duplex, and flow control
@@ -1640,22 +1467,12 @@ static void sbmac_channel_start(struct sbmac_softc *s)
 	
 	
 
-
-#ifdef CONFIG_SBMAC_COALESCE
-	/*
-	 * Accept any TX interrupt and EOP count/timer RX interrupts on ch 0
-	 */
-	SBMAC_WRITECSR(s->sbm_imr,
-		       (M_MAC_INT_CHANNEL << S_MAC_TX_CH0) |
-		       ((M_MAC_INT_EOP_COUNT | M_MAC_INT_EOP_TIMER) << S_MAC_RX_CH0));
-#else
 	/*
 	 * Accept any kind of interrupt on TX and RX DMA channel 0
 	 */
 	SBMAC_WRITECSR(s->sbm_imr,
 		       (M_MAC_INT_CHANNEL << S_MAC_TX_CH0) |
 		       (M_MAC_INT_CHANNEL << S_MAC_RX_CH0));
-#endif
 	
 	/* 
 	 * Enable receiving unicasts and broadcasts 
@@ -1700,6 +1517,8 @@ static void sbmac_channel_start(struct sbmac_softc *s)
 
 static void sbmac_channel_stop(struct sbmac_softc *s)
 {
+	uint64_t ctl;
+	
 	/* don't do this if already stopped */
 	
 	if (s->sbm_state == sbmac_state_off) return;
@@ -1715,18 +1534,14 @@ static void sbmac_channel_stop(struct sbmac_softc *s)
 	
 	/* turn off receiver and transmitter */
 	
-	SBMAC_WRITECSR(s->sbm_macenable,0);
+	ctl = SBMAC_READCSR(s->sbm_macenable);
+	ctl &= ~(M_MAC_RXDMA_EN0 | M_MAC_TXDMA_EN0);
+	SBMAC_WRITECSR(s->sbm_macenable,ctl);
 	
 	/* We're stopped now. */
 	
 	s->sbm_state = sbmac_state_off;
 	
-	/*
-	 * Stop DMA channels (rings should be ok now)
-	 */
-	
-	sbdma_channel_stop(&(s->sbm_rxdma));
-	sbdma_channel_stop(&(s->sbm_txdma));
 	
 	/* Empty the receive and transmit rings */
 	
@@ -1809,36 +1624,6 @@ static void sbmac_promiscuous_mode(struct sbmac_softc *sc,int onoff)
 	}
 }
 
-/**********************************************************************
- *  SBMAC_SETIPHDR_OFFSET(sc,onoff)
- *  
- *  Set the iphdr offset as 15 assuming ethernet encapsulation
- *  
- *  Input parameters: 
- *  	   sc - softc
- *  	   
- *  Return value:
- *  	   nothing
- ********************************************************************* */
-
-static void sbmac_set_iphdr_offset(struct sbmac_softc *sc)
-{
-	uint64_t reg;
-	
-	reg = SBMAC_READCSR(sc->sbm_rxfilter);
-	reg &= ~M_MAC_IPHDR_OFFSET;
-	/* Hard code the off set to 15 for now */
-	reg |= 15 << S_MAC_IPHDR_OFFSET;
-	SBMAC_WRITECSR(sc->sbm_rxfilter,reg);
-	
-	/* read system identification to determine revision */
-	if (sb1250_pass >= K_SYS_REVISION_PASS2) {
-		printk(KERN_INFO "pass2 - enabling Rx rcv tcp checksum\n");
-		sc->rx_hw_checksum = ENABLE;
-	} else {
-		sc->rx_hw_checksum = DISABLE;
-	}
-}
 
 
 #if 0
@@ -2110,11 +1895,10 @@ static void sbmac_intr(int irq,void *dev_instance,struct pt_regs *rgs)
 	for (;;) {
 		
 		/*
-		 * Read the ISR (this clears the bits in the real
-		 * register, except for counter addr)
+		 * Read the ISR (this clears the bits in the real register)
 		 */
 		
-		isr = SBMAC_READCSR(sc->sbm_isr) & ~M_MAC_COUNTER_ADDR;
+		isr = SBMAC_READCSR(sc->sbm_isr);
 		
 		if (isr == 0) break;
 		
@@ -2129,23 +1913,6 @@ static void sbmac_intr(int irq,void *dev_instance,struct pt_regs *rgs)
 		/*
 		 * Receives on channel 0
 		 */
-
-		/*
-		 * It's important to test all the bits (or at least the
-		 * EOP_SEEN bit) when deciding to do the RX process
-		 * particularly when coalescing, to make sure we
-		 * take care of the following:
-		 *
-		 * If you have some packets waiting (have been received
-		 * but no interrupt) and get a TX interrupt before
-		 * the RX timer or counter expires, reading the ISR
-		 * above will clear the timer and counter, and you
-		 * won't get another interrupt until a packet shows
-		 * up to start the timer again.  Testing
-		 * EOP_SEEN here takes care of this case.
-		 * (EOP_SEEN is part of M_MAC_INT_CHANNEL << S_MAC_RX_CH0)
-		 */
-		 
 		
 		if (isr & (M_MAC_INT_CHANNEL << S_MAC_RX_CH0)) {
 			sbdma_rx_process(sc,&(sc->sbm_rxdma));
@@ -2183,9 +1950,6 @@ static int sbmac_start_tx(struct sk_buff *skb, struct net_device *dev)
 	if (sbdma_add_txbuffer(&(sc->sbm_txdma),skb)) {
 		/* XXX save skb that we could not send */
 		netif_stop_queue(dev);
-		spin_unlock_irq(&sc->sbm_lock);
-
-		return 1;
 	}
 	
 	dev->trans_start = jiffies;
@@ -2357,15 +2121,6 @@ static int sbmac_parse_hwaddr(char *str,u_char *hwaddr)
 }
 #endif
 
-static int sb1250_change_mtu(struct net_device *_dev, int new_mtu)
-{
-        if (new_mtu >  ENET_PACKET_SIZE)
-                return -EINVAL;
-        _dev->mtu = new_mtu;
-	printk(KERN_INFO "changing the mtu to %d\n", new_mtu);
-        return 0;
-}
-
 /**********************************************************************
  *  SBMAC_INIT(dev)
  *  
@@ -2451,16 +2206,6 @@ static int sbmac_init(struct net_device *dev)
 	dev->do_ioctl           = sbmac_mii_ioctl;
 	dev->tx_timeout         = sbmac_tx_timeout;
 	dev->watchdog_timeo     = TX_TIMEOUT;
-
-	dev->change_mtu         = sb1250_change_mtu;
-
-	if (sb1250_pass >= K_SYS_REVISION_PASS3) {
-		/* In pass3 we do dumb checksum in TX */
-		dev->features |= NETIF_F_IP_CSUM;
-	}
-
-        /* This is needed for PASS2 for Rx H/W checksum feature */
-	sbmac_set_iphdr_offset( sc);
 	
 	return 0;
 	
@@ -2616,9 +2361,6 @@ static int sbmac_mii_poll(struct sbmac_softc *s,int noisy)
 	p += sprintf(p,"Unknown");
 	}
 
-#ifdef CONFIG_NET_SB1250_MAC_QUIET
-    noisy = 0;
-#endif
     if (noisy) {
 	    printk(KERN_INFO "%s: %s\n",s->sbm_dev->name,buffer);
 	    }
@@ -2841,7 +2583,6 @@ sbmac_init_module(void)
 	int macidx = 0;
 	struct net_device *dev;
 	sbmac_port_t port;
-	int chip_max_units;
 	
 	/*
 	 * For bringup when not using the firmware, we can pre-fill
@@ -2862,25 +2603,8 @@ sbmac_init_module(void)
 	 * Walk through the Ethernet controllers and find
 	 * those who have their MAC addresses set.
 	 */
-	chip_revision = SBMAC_READCSR(PKSEG1(A_SCD_SYSTEM_REVISION));
-	switch ((int)G_SYS_PART(chip_revision)) {
-	case 0x1150:
-	case 0x1250:
-		chip_max_units = 3;
-		break;
-	case 0x1120:
-	case 0x1125:
-	case 0x1126:
-		chip_max_units = 2;
-		break;
-	default:
-		chip_max_units = 0;
-		break;
-	}
-	if (chip_max_units > MAX_UNITS)
-		chip_max_units = MAX_UNITS;
-
-	for (idx = 0; idx < chip_max_units; idx++) {
+	
+	for (idx = 0; idx < MAX_UNITS; idx++) {
 
 	        /*
 	         * This is the base address of the MAC.
@@ -2894,20 +2618,16 @@ sbmac_init_module(void)
 		 * If we find a zero, skip this MAC.
 		 */
 
-		sbmac_orig_hwaddr[idx] = SBMAC_READCSR(PKSEG1(port+R_MAC_ETHERNET_ADDR));
-		if (sbmac_orig_hwaddr[idx] == 0) {
-		    printk( KERN_DEBUG "sbmac: not configuring MAC at %x\n",(uint32_t)port);
+		if (SBMAC_READCSR(PKSEG1(port+R_MAC_ETHERNET_ADDR)) == 0) {
 		    continue;
-		}
+		    }
 
 		/*
 		 * Okay, cool.  Initialize this MAC.
 		 */
 
 		dev = init_etherdev(NULL,sizeof(struct sbmac_softc));
-		if (!dev) 
-		  return -ENOMEM;	/* return ENOMEM */
-
+		if (!dev) break;			/* problems, get out now. */
 		dev->irq = K_INT_MAC_0 + idx;
 		dev->base_addr = port;
 		dev->mem_end = 0;
@@ -2932,7 +2652,6 @@ sbmac_cleanup_module(void)
 {
 	int idx;
 	struct net_device *dev;
-	sbmac_port_t port;
 	for (idx = 0; idx < MAX_UNITS; idx++) {
 		dev = dev_sbmac[idx];
 		if (dev == NULL) continue;
@@ -2943,10 +2662,8 @@ sbmac_cleanup_module(void)
 			
 			sbmac_uninitctx(sc);
 			
+			KFREE(sc);
 		}
-
-	        port = A_MAC_CHANNEL_BASE(idx);
-		SBMAC_WRITECSR(PKSEG1(port+R_MAC_ETHERNET_ADDR), sbmac_orig_hwaddr[idx] );
 		KFREE(dev);
 		dev_sbmac[idx] = NULL;
 	}

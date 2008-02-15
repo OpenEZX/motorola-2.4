@@ -431,7 +431,7 @@ typedef struct immap {
 	char		res11[4096];
 } immap_t;
 
-extern immap_t	*immr;
+extern volatile immap_t	*immr;
 
 #endif /* __IMMAP_82XX__ */
 #endif /* __KERNEL__ */

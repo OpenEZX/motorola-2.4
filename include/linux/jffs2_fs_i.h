@@ -1,4 +1,4 @@
-/* $Id: jffs2_fs_i.h,v 1.8 2001/04/18 13:05:28 dwmw2 Exp $ */
+/* $Id: jffs2_fs_i.h,v 1.10 2002/01/09 11:44:23 dwmw2 Exp $ */
 
 #ifndef _JFFS2_FS_I
 #define _JFFS2_FS_I
@@ -26,7 +26,7 @@ struct jffs2_inode_info {
 	struct semaphore sem;
 
 	/* The highest (datanode) version number used for this ino */
-	__u32 highest_version;
+	uint32_t highest_version;
 
 	/* List of data fragments which make up the file */
 	struct jffs2_node_frag *fraglist;
@@ -48,15 +48,8 @@ struct jffs2_inode_info {
 	   use the doubly-linked lists because we don't want to increase
 	   the memory usage that much. This is simpler */
 	//	struct jffs2_raw_node_ref *lastnode;
-	__u16 flags;
-	__u8 usercompr;
+	uint16_t flags;
+	uint8_t usercompr;
 };
 
-#ifdef JFFS2_OUT_OF_KERNEL
-#define JFFS2_INODE_INFO(i) ((struct jffs2_inode_info *) &(i)->u)
-#else
-#define JFFS2_INODE_INFO(i) (&i->u.jffs2_i)
-#endif
-
 #endif /* _JFFS2_FS_I */
-

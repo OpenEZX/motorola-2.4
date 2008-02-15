@@ -96,11 +96,8 @@ NORET_TYPE void panic(const char * fmt, ...)
 #endif
 	sti();
 	for(;;) {
-#if defined(CONFIG_X86) && defined(CONFIG_VT) 
-		extern void panic_blink(void);
-		panic_blink(); 
-#endif
 		CHECK_EMERGENCY_SYNC
+		barrier();
 	}
 }
 
@@ -124,23 +121,3 @@ const char *print_tainted()
 }
 
 int tainted = 0;
-
-/*
- * A BUG() call in an inline function in a header should be avoided,
- * because it can seriously bloat the kernel.  So here we have
- * helper functions.
- * We lose the BUG()-time file-and-line info this way, but it's
- * usually not very useful from an inline anyway.  The backtrace
- * tells us what we want to know.
- */
-
-void __out_of_line_bug(int line)
-{
-	printk("kernel BUG in header file at line %d\n", line);
-
-	BUG();
-
-	/* Satisfy __attribute__((noreturn)) */
-	for ( ; ; )
-		;
-}

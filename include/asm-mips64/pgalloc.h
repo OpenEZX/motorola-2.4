@@ -19,30 +19,29 @@
  *  - flush_tlb_range(mm, start, end) flushes a range of pages
  *  - flush_tlb_pgtables(mm, start, end) flushes a range of page tables
  */
-extern void local_flush_tlb_all(void);
-extern void local_flush_tlb_mm(struct mm_struct *mm);
-extern void local_flush_tlb_range(struct mm_struct *mm, unsigned long start,
+extern void (*_flush_tlb_all)(void);
+extern void (*_flush_tlb_mm)(struct mm_struct *mm);
+extern void (*_flush_tlb_range)(struct mm_struct *mm, unsigned long start,
 			       unsigned long end);
-extern void local_flush_tlb_page(struct vm_area_struct *vma,
-                                 unsigned long page);
+extern void (*_flush_tlb_page)(struct vm_area_struct *vma, unsigned long page);
 
-#ifdef CONFIG_SMP
+#ifndef CONFIG_SMP
+
+#define flush_tlb_all()			_flush_tlb_all()
+#define flush_tlb_mm(mm)		_flush_tlb_mm(mm)
+#define flush_tlb_range(mm,vmaddr,end)	_flush_tlb_range(mm, vmaddr, end)
+#define flush_tlb_page(vma,page)	_flush_tlb_page(vma, page)
+
+#else /* CONFIG_SMP */
 
 extern void flush_tlb_all(void);
 extern void flush_tlb_mm(struct mm_struct *);
 extern void flush_tlb_range(struct mm_struct *, unsigned long, unsigned long);
 extern void flush_tlb_page(struct vm_area_struct *, unsigned long);
 
-#else /* CONFIG_SMP */
-
-#define flush_tlb_all()			local_flush_tlb_all()
-#define flush_tlb_mm(mm)		local_flush_tlb_mm(mm)
-#define flush_tlb_range(mm,vmaddr,end)	local_flush_tlb_range(mm, vmaddr, end)
-#define flush_tlb_page(vma,page)	local_flush_tlb_page(vma, page)
-
 #endif /* CONFIG_SMP */
 
-static inline void flush_tlb_pgtables(struct mm_struct *mm,
+extern inline void flush_tlb_pgtables(struct mm_struct *mm,
                                       unsigned long start, unsigned long end)
 {
 	/* Nothing to do on MIPS.  */
@@ -63,7 +62,7 @@ static inline void flush_tlb_pgtables(struct mm_struct *mm,
 
 extern pgd_t *get_pgd_slow(void);
 
-static inline pgd_t *get_pgd_fast(void)
+extern inline pgd_t *get_pgd_fast(void)
 {
 	unsigned long *ret;
 
@@ -78,14 +77,14 @@ static inline pgd_t *get_pgd_fast(void)
 	return (pgd_t *)ret;
 }
 
-static inline void free_pgd_fast(pgd_t *pgd)
+extern inline void free_pgd_fast(pgd_t *pgd)
 {
 	*(unsigned long *)pgd = (unsigned long) pgd_quicklist;
 	pgd_quicklist = (unsigned long *) pgd;
 	pgtable_cache_size++;
 }
 
-static inline void free_pgd_slow(pgd_t *pgd)
+extern inline void free_pgd_slow(pgd_t *pgd)
 {
 	free_pages((unsigned long)pgd, 1);
 }
@@ -114,7 +113,7 @@ static inline pte_t *pte_alloc_one_fast(struct mm_struct *mm, unsigned long addr
 
 extern pte_t *get_pte_slow(pmd_t *pmd, unsigned long address_preadjusted);
 
-static inline pte_t *get_pte_fast(void)
+extern inline pte_t *get_pte_fast(void)
 {
 	unsigned long *ret;
 
@@ -126,14 +125,14 @@ static inline pte_t *get_pte_fast(void)
 	return (pte_t *)ret;
 }
 
-static inline void free_pte_fast(pte_t *pte)
+extern inline void free_pte_fast(pte_t *pte)
 {
 	*(unsigned long *)pte = (unsigned long) pte_quicklist;
 	pte_quicklist = (unsigned long *) pte;
 	pgtable_cache_size++;
 }
 
-static inline void free_pte_slow(pte_t *pte)
+extern inline void free_pte_slow(pte_t *pte)
 {
 	free_pages((unsigned long)pte, 0);
 }
@@ -162,7 +161,7 @@ static inline pmd_t *pmd_alloc_one_fast(struct mm_struct *mm, unsigned long addr
 
 extern pmd_t *get_pmd_slow(pgd_t *pgd, unsigned long address_preadjusted);
 
-static inline pmd_t *get_pmd_fast(void)
+extern inline pmd_t *get_pmd_fast(void)
 {
 	unsigned long *ret;
 
@@ -176,14 +175,14 @@ static inline pmd_t *get_pmd_fast(void)
 	return (pmd_t *)ret;
 }
 
-static inline void free_pmd_fast(pmd_t *pmd)
+extern inline void free_pmd_fast(pmd_t *pmd)
 {
 	*(unsigned long *)pmd = (unsigned long) pmd_quicklist;
 	pmd_quicklist = (unsigned long *) pmd;
 	pgtable_cache_size++;
 }
 
-static inline void free_pmd_slow(pmd_t *pmd)
+extern inline void free_pmd_slow(pmd_t *pmd)
 {
 	free_pages((unsigned long)pmd, 1);
 }
@@ -193,7 +192,7 @@ static inline void free_pmd_slow(pmd_t *pmd)
 #define pgd_free(pgd)           free_pgd_fast(pgd)
 #define pgd_alloc(mm)           get_pgd_fast()
 
-extern pte_t kptbl[(PAGE_SIZE << PGD_ORDER)/sizeof(pte_t)];
+extern pte_t kptbl[(PAGE_SIZE<<KPTBL_PAGE_ORDER)/sizeof(pte_t)];
 extern pmd_t kpmdtbl[PTRS_PER_PMD];
 
 extern int do_check_pgt_cache(int, int);

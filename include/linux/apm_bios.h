@@ -16,6 +16,8 @@
  * General Public License for more details.
  */
 
+#include <linux/pm-devices.h>
+
 typedef unsigned short	apm_event_t;
 typedef unsigned short	apm_eventinfo_t;
 
@@ -168,6 +170,7 @@ extern struct apm_info	apm_info;
 /*
  * APM Device IDs
  */
+#ifdef __i386__
 #define APM_DEVICE_BIOS		0x0000
 #define APM_DEVICE_ALL		0x0001
 #define APM_DEVICE_DISPLAY	0x0100
@@ -181,6 +184,20 @@ extern struct apm_info	apm_info;
 #define APM_DEVICE_OLD_ALL	0xffff
 #define APM_DEVICE_CLASS	0x00ff
 #define APM_DEVICE_MASK		0xff00
+#else
+/*
+ *  APM devices IDs for non-x86
+ */
+#define APM_DEVICE_ALL		PM_SYS_DEV
+#define APM_DEVICE_DISPLAY      PM_DISPLAY_DEV
+#define APM_DEVICE_STORAGE	PM_STORAGE_DEV
+#define APM_DEVICE_PARALLEL	PM_PARALLEL_DEV
+#define APM_DEVICE_SERIAL	PM_SERIAL_DEV
+#define APM_DEVICE_NETWORK	PM_NETWORK_DEV
+#define APM_DEVICE_PCMCIA	PM_PCMCIA_DEV
+#define APM_DEVICE_BATTERY	PM_BATTERY_DEV
+#define APM_DEVICE_TPANEL	PM_TPANEL_DEV
+#endif
 
 #ifdef __KERNEL__
 /*
@@ -208,11 +225,109 @@ extern struct apm_info	apm_info;
 #define APM_CAP_RESUME_SUSPEND_PCMCIA	0x0080 /* Resume on PCMCIA Ring	*/
 
 /*
+ * by zxf, 11/11/2002
+ * kernel event definitions for our ezx platform
+ */
+enum
+{
+	KRNL_ACCS_ATTACH,
+	KRNL_ACCS_DETACH,		
+	KRNL_BLUETOOTH,
+	KRNL_TOUCHSCREEN,
+	KRNL_KEYPAD,
+	KRNL_RTC,
+	KRNL_FLIP_ON,
+	KRNL_FLIP_OFF,
+	KRNL_VOICE_REC,
+	KRNL_ICL,
+	KRNL_BP,
+	KRNL_BP_WDI,
+	KRNL_PROC_INACT,
+	KRNL_IDLE_TIMEOUT
+};
+
+/*
  * ioctl operations
  */
 #include <linux/ioctl.h>
 
 #define APM_IOC_STANDBY		_IO('A', 1)
 #define APM_IOC_SUSPEND		_IO('A', 2)
+#define APM_IOC_SET_WAKEUP	_IO('A', 3)
+
+/*
+ * by zxf, 11/11/2002
+ * some new io control commands
+ */ 
+#define APM_IOC_IDLE			_IOW('A', 4, int)
+#define APM_IOC_SLEEP			_IOW('A', 5, int)
+#define APM_IOC_SET_IDLETIMER		_IOW('A', 6, unsigned long)
+#define APM_IOC_SET_SLEEPTIMER		_IOW('A', 7, unsigned long)
+#define APM_IOC_WAKEUP_ENABLE		_IOW('A', 8, int)
+#define APM_IOC_WAKEUP_DISABLE		_IOW('A', 9, int)
+#define APM_IOC_POWEROFF		_IO('A', 10)
+#define APM_IOC_RESET_BP		_IO('A', 11)
+#define APM_IOC_USEROFF_ENABLE		_IOW('A', 12, int)
+#define APM_IOC_NOTIFY_BP		_IOW('A', 13, int)
+
+/* parameters passed to APM_IOC_NOTIFY_BP in order to signal BP */
+#define APM_NOTIFY_BP_QUIET		1
+#define APM_NOTIFY_BP_UNHOLD		0
+
+/* 
+ * by zxf, 11/11/2002
+ * for debug
+ */
+//#define APM_DEBUG
+
+#ifdef APM_DEBUG
+#define APM_DPRINTK(format, args...)	printk(format, ##args)
+#else
+#define APM_DPRINTK(format, args...)
+#endif
+
+
+#if	defined(CONFIG_ARCH_SA1100)
+#define APM_AC_OFFLINE 0
+#define APM_AC_ONLINE 1
+#define APM_AC_BACKUP 2
+#define APM_AC_UNKNOWN 0xFF
+
+#define APM_BATTERY_STATUS_HIGH 0
+#define APM_BATTERY_STATUS_LOW  1
+#define APM_BATTERY_STATUS_CRITICAL 2
+#define APM_BATTERY_STATUS_CHARGING 3
+#define APM_BATTERY_STATUS_UNKNOWN 0xFF
+
+#define APM_BATTERY_LIFE_UNKNOWN 0xFFFF
+#define APM_BATTERY_LIFE_MINUTES 0x8000
+#define APM_BATTERY_LIFE_VALUE_MASK 0x7FFF
+#endif
+
+
+/*
+ * Maximum number of events stored
+ */
+#define APM_MAX_EVENTS		20
+
+/*
+ * The per-file APM data
+ */
+struct apm_user {
+	int		magic;
+	struct apm_user *	next;
+	int		suser: 1;
+	int		suspend_wait: 1;
+	int		suspend_result;
+	int		suspends_pending;
+	int		standbys_pending;
+	int		suspends_read;
+	int		standbys_read;
+	int		event_head;
+	int		event_tail;
+	apm_event_t	events[APM_MAX_EVENTS];
+};
+
+extern void queue_apm_event(apm_event_t event, struct apm_user *sender);
 
 #endif	/* LINUX_APM_H */

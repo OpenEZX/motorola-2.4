@@ -4,10 +4,11 @@
  * License.  See the file "COPYING" in the main directory of this archive
  * for more details.
  *
- * Copyright (C) 1992 - 1997, 2000-2001 Silicon Graphics, Inc. All rights reserved.
+ * Copyright (C) 1992 - 1997, 2000 Silicon Graphics, Inc.
+ * Copyright (C) 2000 by Colin Ngam
  */
-#ifndef _ASM_IA64_SN_SN1_HUBMD_H
-#define _ASM_IA64_SN_SN1_HUBMD_H
+#ifndef _ASM_SN_SN1_HUBMD_H
+#define _ASM_SN_SN1_HUBMD_H
 
 
 /************************************************************************
@@ -314,7 +315,7 @@
 
 
 
-#ifndef __ASSEMBLY__
+#ifdef _LANGUAGE_C
 
 /************************************************************************
  *                                                                      *
@@ -2139,7 +2140,7 @@ typedef union md_mb_ecc_config_u {
  * corresponds to the valid bit, and bit 1 of each two-bit field        *
  * corresponds to the overrun bit.                                      *
  * The rule for the valid bit is that it gets set whenever that error   *
- * occurs, regardless of whether a higher priority error has occurred.  *
+ * occurs, regardless of whether a higher priority error has occurred.   *
  * The rule for the overrun bit is that it gets set whenever we are     *
  * unable to record the address information for this particular         *
  * error, due to a previous error of the same or higher priority.       *
@@ -2462,7 +2463,7 @@ typedef union md_mb_debug_u {
 
 
 
-#endif /* __ASSEMBLY__ */
+#endif /* _LANGUAGE_C */
 
 /************************************************************************
  *                                                                      *
@@ -2473,4 +2474,4 @@ typedef union md_mb_debug_u {
 
 
 
-#endif /* _ASM_IA64_SN_SN1_HUBMD_H */
+#endif /* _ASM_SN_SN1_HUBMD_H */

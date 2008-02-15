@@ -41,7 +41,7 @@ epxa10db_fixup(struct machine_desc *desc, struct param_struct *params,
 
         mi->nr_banks      = 1;
         mi->bank[0].start = 0;
-        mi->bank[0].size  = (32*1024*1024);
+        mi->bank[0].size  = (128*1024*1024);
         mi->bank[0].node  = 0;
 
 /*

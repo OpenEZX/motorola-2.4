@@ -68,6 +68,13 @@ pci_map_single(struct pci_dev *hwdev, void *ptr, size_t size, int direction)
 	return virt_to_bus(ptr);
 }
 
+static inline dma_addr_t
+pci_map_page(struct pci_dev *hwdev, struct page *page, unsigned long offset, size_t size, int dir)
+{
+	void *vaddr = (void*) page_address(page);
+	return pci_map_single(hwdev, vaddr + offset, size, dir);
+}
+
 /* Unmap a single streaming mode DMA translation.  The dma_addr and size
  * must match what was provided for in a previous pci_map_single call.  All
  * other usages are undefined.
@@ -85,6 +92,13 @@ pci_unmap_single(struct pci_dev *hwdev, dma_addr_t dma_addr, size_t size, int di
 		sa1111_unmap_single(hwdev, dma_addr, size, direction);
 #endif
 	/* nothing to do */
+}
+
+static inline void
+pci_unmap_page(struct pci_dev *hwdev, dma_addr_t dma_addr, 
+			size_t size, int direction)
+{
+	pci_unmap_single(hwdev, dma_addr, size, direction);
 }
 
 /* Whether pci_unmap_{single,page} is a nop depends upon the

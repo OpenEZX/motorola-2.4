@@ -28,7 +28,6 @@
  *					Parameterized timeout
  *		Tigran Aivazian	:	Restructured wdt_init() to handle failures
  *		Joel Becker	:	Added WDIOC_GET/SETTIMEOUT
- *		Matt Domsch	:	Added nowayout module option
  */
 
 #include <linux/config.h>
@@ -52,8 +51,7 @@
 #include <linux/reboot.h>
 #include <linux/init.h>
 
-static unsigned long wdt_is_open;
-static int expect_close;
+static int wdt_is_open;
 
 /*
  *	You must set these - there is no sane way to probe for this board.
@@ -67,15 +65,6 @@ static int irq=11;
 #define WD_TIMO (100*60)		/* 1 minute */
 
 static int wd_margin = WD_TIMO;
-
-#ifdef CONFIG_WATCHDOG_NOWAYOUT
-static int nowayout = 1;
-#else
-static int nowayout = 0;
-#endif
-
-MODULE_PARM(nowayout,"i");
-MODULE_PARM_DESC(nowayout, "Watchdog cannot be stopped once started (default=CONFIG_WATCHDOG_NOWAYOUT)");
 
 #ifndef MODULE
 
@@ -254,20 +243,6 @@ static ssize_t wdt_write(struct file *file, const char *buf, size_t count, loff_
 
 	if(count)
 	{
-		if (!nowayout) {
-			size_t i;
-
-			/* In case it was set long ago */
-			expect_close = 0;
-
-			for (i = 0; i != count; i++) {
-				char c;
-				if (get_user(c, buf + i))
-					return -EFAULT;
-				if (c == 'V')
-					expect_close = 1;
-			}
-		}
 		wdt_ping();
 		return 1;
 	}
@@ -329,7 +304,7 @@ static int wdt_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 	{
 		WDIOF_OVERHEAT|WDIOF_POWERUNDER|WDIOF_POWEROVER
 			|WDIOF_EXTERN1|WDIOF_EXTERN2|WDIOF_FANFAULT
-			|WDIOF_SETTIMEOUT|WDIOF_MAGICCLOSE,
+			|WDIOF_SETTIMEOUT,
 		1,
 		"WDT500/501"
 	};
@@ -380,7 +355,7 @@ static int wdt_open(struct inode *inode, struct file *file)
 	switch(MINOR(inode->i_rdev))
 	{
 		case WATCHDOG_MINOR:
-			if(test_and_set_bit(0, &wdt_is_open))
+			if(wdt_is_open)
 				return -EBUSY;
 			/*
 			 *	Activate 
@@ -417,16 +392,16 @@ static int wdt_open(struct inode *inode, struct file *file)
  
 static int wdt_release(struct inode *inode, struct file *file)
 {
+	lock_kernel();
 	if(MINOR(inode->i_rdev)==WATCHDOG_MINOR)
 	{
-		if (expect_close) {
-			inb_p(WDT_DC);		/* Disable counters */
-			wdt_ctr_load(2,0);	/* 0 length reset pulses now */
-		} else {
-			printk(KERN_CRIT "wdt: WDT device closed unexpectedly.  WDT will not stop!\n");
-		}
-		clear_bit(0, &wdt_is_open);
+#ifndef CONFIG_WATCHDOG_NOWAYOUT	
+		inb_p(WDT_DC);		/* Disable counters */
+		wdt_ctr_load(2,0);	/* 0 length reset pulses now */
+#endif		
+		wdt_is_open=0;
 	}
+	unlock_kernel();
 	return 0;
 }
 

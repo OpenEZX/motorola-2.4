@@ -286,7 +286,7 @@ ctc_tty_tint(ctc_tty_info * info)
 
 	if (!info->netdev) {
 		if (skb)
-			kfree_skb(skb);
+			kfree(skb);
 		return 0;
 	}
 	if (info->flags & CTC_ASYNC_TX_LINESTAT) {

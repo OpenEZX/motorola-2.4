@@ -476,6 +476,9 @@ ENTRY(cpu_arm1020_tlb_invalidate_all)
  */
 	.align	5
 ENTRY(cpu_arm1020_tlb_invalidate_range)
+	sub	r3, r1, r0
+	cmp	r3, #256 * PAGESIZE
+	bhi	cpu_arm1020_tlb_invalidate_all
 	mov	r3, #0
 	mcr	p15, 0, r3, c7, c10, 4		@ drain WB
 1:	mcr	p15, 0, r0, c8, c6, 1		@ invalidate D TLB entry
@@ -761,7 +764,7 @@ __arm1020_proc_info:
 	b	__arm1020_setup
 	.long	cpu_arch_name
 	.long	cpu_elf_name
-	.long	HWCAP_SWP | HWCAP_HALF | HWCAP_26BIT
+	.long	HWCAP_SWP | HWCAP_HALF | HWCAP_THUMB
 	.long	cpu_arm1020_info
 	.long	arm1020_processor_functions
 	.size	__arm1020_proc_info, . - __arm1020_proc_info

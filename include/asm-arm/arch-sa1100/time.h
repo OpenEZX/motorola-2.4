@@ -83,6 +83,8 @@ static void sa1100_timer_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 		next_match = (OSMR0 += LATCH);
 		restore_flags( flags );
 	} while( (signed long)(next_match - OSCR) <= 0 );
+
+	do_profile(regs);
 }
 
 static inline void setup_timer (void)

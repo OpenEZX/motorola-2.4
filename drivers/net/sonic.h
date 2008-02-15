@@ -87,7 +87,6 @@
 #define SONIC_FAET              0x2d
 #define SONIC_MPT               0x2e
 
-#define SONIC_DCR2              0x3f
 
 /*
  * SONIC command bits
@@ -218,7 +217,7 @@
 #define	SONIC_END_OF_LINKS	0x0001
 
 
-#ifdef CONFIG_MACSONIC
+#if defined(CONFIG_MACSONIC) || defined(__XTENSA_EB__)
 /*
  * Big endian like structures on 680x0 Macs
  */

@@ -99,14 +99,14 @@
 #define NASID_GET(_pa)		(int) ((UINT64_CAST (_pa) >>		\
 					NASID_SHFT) & NASID_BITMASK)
 
-#if !defined(__ASSEMBLY__) && !defined(_STANDALONE)
+#if _LANGUAGE_C && !defined(_STANDALONE)
 #define NODE_SWIN_BASE(nasid, widget)					\
 	((widget == 0) ? NODE_BWIN_BASE((nasid), SWIN0_BIGWIN)		\
 	: RAW_NODE_SWIN_BASE(nasid, widget))
-#else /* __ASSEMBLY__ || _STANDALONE */
+#else
 #define NODE_SWIN_BASE(nasid, widget) \
      (NODE_IO_BASE(nasid) + (UINT64_CAST (widget) << SWIN_SIZE_BITS))
-#endif /* __ASSEMBLY__ || _STANDALONE */
+#endif /* _LANGUAGE_C */
 
 /*
  * The following definitions pertain to the IO special address
@@ -163,11 +163,11 @@
 #define SABLE_LOG_TRIGGER(_map)
 #endif /* SABLE */
 
-#ifndef __ASSEMBLY__
+#if _LANGUAGE_C
 #define KERN_NMI_ADDR(nasid, slice)					\
                     TO_NODE_UNCAC((nasid), IP27_NMI_KREGS_OFFSET + 	\
 				  (IP27_NMI_KREGS_CPU_SIZE * (slice)))
-#endif /* !__ASSEMBLY__ */
+#endif /* _LANGUAGE_C */
 
 #ifdef PROM
 
@@ -272,7 +272,7 @@
 #define KL_UART_DATA	LOCAL_HUB_ADDR(MD_UREG0_1)	/* UART data reg */
 #define KL_I2C_REG	MD_UREG0_0			/* I2C reg */
 
-#ifndef __ASSEMBLY__
+#if !_LANGUAGE_ASSEMBLY
 /* Address 0x400 to 0x1000 ualias points to cache error eframe + misc
  * CACHE_ERR_SP_PTR could either contain an address to the stack, or
  * the stack could start at CACHE_ERR_SP_PTR
@@ -289,7 +289,7 @@
 #define CACHE_ERR_SP		(CACHE_ERR_SP_PTR - 16)
 #define CACHE_ERR_AREA_SIZE	(ARCS_SPB_OFFSET - CACHE_ERR_EFRAME)
 
-#endif	/* !__ASSEMBLY__ */
+#endif	/* !_LANGUAGE_ASSEMBLY */
 
 #define _ARCSPROM
 
@@ -314,7 +314,7 @@
  * is in place.
  */
 
-#ifndef __ASSEMBLY__
+#if _LANGUAGE_C
 
 #define uchar unsigned char
 
@@ -359,7 +359,7 @@
 #define PUT_INSTALL_STATUS(c,s)		c->Revision = s
 #define GET_INSTALL_STATUS(c)		c->Revision
 
-#endif /* !__ASSEMBLY__ */
+#endif /* LANGUAGE_C */
 
 #endif /* _STANDALONE */
 

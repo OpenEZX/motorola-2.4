@@ -8,12 +8,7 @@
 #include <linux/types.h>
 
 /* This struct defines the way the registers are stored on the 
- * stack during a system call.
- *
- * N.B. gdb/strace care about the size and offsets within this
- * structure. If you change things, you may break object compatibility
- * for those applications.
- */
+   stack during a system call. */
 
 struct pt_regs {
 	unsigned long gr[32];	/* PSW is in gr[0] */
@@ -21,8 +16,11 @@ struct pt_regs {
 	unsigned long sr[ 8];
 	unsigned long iasq[2];
 	unsigned long iaoq[2];
+	unsigned long cr24;
+	unsigned long cr25;
+	unsigned long cr26;
 	unsigned long cr27;
-	unsigned long pad0;     /* available for other uses */
+	unsigned long cr30;
 	unsigned long orig_r28;
 	unsigned long ksp;
 	unsigned long kpc;
@@ -31,6 +29,7 @@ struct pt_regs {
 	unsigned long isr;	/* CR20 */
 	unsigned long ior;	/* CR21 */
 	unsigned long ipsw;	/* CR22 */
+	unsigned long cr_pid[4]; /* CR8,9,12,13 */
 };
 
 #define task_regs(task) ((struct pt_regs *) ((char *)(task) + TASK_REGS))

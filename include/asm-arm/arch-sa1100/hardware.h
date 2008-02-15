@@ -171,6 +171,10 @@ extern void set_GPIO_IRQ_edge( int gpio_mask, int edge_mask );
 #include "jornada720.h"
 #endif
 
+#if defined(CONFIG_SA1100_JORNADA56X)
+#include "jornada56x.h"
+#endif
+
 #if defined(CONFIG_SA1100_PLEB)
 #include "pleb.h"
 #endif

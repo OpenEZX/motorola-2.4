@@ -56,9 +56,12 @@ extern void bootmem_init(struct meminfo *);
 extern void reboot_setup(char *str);
 extern int root_mountflags;
 extern int _stext, _text, _etext, _edata, _end;
+#ifdef CONFIG_XIP_ROM
+extern int _endtext, _sdata;
+#endif
+
 
 unsigned int processor_id;
-unsigned int compat;
 unsigned int __machine_arch_type;
 unsigned int system_rev;
 unsigned int system_serial_low;
@@ -105,6 +108,109 @@ static struct resource io_res[] = {
 #define lp1 io_res[1]
 #define lp2 io_res[2]
 
+#ifdef CONFIG_CPU_32
+static const char *cache_types[16] = {
+	"write-through",
+	"write-back",
+	"write-back",
+	"undefined 3",
+	"undefined 4",
+	"undefined 5",
+	"write-back",
+	"write-back",
+	"undefined 8",
+	"undefined 9",
+	"undefined 10",
+	"undefined 11",
+	"undefined 12",
+	"undefined 13",
+	"undefined 14",
+	"undefined 15",
+};
+
+static const char *cache_clean[16] = {
+	"not required",
+	"read-block",
+	"cp15 c7 ops",
+	"undefined 3",
+	"undefined 4",
+	"undefined 5",
+	"cp15 c7 ops",
+	"cp15 c7 ops",
+	"undefined 8",
+	"undefined 9",
+	"undefined 10",
+	"undefined 11",
+	"undefined 12",
+	"undefined 13",
+	"undefined 14",
+	"undefined 15",
+};
+
+static const char *cache_lockdown[16] = {
+	"not supported",
+	"not supported",
+	"not supported",
+	"undefined 3",
+	"undefined 4",
+	"undefined 5",
+	"format A",
+	"format B",
+	"undefined 8",
+	"undefined 9",
+	"undefined 10",
+	"undefined 11",
+	"undefined 12",
+	"undefined 13",
+	"undefined 14",
+	"undefined 15",
+};
+
+#define CACHE_TYPE(x)	(((x) >> 25) & 15)
+#define CACHE_S(x)	((x) & (1 << 24))
+#define CACHE_DSIZE(x)	(((x) >> 12) & 4095)	/* only if S=1 */
+#define CACHE_ISIZE(x)	((x) & 4095)
+
+#define CACHE_SIZE(y)	(((y) >> 6) & 7)
+#define CACHE_ASSOC(y)	(((y) >> 3) & 7)
+#define CACHE_M(y)	((y) & (1 << 2))
+#define CACHE_LINE(y)	((y) & 3)
+
+static inline void dump_cache(const char *prefix, unsigned int cache)
+{
+	unsigned int mult = 2 + (CACHE_M(cache) ? 1 : 0);
+
+	printk("%s size %dK associativity %d line length %d sets %d\n",
+		prefix,
+		mult << (8 + CACHE_SIZE(cache)),
+		(mult << CACHE_ASSOC(cache)) >> 1,
+		8 << CACHE_LINE(cache),
+		1 << (6 + CACHE_SIZE(cache) - CACHE_ASSOC(cache) -
+			CACHE_LINE(cache)));
+}
+
+static inline void dump_cpu_cache_id(void)
+{
+	unsigned int cache_info;
+
+	asm("mrc p15, 0, %0, c0, c0, 1" : "=r" (cache_info));
+
+	if (cache_info == processor_id)
+		return;
+
+	printk("CPU: D %s cache\n", cache_types[CACHE_TYPE(cache_info)]);
+	if (CACHE_S(cache_info)) {
+		dump_cache("CPU: I cache", CACHE_ISIZE(cache_info));
+		dump_cache("CPU: D cache", CACHE_DSIZE(cache_info));
+	} else {
+		dump_cache("CPU: cache", CACHE_ISIZE(cache_info));
+	}
+}
+
+#else
+#define dump_cpu_cache_id() do { } while (0)
+#endif
+
 static void __init setup_processor(void)
 {
 	extern struct proc_info_list __proc_info_begin, __proc_info_end;
@@ -135,7 +241,7 @@ static void __init setup_processor(void)
 	processor = *list->proc;
 #endif
 
-	printk("Processor: %s %s revision %d\n",
+	printk("CPU: %s %s revision %d\n",
 	       proc_info.manufacturer, proc_info.cpu_name,
 	       (int)processor_id & 15);
 
@@ -146,7 +252,7 @@ static void __init setup_processor(void)
 	cpu_proc_init();
 }
 
-static struct machine_desc * __init setup_architecture(unsigned int nr)
+static struct machine_desc * __init setup_machine(unsigned int nr)
 {
 	extern struct machine_desc __arch_info_begin, __arch_info_end;
 	struct machine_desc *list;
@@ -168,12 +274,7 @@ static struct machine_desc * __init setup_architecture(unsigned int nr)
 		while (1);
 	}
 
-	printk("Architecture: %s\n", list->name);
-	if (compat)
-		printk(KERN_WARNING "Using compatibility code "
-			"scheduled for removal in v%d.%d.%d\n",
-			compat >> 24, (compat >> 12) & 0x3ff,
-			compat & 0x3ff);
+	printk("Machine: %s\n", list->name);
 
 	return list;
 }
@@ -263,7 +364,11 @@ request_standard_resources(struct meminfo *mi, struct machine_desc *mdesc)
 
 	kernel_code.start  = __virt_to_phys(init_mm.start_code);
 	kernel_code.end    = __virt_to_phys(init_mm.end_code - 1);
+#ifndef CONFIG_XIP_ROM
 	kernel_data.start  = __virt_to_phys(init_mm.end_code);
+#else
+	kernel_data.start  = __virt_to_phys(init_mm.start_data);
+#endif
 	kernel_data.end    = __virt_to_phys(init_mm.brk - 1);
 
 	for (i = 0; i < mi->nr_banks; i++) {
@@ -339,11 +444,19 @@ static int __init parse_tag_mem32(const struct tag *tag)
 			tag->u.mem.start, tag->u.mem.size / 1024);
 		return -EINVAL;
 	}
+#if 0	
+	printk(" mem banks nr is %d\n", meminfo.nr_banks);
+#endif
 	meminfo.bank[meminfo.nr_banks].start = tag->u.mem.start;
 	meminfo.bank[meminfo.nr_banks].size  = tag->u.mem.size;
 	meminfo.bank[meminfo.nr_banks].node  = PHYS_TO_NID(tag->u.mem.start);
+#if 0	
+	printk("sdram size is 0x%8x, start is 0x%8x\n", meminfo.bank[meminfo.nr_banks].size, meminfo.bank[meminfo.nr_banks].start);
+#endif	
 	meminfo.nr_banks += 1;
-
+#if 0		
+	printk(" mem banks nr is %d\n", meminfo.nr_banks);
+#endif	
 	return 0;
 }
 
@@ -393,6 +506,20 @@ static int __init parse_tag_initrd(const struct tag *tag)
 }
 
 __tagtable(ATAG_INITRD, parse_tag_initrd);
+
+static int __init parse_tag_initrd2(const struct tag *tag)
+{
+	unsigned long start = 0;
+
+	if (tag->u.initrd.size) {
+		start = (unsigned long)phys_to_virt(tag->u.initrd.start);
+
+		setup_initrd(start, tag->u.initrd.size);
+	}
+	return 0;
+}
+
+__tagtable(ATAG_INITRD2, parse_tag_initrd2);
 
 static int __init parse_tag_serialnr(const struct tag *tag)
 {
@@ -461,42 +588,57 @@ void __init setup_arch(char **cmdline_p)
 	ROOT_DEV = MKDEV(0, 255);
 
 	setup_processor();
-	mdesc = setup_architecture(machine_arch_type);
+	mdesc = setup_machine(machine_arch_type);
 	machine_name = mdesc->name;
 
 	if (mdesc->soft_reboot)
 		reboot_setup("s");
 
-	if (mdesc->param_offset)
+	if (mdesc->param_offset) 
 		tags = phys_to_virt(mdesc->param_offset);
-
+#if 0	
+	printk("Tags address is 0x%8x\n", mdesc->param_offset);
+#endif	
 	/*
 	 * Do the machine-specific fixups before we parse the
 	 * parameters or tags.
 	 */
-	if (mdesc->fixup)
+	if (mdesc->fixup) 
 		mdesc->fixup(mdesc, (struct param_struct *)tags,
 			     &from, &meminfo);
-
 	/*
 	 * If we have the old style parameters, convert them to
 	 * a tag list before.
 	 */
-	if (tags && tags->hdr.tag != ATAG_CORE)
+	if (tags && tags->hdr.tag != ATAG_CORE) {
 		convert_to_tag_list((struct param_struct *)tags,
 				    meminfo.nr_banks == 0);
+#if 0
+		printk("have no old params\n");
+#endif
+	}
 
-	if (tags && tags->hdr.tag == ATAG_CORE)
+	if (tags && tags->hdr.tag == ATAG_CORE)	{
+//		meminfo.nr_banks = 0;
 		parse_tags(tags);
+	}
 
 	if (meminfo.nr_banks == 0) {
 		meminfo.nr_banks      = 1;
 		meminfo.bank[0].start = PHYS_OFFSET;
 		meminfo.bank[0].size  = MEM_SIZE;
 	}
-
+#if 1
+	printk("Sdram size is 0x%8x, start is 0x%8x\n", meminfo.bank[meminfo.nr_banks-1].size, meminfo.bank[meminfo.nr_banks-1].start);
+	printk("Memory banks number is %d\n", meminfo.nr_banks);
+#endif
 	init_mm.start_code = (unsigned long) &_text;
+#ifndef CONFIG_XIP_ROM
 	init_mm.end_code   = (unsigned long) &_etext;
+#else
+	init_mm.end_code   = (unsigned long) &_endtext;
+	init_mm.start_data   = (unsigned long) &_sdata;
+#endif
 	init_mm.end_data   = (unsigned long) &_edata;
 	init_mm.brk	   = (unsigned long) &_end;
 
@@ -533,6 +675,41 @@ static const char *hwcap_str[] = {
 	NULL
 };
 
+static const char *proc_arch[16] = {
+	"undefined 0",
+	"4",
+	"4T",
+	"5",
+	"5T",
+	"5TE",
+	"undefined 6",
+	"undefined 7",
+	"undefined 8",
+	"undefined 9",
+	"undefined 10",
+	"undefined 11",
+	"undefined 12",
+	"undefined 13",
+	"undefined 14",
+	"undefined 15"
+};
+
+static void
+c_show_cache(struct seq_file *m, const char *type, unsigned int cache)
+{
+	unsigned int mult = 2 + (CACHE_M(cache) ? 1 : 0);
+
+	seq_printf(m, "%s size\t\t: %d\n"
+		      "%s assoc\t\t: %d\n"
+		      "%s line length\t: %d\n"
+		      "%s sets\t\t: %d\n",
+		type, mult << (8 + CACHE_SIZE(cache)),
+		type, (mult << CACHE_ASSOC(cache)) >> 1,
+		type, 8 << CACHE_LINE(cache),
+		type, 1 << (6 + CACHE_SIZE(cache) - CACHE_ASSOC(cache) -
+			    CACHE_LINE(cache)));
+}
+
 static int c_show(struct seq_file *m, void *v)
 {
 	int i;
@@ -552,7 +729,60 @@ static int c_show(struct seq_file *m, void *v)
 		if (elf_hwcap & (1 << i))
 			seq_printf(m, "%s ", hwcap_str[i]);
 
-	seq_puts(m, "\n\n");
+	seq_puts(m, "\n");
+
+	if ((processor_id & 0x0000f000) == 0x00000000) {
+		/* pre-ARM7 */
+		seq_printf(m, "CPU part\t\t: %07x\n", processor_id >> 4);
+	} else if ((processor_id & 0x0000f000) == 0x00007000) {
+		/* ARM7 */
+		seq_printf(m, "CPU implementor\t: 0x%02x\n"
+			      "CPU architecture: %s\n"
+			      "CPU variant\t: 0x%02x\n"
+			      "CPU part\t: 0x%03x\n",
+			   processor_id >> 24,
+			   processor_id & (1 << 23) ? "4T" : "3",
+			   (processor_id >> 16) & 127,
+			   (processor_id >> 4) & 0xfff);
+	} else {
+		/* post-ARM7 */
+		seq_printf(m, "CPU implementor\t: 0x%02x\n"
+			      "CPU architecture: %s\n"
+			      "CPU variant\t: 0x%x\n"
+			      "CPU part\t: 0x%03x\n",
+			   processor_id >> 24,
+			   proc_arch[(processor_id >> 16) & 15],
+			   (processor_id >> 20) & 15,
+			   (processor_id >> 4) & 0xfff);
+	}
+	seq_printf(m, "CPU revision\t: %d\n", processor_id & 15);
+
+#ifdef CONFIG_CPU_32
+	{
+		unsigned int cache_info;
+
+		asm("mrc p15, 0, %0, c0, c0, 1" : "=r" (cache_info));
+		if (cache_info != processor_id) {
+			seq_printf(m, "Cache type\t: %s\n"
+				      "Cache clean\t: %s\n"
+				      "Cache lockdown\t: %s\n"
+				      "Cache unified\t: %s\n",
+				   cache_types[CACHE_TYPE(cache_info)],
+				   cache_clean[CACHE_TYPE(cache_info)],
+				   cache_lockdown[CACHE_TYPE(cache_info)],
+				   CACHE_S(cache_info) ? "harvard" : "unified");
+
+			if (CACHE_S(cache_info)) {
+				c_show_cache(m, "I", CACHE_ISIZE(cache_info));
+				c_show_cache(m, "D", CACHE_DSIZE(cache_info));
+			} else {
+				c_show_cache(m, "Cache", CACHE_ISIZE(cache_info));
+			}
+		}
+	}
+#endif
+
+	seq_puts(m, "\n");
 
 	seq_printf(m, "Hardware\t: %s\n", machine_name);
 	seq_printf(m, "Revision\t: %04x\n", system_rev);
@@ -583,3 +813,22 @@ struct seq_operations cpuinfo_op = {
 	stop:	c_stop,
 	show:	c_show
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

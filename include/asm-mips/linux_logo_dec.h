@@ -8,9 +8,10 @@
  * Copyright (C) 2001 Jan-Benedict Glaw <jbglaw@lug-owl.de>
  *
  */
-
+ 
 #include <linux/init.h>
 #include <linux/version.h>
+#include <linux/config.h>
 
 #define linux_logo_banner "Linux/MIPSel version " UTS_RELEASE
 #define LINUX_LOGO_COLORS 183

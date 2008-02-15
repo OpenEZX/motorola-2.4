@@ -4,7 +4,8 @@
  * License.  See the file "COPYING" in the main directory of this archive
  * for more details.
  *
- * Copyright (C) 1992 - 1997, 2000-2001 Silicon Graphics, Inc. All rights reserved.
+ * Copyright (C) 1992 - 1997, 2000 Silicon Graphics, Inc.
+ * Copyright (C) 2000 by Colin Ngam
  */
 #ifndef _ASM_SN_PCI_PCI_DEFS_H
 #define _ASM_SN_PCI_PCI_DEFS_H

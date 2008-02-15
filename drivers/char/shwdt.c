@@ -3,7 +3,7 @@
  *
  * Watchdog driver for integrated watchdog in the SuperH processors.
  *
- * Copyright (C) 2001, 2002 Paul Mundt <lethal@0xd6.org>
+ * Copyright (C) 2001, 2002 Paul Mundt <lethal@chaoticdreams.org>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -12,9 +12,6 @@
  *
  * 14-Dec-2001 Matt Domsch <Matt_Domsch@dell.com>
  *     Added nowayout module option to override CONFIG_WATCHDOG_NOWAYOUT
- * 19-Apr-2002 Rob Radez <rob@osinvestor.com>
- *     Added expect close support, made emulated timeout runtime changeable
- *     general cleanups, add some ioctls
  */
 #include <linux/config.h>
 #include <linux/module.h>
@@ -26,6 +23,7 @@
 #include <linux/reboot.h>
 #include <linux/notifier.h>
 #include <linux/ioport.h>
+#include <linux/fs.h>
 
 #include <asm/io.h>
 #include <asm/uaccess.h>
@@ -40,7 +38,7 @@
   #define WTCNT		0xffffff84
   #define WTCSR		0xffffff86
 #else
-  #error "Can't use SuperH watchdog on this platform"
+  #error "Can't use SuperH watchdog on this processor."
 #endif
 
 #define WTCNT_HIGH	0x5a00
@@ -90,14 +88,12 @@ static int clock_division_ratio = WTCSR_CKS_4096;
 
 #define msecs_to_jiffies(msecs)	(jiffies + ((HZ * msecs + 999) / 1000))
 #define next_ping_period(cks)	msecs_to_jiffies(cks - 4)
+#define user_ping_period(cks)	(next_ping_period(cks) * 10)
 
-static unsigned long sh_is_open;
+static unsigned long sh_is_open = 0;
 static struct watchdog_info sh_wdt_info;
-static char shwdt_expect_close;
-
 static struct timer_list timer;
 static unsigned long next_heartbeat;
-static int sh_heartbeat = 30;
 
 #ifdef CONFIG_WATCHDOG_NOWAYOUT
 static int nowayout = 1;
@@ -139,7 +135,7 @@ static void sh_wdt_write_csr(__u8 val)
 static void sh_wdt_start(void)
 {
 	timer.expires = next_ping_period(clock_division_ratio);
-	next_heartbeat = jiffies + (sh_heartbeat * HZ);
+	next_heartbeat = user_ping_period(clock_division_ratio);
 	add_timer(&timer);
 
 	sh_wdt_write_csr(WTCSR_WT | WTCSR_CKS_4096);
@@ -187,10 +183,21 @@ static void sh_wdt_ping(unsigned long data)
  */
 static int sh_wdt_open(struct inode *inode, struct file *file)
 {
-	if (test_and_set_bit(0, &sh_is_open))
-		return -EBUSY;
+	switch (minor(inode->i_rdev)) {
+		case WATCHDOG_MINOR:
+			if (test_and_set_bit(0, &sh_is_open))
+				return -EBUSY;
 
-	sh_wdt_start();
+			if (nowayout) {
+				MOD_INC_USE_COUNT;
+			}
+
+			sh_wdt_start();
+
+			break;
+		default:
+			return -ENODEV;
+	}
 
 	return 0;
 }
@@ -205,14 +212,12 @@ static int sh_wdt_open(struct inode *inode, struct file *file)
  */
 static int sh_wdt_close(struct inode *inode, struct file *file)
 {
-	if (!nowayout && shwdt_expect_close == 42) {
-		sh_wdt_stop();
-	} else {
-		printk(KERN_CRIT "shwdt: Unexpected close, not stopping watchdog!\n");
-		next_heartbeat = jiffies + (sh_heartbeat * HZ);
+	if (minor(inode->i_rdev) == WATCHDOG_MINOR) {
+		if (!nowayout) {
+			sh_wdt_stop();
+		}
+		clear_bit(0, &sh_is_open);
 	}
-	clear_bit(0, &sh_is_open);
-	shwdt_expect_close = 0;
 	
 	return 0;
 }
@@ -235,21 +240,11 @@ static ssize_t sh_wdt_write(struct file *file, const char *buf,
 		return -ESPIPE;
 
 	if (count) {
-		size_t i;
-
-		shwdt_expect_close = 0;
-
-		for (i = 0; i != count; i++) {
-			char c;
-			if (get_user(c, buf + i))
-				return -EFAULT;
-			if (c == 'V')
-				shwdt_expect_close = 42;
-		}
-		next_heartbeat = jiffies + (sh_heartbeat * HZ);
+		next_heartbeat = user_ping_period(clock_division_ratio);
+		return 1;
 	}
 
-	return count;
+	return 0;
 }
 
 /**
@@ -266,8 +261,6 @@ static ssize_t sh_wdt_write(struct file *file, const char *buf,
 static int sh_wdt_ioctl(struct inode *inode, struct file *file,
 			unsigned int cmd, unsigned long arg)
 {
-	int new_timeout;
-
 	switch (cmd) {
 		case WDIOC_GETSUPPORT:
 			if (copy_to_user((struct watchdog_info *)arg,
@@ -275,44 +268,20 @@ static int sh_wdt_ioctl(struct inode *inode, struct file *file,
 					  sizeof(sh_wdt_info))) {
 				return -EFAULT;
 			}
-
+			
 			break;
 		case WDIOC_GETSTATUS:
-		case WDIOC_GETBOOTSTATUS:
-			return put_user(0, (int *)arg);
-		case WDIOC_KEEPALIVE:
-			next_heartbeat = jiffies + (sh_heartbeat * HZ);
+			if (copy_to_user((int *)arg,
+					 &sh_is_open,
+					 sizeof(int))) {
+				return -EFAULT;
+			}
 
 			break;
-		case WDIOC_SETTIMEOUT:
-			if (get_user(new_timeout, (int *)arg))
-				return -EFAULT;
-			if (new_timeout < 1 || new_timeout > 3600) /* arbitrary upper limit */
-				return -EINVAL;
-			sh_heartbeat = new_timeout;
-			next_heartbeat = jiffies + (sh_heartbeat * HZ);
-			/* Fall */
-		case WDIOC_GETTIMEOUT:
-			return put_user(sh_heartbeat, (int *)arg);
-		case WDIOC_SETOPTIONS:
-		{
-			int options, retval = -EINVAL;
-
-			if (get_user(options, (int *)arg))
-				return -EFAULT;
-
-			if (options & WDIOS_DISABLECARD) {
-				sh_wdt_stop();
-				retval = 0;
-			}
-
-			if (options & WDIOS_ENABLECARD) {
-				sh_wdt_start();
-				retval = 0;
-			}
-
-			return retval;
-		}
+		case WDIOC_KEEPALIVE:
+			next_heartbeat = user_ping_period(clock_division_ratio);
+			
+			break;
 		default:
 			return -ENOTTY;
 	}
@@ -350,9 +319,9 @@ static struct file_operations sh_wdt_fops = {
 };
 
 static struct watchdog_info sh_wdt_info = {
-	options:		WDIOF_KEEPALIVEPING | WDIOF_SETTIMEOUT | WDIOF_MAGICCLOSE,
-	firmware_version:	0,
-	identity:		"SH WDT",
+	WDIOF_KEEPALIVEPING,
+	1,
+	"SH WDT",
 };
 
 static struct notifier_block sh_wdt_notifier = {
@@ -362,9 +331,9 @@ static struct notifier_block sh_wdt_notifier = {
 };
 
 static struct miscdevice sh_wdt_miscdev = {
-	minor:		WATCHDOG_MINOR,
-	name:		"watchdog",
-	fops:		&sh_wdt_fops,
+	WATCHDOG_MINOR,
+	"watchdog",
+	&sh_wdt_fops,
 };
 
 /**
@@ -424,14 +393,13 @@ static void __exit sh_wdt_exit(void)
 
 EXPORT_NO_SYMBOLS;
 
-MODULE_PARM(nowayout,"i");
-MODULE_PARM_DESC(nowayout, "Watchdog cannot be stopped once started (default=CONFIG_WATCHDOG_NOWAYOUT)");
-MODULE_PARM(clock_division_ratio, "i");
-MODULE_PARM_DESC(clock_division_ratio, "Clock division ratio. Valid ranges are from 0x5 (1.31ms) to 0x7 (5.25ms). Defaults to 0x7.");
-
-MODULE_AUTHOR("Paul Mundt <lethal@0xd6.org>");
+MODULE_AUTHOR("Paul Mundt <lethal@chaoticdreams.org>");
 MODULE_DESCRIPTION("SuperH watchdog driver");
 MODULE_LICENSE("GPL");
+MODULE_PARM(clock_division_ratio, "i");
+MODULE_PARM_DESC(clock_division_ratio, "Clock division ratio. Valid ranges are from 0x5 (1.31ms) to 0x7 (5.25ms). Defaults to 0x7.");
+MODULE_PARM(nowayout,"i");
+MODULE_PARM_DESC(nowayout, "Watchdog cannot be stopped once started (default=CONFIG_WATCHDOG_NOWAYOUT)");
 
 module_init(sh_wdt_init);
 module_exit(sh_wdt_exit);

@@ -72,12 +72,12 @@ inline void lmc_trace(struct net_device *dev, char *msg){
 
     if(in_interrupt()){
         printk("%s: * %s\n", dev->name, msg);
-//        while(time_before(jiffies, j+10))
+//        while(jiffies < j+10)
 //            ;
     }
     else {
         printk("%s: %s\n", dev->name, msg);
-        while(time_before(jiffies, j))
+        while(jiffies < j)
             schedule();
     }
 #endif

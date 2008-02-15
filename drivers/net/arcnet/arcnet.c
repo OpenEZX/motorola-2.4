@@ -163,7 +163,6 @@ void __init arcnet_init(void)
 
 static int debug = ARCNET_DEBUG;
 MODULE_PARM(debug, "i");
-MODULE_LICENSE("GPL");
 
 int __init init_module(void)
 {
@@ -186,7 +185,7 @@ void cleanup_module(void)
 void arcnet_dump_skb(struct net_device *dev, struct sk_buff *skb, char *desc)
 {
 	int i;
-	unsigned long flags;
+	long flags;
 
 	save_flags(flags);
 	cli();
@@ -212,7 +211,7 @@ void arcnet_dump_packet(struct net_device *dev, int bufnum, char *desc)
 {
 	struct arcnet_local *lp = (struct arcnet_local *) dev->priv;
 	int i, length;
-	unsigned long flags;
+	long flags;
 	static uint8_t buf[512];
 
 	save_flags(flags);

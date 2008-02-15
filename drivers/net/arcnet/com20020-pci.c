@@ -57,7 +57,6 @@ MODULE_PARM(timeout, "i");
 MODULE_PARM(backplane, "i");
 MODULE_PARM(clockp, "i");
 MODULE_PARM(clockm, "i");
-MODULE_LICENSE("GPL");
 
 static void com20020pci_open_close(struct net_device *dev, bool open)
 {

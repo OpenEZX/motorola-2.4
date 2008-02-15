@@ -66,7 +66,7 @@
 #include <linux/sched.h>
 #include <linux/delay.h>
 #include <linux/sound.h>
-#include <linux/slab.h>
+#include <linux/malloc.h>
 #include <linux/soundcard.h>
 #include <linux/ac97_codec.h>
 #include <linux/pci.h>
@@ -199,6 +199,9 @@ static const char invalid_magic[] =
                 return -ENXIO;                     \
         }                                          \
 })
+
+#define list_for_each(pos, head) \
+        for (pos = (head)->next; pos != (head); pos = pos->next)
 
 struct list_head cs4297a_devs = { &cs4297a_devs, &cs4297a_devs };
 

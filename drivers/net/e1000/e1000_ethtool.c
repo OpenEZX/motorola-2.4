@@ -1,28 +1,73 @@
 /*******************************************************************************
 
+  This software program is available to you under a choice of one of two
+  licenses. You may choose to be licensed under either the GNU General Public
+  License 2.0, June 1991, available at http://www.fsf.org/copyleft/gpl.html,
+  or the Intel BSD + Patent License, the text of which follows:
   
-  Copyright(c) 1999 - 2002 Intel Corporation. All rights reserved.
+  Recipient has requested a license and Intel Corporation ("Intel") is willing
+  to grant a license for the software entitled Linux Base Driver for the
+  Intel(R) PRO/1000 Family of Adapters (e1000) (the "Software") being provided
+  by Intel Corporation. The following definitions apply to this license:
   
-  This program is free software; you can redistribute it and/or modify it 
-  under the terms of the GNU General Public License as published by the Free 
-  Software Foundation; either version 2 of the License, or (at your option) 
-  any later version.
+  "Licensed Patents" means patent claims licensable by Intel Corporation which
+  are necessarily infringed by the use of sale of the Software alone or when
+  combined with the operating system referred to below.
   
-  This program is distributed in the hope that it will be useful, but WITHOUT 
-  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or 
-  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for 
-  more details.
+  "Recipient" means the party to whom Intel delivers this Software.
   
-  You should have received a copy of the GNU General Public License along with
-  this program; if not, write to the Free Software Foundation, Inc., 59 
-  Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+  "Licensee" means Recipient and those third parties that receive a license to
+  any operating system available under the GNU General Public License 2.0 or
+  later.
   
-  The full GNU General Public License is included in this distribution in the
-  file called LICENSE.
+  Copyright (c) 1999 - 2002 Intel Corporation.
+  All rights reserved.
   
-  Contact Information:
-  Linux NICS <linux.nics@intel.com>
-  Intel Corporation, 5200 N.E. Elam Young Parkway, Hillsboro, OR 97124-6497
+  The license is provided to Recipient and Recipient's Licensees under the
+  following terms.
+  
+  Redistribution and use in source and binary forms of the Software, with or
+  without modification, are permitted provided that the following conditions
+  are met:
+  
+  Redistributions of source code of the Software may retain the above
+  copyright notice, this list of conditions and the following disclaimer.
+  
+  Redistributions in binary form of the Software may reproduce the above
+  copyright notice, this list of conditions and the following disclaimer in
+  the documentation and/or materials provided with the distribution.
+  
+  Neither the name of Intel Corporation nor the names of its contributors
+  shall be used to endorse or promote products derived from this Software
+  without specific prior written permission.
+  
+  Intel hereby grants Recipient and Licensees a non-exclusive, worldwide,
+  royalty-free patent license under Licensed Patents to make, use, sell, offer
+  to sell, import and otherwise transfer the Software, if any, in source code
+  and object code form. This license shall include changes to the Software
+  that are error corrections or other minor changes to the Software that do
+  not add functionality or features when the Software is incorporated in any
+  version of an operating system that has been distributed under the GNU
+  General Public License 2.0 or later. This patent license shall apply to the
+  combination of the Software and any operating system licensed under the GNU
+  General Public License 2.0 or later if, at the time Intel provides the
+  Software to Recipient, such addition of the Software to the then publicly
+  available versions of such operating systems available under the GNU General
+  Public License 2.0 or later (whether in gold, beta or alpha form) causes
+  such combination to be covered by the Licensed Patents. The patent license
+  shall not apply to any other combinations which include the Software. NO
+  hardware per se is licensed hereunder.
+  
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MECHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL INTEL OR IT CONTRIBUTORS BE LIABLE FOR ANY
+  DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+  (INCLUDING, BUT NOT LIMITED, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+  ANY LOSS OF USE; DATA, OR PROFITS; OR BUSINESS INTERUPTION) HOWEVER CAUSED
+  AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY OR
+  TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 *******************************************************************************/
 
@@ -37,7 +82,6 @@ extern char e1000_driver_version[];
 
 extern int e1000_up(struct e1000_adapter *adapter);
 extern void e1000_down(struct e1000_adapter *adapter);
-extern void e1000_reset(struct e1000_adapter *adapter);
 
 static void
 e1000_ethtool_gset(struct e1000_adapter *adapter, struct ethtool_cmd *ecmd)
@@ -117,8 +161,7 @@ e1000_ethtool_sset(struct e1000_adapter *adapter, struct ethtool_cmd *ecmd)
 
 	if(ecmd->autoneg == AUTONEG_ENABLE) {
 		hw->autoneg = 1;
-		hw->autoneg_advertised = 0x002F;
-		ecmd->advertising = 0x002F;
+		hw->autoneg_advertised = (ecmd->advertising & 0x002F);
 	} else {
 		hw->autoneg = 0;
 		switch(ecmd->speed + ecmd->duplex) {
@@ -146,11 +189,8 @@ e1000_ethtool_sset(struct e1000_adapter *adapter, struct ethtool_cmd *ecmd)
 
 	/* reset the link */
 
-	if(netif_running(adapter->netdev)) {
-		e1000_down(adapter);
-		e1000_up(adapter);
-	} else
-		e1000_reset(adapter);
+	e1000_down(adapter);
+	e1000_up(adapter);
 
 	return 0;
 }
@@ -171,7 +211,7 @@ e1000_ethtool_gdrvinfo(struct e1000_adapter *adapter,
 {
 	strncpy(drvinfo->driver,  e1000_driver_name, 32);
 	strncpy(drvinfo->version, e1000_driver_version, 32);
-	strncpy(drvinfo->fw_version, "N/A", 32);
+	strncpy(drvinfo->fw_version, "", 32);
 	strncpy(drvinfo->bus_info, adapter->pdev->slot_name, 32);
 #define E1000_REGS_LEN 32
 	drvinfo->regdump_len  = E1000_REGS_LEN * sizeof(uint32_t);
@@ -229,7 +269,6 @@ e1000_ethtool_geeprom(struct e1000_adapter *adapter,
 
 	for(i = 0; i <= (last_word - first_word); i++)
 		e1000_read_eeprom(hw, first_word + i, &eeprom_buff[i]);
-
 	return 0;
 }
 
@@ -242,11 +281,10 @@ e1000_ethtool_seeprom(struct e1000_adapter *adapter,
 	int i, max_len, first_word, last_word;
 	void *ptr;
 
-	if(eeprom->len == 0)
-		return -EOPNOTSUPP;
-
 	if(eeprom->magic != (hw->vendor_id | (hw->device_id << 16)))
 		return -EFAULT;
+
+	if(eeprom->len == 0) return 0;
 
 	max_len = e1000_eeprom_size(hw);
 
@@ -292,6 +330,7 @@ e1000_ethtool_gwol(struct e1000_adapter *adapter, struct ethtool_wolinfo *wol)
 	case E1000_DEV_ID_82543GC_FIBER:
 	case E1000_DEV_ID_82543GC_COPPER:
 	case E1000_DEV_ID_82544EI_FIBER:
+	default:
 		wol->supported = 0;
 		wol->wolopts   = 0;
 		return;
@@ -305,7 +344,14 @@ e1000_ethtool_gwol(struct e1000_adapter *adapter, struct ethtool_wolinfo *wol)
 		}
 		/* Fall Through */
 
-	default:
+	case E1000_DEV_ID_82544EI_COPPER:
+	case E1000_DEV_ID_82544GC_COPPER:
+	case E1000_DEV_ID_82544GC_LOM:
+	case E1000_DEV_ID_82540EM:
+	case E1000_DEV_ID_82540EM_LOM:
+	case E1000_DEV_ID_82545EM_COPPER:
+	case E1000_DEV_ID_82545EM_FIBER:
+	case E1000_DEV_ID_82546EB_COPPER:
 		wol->supported = WAKE_PHY | WAKE_UCAST | 
 				 WAKE_MCAST | WAKE_BCAST | WAKE_MAGIC;
 		
@@ -334,6 +380,7 @@ e1000_ethtool_swol(struct e1000_adapter *adapter, struct ethtool_wolinfo *wol)
 	case E1000_DEV_ID_82543GC_FIBER:
 	case E1000_DEV_ID_82543GC_COPPER:
 	case E1000_DEV_ID_82544EI_FIBER:
+	default:
 		return wol->wolopts ? -EOPNOTSUPP : 0;
 
 	case E1000_DEV_ID_82546EB_FIBER:
@@ -342,7 +389,14 @@ e1000_ethtool_swol(struct e1000_adapter *adapter, struct ethtool_wolinfo *wol)
 			return wol->wolopts ? -EOPNOTSUPP : 0;
 		/* Fall Through */
 
-	default:
+	case E1000_DEV_ID_82544EI_COPPER:
+	case E1000_DEV_ID_82544GC_COPPER:
+	case E1000_DEV_ID_82544GC_LOM:
+	case E1000_DEV_ID_82540EM:
+	case E1000_DEV_ID_82540EM_LOM:
+	case E1000_DEV_ID_82545EM_COPPER:
+	case E1000_DEV_ID_82545EM_FIBER:
+	case E1000_DEV_ID_82546EB_COPPER:
 		if(wol->wolopts & (WAKE_ARP | WAKE_MAGICSECURE))
 			return -EOPNOTSUPP;
 
@@ -461,17 +515,9 @@ e1000_ethtool_ioctl(struct net_device *netdev, struct ifreq *ifr)
 	case ETHTOOL_NWAY_RST: {
 		if(!capable(CAP_NET_ADMIN))
 			return -EPERM;
-		if(netif_running(netdev)) {
-			e1000_down(adapter);
-			e1000_up(adapter);
-		}
+		e1000_down(adapter);
+		e1000_up(adapter);
 		return 0;
-	}
-	case ETHTOOL_PHYS_ID: {
-		struct ethtool_value id;
-		if(copy_from_user(&id, addr, sizeof(id)))
-			return -EFAULT;
-		return e1000_ethtool_led_blink(adapter, &id);
 	}
 	case ETHTOOL_GLINK: {
 		struct ethtool_value link = {ETHTOOL_GLINK};
@@ -504,8 +550,7 @@ e1000_ethtool_ioctl(struct net_device *netdev, struct ifreq *ifr)
 		if(copy_from_user(&eeprom, addr, sizeof(eeprom)))
 			return -EFAULT;
 
-		if((err = e1000_ethtool_geeprom(adapter, 
-			&eeprom, eeprom_buff)))
+		if((err = e1000_ethtool_geeprom(adapter, &eeprom, eeprom_buff))<0)
 			return err;
 
 		if(copy_to_user(addr, &eeprom, sizeof(eeprom)))

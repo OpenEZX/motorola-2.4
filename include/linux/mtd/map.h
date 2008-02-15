@@ -37,7 +37,8 @@ struct map_info {
 	 * It doesn't.
 	 * I won't.
 	 * dwmw2 */
-	
+	__u64 (*read64)(struct map_info *, unsigned long);
+	void (*write64)(struct map_info *, __u64, unsigned long);
 	void (*copy_from)(struct map_info *, void *, unsigned long, ssize_t);
 	void (*write8)(struct map_info *, __u8, unsigned long);
 	void (*write16)(struct map_info *, __u16, unsigned long);

@@ -94,8 +94,7 @@ sbus_is_slave(struct sbus_dev *dev)
         for((device) = (bus)->devices; (device); (device)=(device)->next)
         
 #define for_all_sbusdev(device, bus) \
-	for ((bus) = sbus_root; (bus); (bus) = (bus)->next) \
-		for ((device) = (bus)->devices; (device); (device) = (device)->next)
+	for((bus) = sbus_root, ((device) = (bus) ? (bus)->devices : 0); (bus); (device)=((device)->next ? (device)->next : ((bus) = (bus)->next, (bus) ? (bus)->devices : 0)))
 
 /* Driver DVMA interfaces. */
 #define sbus_can_dma_64bit(sdev)	(0) /* actually, sparc_cpu_model==sun4d */
@@ -112,13 +111,13 @@ extern void sbus_free_consistent(struct sbus_dev *, long, void *, u32);
 #define	SBUS_DMA_NONE		3
 
 /* All the rest use streaming mode mappings. */
-extern dma_addr_t sbus_map_single(struct sbus_dev *, void *, size_t, int);
-extern void sbus_unmap_single(struct sbus_dev *, dma_addr_t, size_t, int);
+extern u32 sbus_map_single(struct sbus_dev *, void *, long, int);
+extern void sbus_unmap_single(struct sbus_dev *, u32, long, int);
 extern int sbus_map_sg(struct sbus_dev *, struct scatterlist *, int, int);
 extern void sbus_unmap_sg(struct sbus_dev *, struct scatterlist *, int, int);
 
 /* Finally, allow explicit synchronization of streamable mappings. */
-extern void sbus_dma_sync_single(struct sbus_dev *, dma_addr_t, size_t, int);
+extern void sbus_dma_sync_single(struct sbus_dev *, u32, long, int);
 extern void sbus_dma_sync_sg(struct sbus_dev *, struct scatterlist *, int, int);
 
 #endif /* !(_SPARC_SBUS_H) */

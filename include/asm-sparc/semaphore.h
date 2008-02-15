@@ -213,11 +213,6 @@ static inline void up(struct semaphore * sem)
 	: "g3", "g4", "g7", "memory", "cc");
 }	
 
-static inline int sem_getcount(struct semaphore *sem)
-{
-	return atomic_read(&sem->count);
-}
-
 #endif /* __KERNEL__ */
 
 #endif /* !(_SPARC_SEMAPHORE_H) */

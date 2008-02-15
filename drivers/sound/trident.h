@@ -333,7 +333,7 @@ enum miscint_bits {
 #define VALIDATE_STATE(a) VALIDATE_MAGIC(a,TRIDENT_STATE_MAGIC)
 #define VALIDATE_CARD(a) VALIDATE_MAGIC(a,TRIDENT_CARD_MAGIC)
 
-static inline unsigned ld2(unsigned int x)
+extern __inline__ unsigned ld2(unsigned int x)
 {
 	unsigned r = 0;
 	
@@ -358,16 +358,5 @@ static inline unsigned ld2(unsigned int x)
 	return r;
 }
 
-#ifdef DEBUG
-
-#define TRDBG(msg, args...) do {          \
-        printk(KERN_DEBUG msg , ##args ); \
-} while (0)
-
-#else /* !defined(DEBUG) */ 
-
-#define TRDBG(msg, args...) do { } while (0)
-
-#endif /* DEBUG */ 
-
 #endif /* __TRID4DWAVE_H */
+

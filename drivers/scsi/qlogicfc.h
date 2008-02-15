@@ -95,8 +95,7 @@ int isp2x00_biosparam(Disk *, kdev_t, int[]);
 	cmd_per_lun:		QLOGICFC_CMD_PER_LUN, 			   \
         present:                0,                                         \
         unchecked_isa_dma:      0,                                         \
-        use_clustering:         ENABLE_CLUSTERING,			   \
-	highmem_io:		1					   \
+        use_clustering:         ENABLE_CLUSTERING 			   \
 }
 
 #endif /* _QLOGICFC_H */

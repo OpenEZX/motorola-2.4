@@ -35,8 +35,6 @@
  *                                 are numbered!
  *              Steve Whitehouse : Added return-to-sender functions. Added
  *                                 backlog congestion level return codes.
- *		Steve Whitehouse : Fixed bug where routes were set up with
- *                                 no ref count on net devices.
  *                                 
  */
 
@@ -803,8 +801,6 @@ got_route:
 
 	rt->u.dst.neighbour = neigh;
 	rt->u.dst.dev = neigh ? neigh->dev : NULL;
-	if (rt->u.dst.dev)
-		dev_hold(rt->u.dst.dev);
 	rt->u.dst.lastuse = jiffies;
 	rt->u.dst.output = dn_output;
 	rt->u.dst.input  = dn_rt_bug;
@@ -982,8 +978,6 @@ add_entry:
 
 	rt->u.dst.neighbour = neigh;
 	rt->u.dst.dev = neigh ? neigh->dev : NULL;
-	if (rt->u.dst.dev)
-		dev_hold(rt->u.dst.dev);
 	rt->u.dst.lastuse = jiffies;
 	rt->u.dst.output = dnrt_output;
 	rt->u.dst.input = dnrt_input;

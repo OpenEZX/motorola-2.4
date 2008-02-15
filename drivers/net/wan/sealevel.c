@@ -219,11 +219,12 @@ static struct slvl_board *slvl_init(int iobase, int irq, int txdma, int rxdma, i
 	 *	Get the needed I/O space
 	 */
 	 
-	if(!request_region(iobase, 8, "Sealevel 4021"))
+	if(check_region(iobase, 8))
 	{	
 		printk(KERN_WARNING "sealevel: I/O 0x%X already in use.\n", iobase);
 		return NULL;
 	}
+	request_region(iobase, 8, "Sealevel 4021");
 	
 	b=(struct slvl_board *)kmalloc(sizeof(struct slvl_board), GFP_KERNEL);
 	if(!b)

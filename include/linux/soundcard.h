@@ -39,6 +39,11 @@
 /* In Linux we need to be prepared for cross compiling */
 #include <linux/ioctl.h>
 
+#define MYPHONE_MAJOR           210
+#define MYPHONE_IOCTL_BASE      0xbd
+#define BLUETOOTH_AUDIO_ON      _IO (MYPHONE_IOCTL_BASE,1)
+#define BLUETOOTH_AUDIO_OFF     _IO (MYPHONE_IOCTL_BASE,2)
+
 /*
  *	Supported card ID numbers (Should be somewhere else?)
  */
@@ -777,7 +782,6 @@ typedef struct copr_msg {
  * Use SOUND_MIXER_PRIVATE# macros in future.
  */
 #define SOUND_MIXER_ENHANCE	SOUND_MIXER_NONE
-#define SOUND_MIXER_MUTE	SOUND_MIXER_NONE
 #define SOUND_MIXER_LOUD	SOUND_MIXER_NONE
 
 
@@ -801,6 +805,15 @@ typedef struct copr_msg {
 #define SOUND_MIXER_STEREODEVS	0xfb	/* Mixer channels supporting stereo */
 #define SOUND_MIXER_OUTSRC	0xfa	/* Arg contains a bit for each input source to output */
 #define SOUND_MIXER_OUTMASK	0xf9	/* Arg contains a bit for each supported input source to output */
+/* add by zq */
+#define SOUND_MIXER_MUTE		0xe8
+#define SOUND_MIXER_INPUTMUTE		0xe9
+#define SOUND_MIXER_LOOPBACK		0xea
+#define SOUND_MIXER_AUDOHPF		0xeb
+#define SOUND_MIXER_AUDIHPF		0xec
+#define SOUND_MIXER_HEADSET_STATUS	0xed
+#define SOUND_MIXER_INPATH		0xee	
+#define SOUND_MIXER_OUTPATH		0xef	
 
 /*	Device mask bits	*/
 
@@ -888,8 +901,22 @@ typedef struct copr_msg {
 #define SOUND_MIXER_WRITE_MUTE		MIXER_WRITE(SOUND_MIXER_MUTE)
 #define SOUND_MIXER_WRITE_ENHANCE	MIXER_WRITE(SOUND_MIXER_ENHANCE)
 #define SOUND_MIXER_WRITE_LOUD		MIXER_WRITE(SOUND_MIXER_LOUD)
-
+/* add by zq */
 #define SOUND_MIXER_WRITE_RECSRC	MIXER_WRITE(SOUND_MIXER_RECSRC)
+#define SOUND_MIXER_READ_OUTSRC		MIXER_READ(SOUND_MIXER_OUTSRC)
+#define SOUND_MIXER_WRITE_OUTSRC 	MIXER_WRITE(SOUND_MIXER_OUTSRC)
+
+#define SOUND_MIXER_READ_INPATH		MIXER_READ(SOUND_MIXER_INPATH)
+#define SOUND_MIXER_WRITE_INPATH 	MIXER_WRITE(SOUND_MIXER_INPATH)
+#define SOUND_MIXER_READ_OUTPATH	MIXER_READ(SOUND_MIXER_OUTPATH)
+#define SOUND_MIXER_WRITE_OUTPATH 	MIXER_WRITE(SOUND_MIXER_OUTPATH)
+#define SOUND_MIXER_WRITE_INPUTMUTE	MIXER_WRITE(SOUND_MIXER_INPUTMUTE)
+#define SOUND_MIXER_WRITE_LOOPBACK	MIXER_WRITE(SOUND_MIXER_LOOPBACK)
+
+#define SOUND_MIXER_WRITE_AUDOHPF	MIXER_WRITE(SOUND_MIXER_AUDOHPF)
+#define SOUND_MIXER_WRITE_AUDIHPF	MIXER_WRITE(SOUND_MIXER_AUDIHPF)
+
+#define SOUND_MIXER_READ_HEADSET_STATUS	MIXER_READ(SOUND_MIXER_HEADSET_STATUS)
 
 typedef struct mixer_info
 {

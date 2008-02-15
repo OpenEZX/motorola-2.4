@@ -96,7 +96,7 @@ int __init irlmp_init(void)
 #ifdef CONFIG_IRDA_CACHE_LAST_LSAP
 	irlmp->cache.valid = FALSE;
 #endif
-	strcpy(sysctl_devname, "Linux");
+	strcpy(sysctl_devname, "A760");
 	
 	/* Do discovery every 3 seconds */
 	init_timer(&irlmp->discovery_timer);
@@ -245,7 +245,8 @@ void irlmp_close_lsap(struct lsap_cb *self)
 				      NULL);
 	}
 	if (!lsap) {
-		IRDA_DEBUG(0, "%s(), Looks like somebody has removed me already!\n", __FUNCTION__);
+		IRDA_DEBUG(0, __FUNCTION__ 
+		     "(), Looks like somebody has removed me already!\n");
 		return;
 	}
 	__irlmp_close_lsap(self);
@@ -343,8 +344,9 @@ int irlmp_connect_request(struct lsap_cb *self, __u8 dlsap_sel,
 	ASSERT(self != NULL, return -EBADR;);
 	ASSERT(self->magic == LMP_LSAP_MAGIC, return -EBADR;);
 	
-	IRDA_DEBUG(2, "%s(), slsap_sel=%02x, dlsap_sel=%02x, saddr=%08x, daddr=%08x\n", 
-		__FUNCTION__, self->slsap_sel, dlsap_sel, saddr, daddr);
+	IRDA_DEBUG(2, __FUNCTION__ 
+	      "(), slsap_sel=%02x, dlsap_sel=%02x, saddr=%08x, daddr=%08x\n", 
+	      self->slsap_sel, dlsap_sel, saddr, daddr);
 	
 	if (test_bit(0, &self->connected))
 		return -EISCONN;
@@ -465,8 +467,8 @@ void irlmp_connect_indication(struct lsap_cb *self, struct sk_buff *skb)
 	ASSERT(skb != NULL, return;);
 	ASSERT(self->lap != NULL, return;);
 
-	IRDA_DEBUG(2, "%s(), slsap_sel=%02x, dlsap_sel=%02x\n", 
-		__FUNCTION__, self->slsap_sel, self->dlsap_sel);
+	IRDA_DEBUG(2, "%s(), slsap_sel=%02x, dlsap_sel=%02x\n", __FUNCTION__, 
+		   self->slsap_sel, self->dlsap_sel);
 
 	/* Note : self->lap is set in irlmp_link_data_indication(),
 	 * (case CONNECT_CMD:) because we have no way to set it here.
@@ -504,8 +506,8 @@ int irlmp_connect_response(struct lsap_cb *self, struct sk_buff *userdata)
 
 	set_bit(0, &self->connected);	/* TRUE */
 
-	IRDA_DEBUG(2, "%s(), slsap_sel=%02x, dlsap_sel=%02x\n", 
-		__FUNCTION__, self->slsap_sel, self->dlsap_sel);
+	IRDA_DEBUG(2, "%s(), slsap_sel=%02x, dlsap_sel=%02x\n", __FUNCTION__, 
+		   self->slsap_sel, self->dlsap_sel);
 
 	/* Make room for MUX control header (3 bytes) */
 	ASSERT(skb_headroom(userdata) >= LMP_CONTROL_HEADER, return -1;);
@@ -540,8 +542,8 @@ void irlmp_connect_confirm(struct lsap_cb *self, struct sk_buff *skb)
 	lap_header_size = IRLAP_GET_HEADER_SIZE(self->lap->irlap);	
 	max_header_size = LMP_HEADER + lap_header_size;
 
-	IRDA_DEBUG(2, "%s(), max_header_size=%d\n",
-		__FUNCTION__, max_header_size);
+	IRDA_DEBUG(2, "%s(), max_header_size=%d\n", __FUNCTION__, 
+		   max_header_size);
 
 	/* Hide LMP_CONTROL_HEADER header from layer above */
 	skb_pull(skb, LMP_CONTROL_HEADER);
@@ -666,8 +668,8 @@ void irlmp_disconnect_indication(struct lsap_cb *self, LM_REASON reason,
 	ASSERT(self != NULL, return;);
 	ASSERT(self->magic == LMP_LSAP_MAGIC, return;);
 
-	IRDA_DEBUG(3, "%s(), slsap_sel=%02x, dlsap_sel=%02x\n", 
-		__FUNCTION__, self->slsap_sel, self->dlsap_sel);
+	IRDA_DEBUG(3, "%s(), slsap_sel=%02x, dlsap_sel=%02x\n", __FUNCTION__, 
+		   self->slsap_sel, self->dlsap_sel);
 
 	/* Already disconnected ?
 	 * There is a race condition between irlmp_disconnect_request()
@@ -730,9 +732,7 @@ void irlmp_do_expiry()
 	 * On links which are connected, we can't do discovery
 	 * anymore and can't refresh the log, so we freeze the
 	 * discovery log to keep info about the device we are
-	 * connected to.
-	 * This info is mandatory if we want irlmp_connect_request()
-	 * to work properly. - Jean II
+	 * connected to. - Jean II
 	 */
 	lap = (struct lap_cb *) hashbin_get_first(irlmp->links);
 	while (lap != NULL) {
@@ -760,7 +760,8 @@ void irlmp_do_discovery(int nslots)
 
 	/* Make sure the value is sane */
 	if ((nslots != 1) && (nslots != 6) && (nslots != 8) && (nslots != 16)){
-		WARNING("%s(), invalid value for number of slots!\n", __FUNCTION__);
+		WARNING("%s(), invalid value for number of slots!\n",
+				__FUNCTION__);
 		nslots = sysctl_discovery_slots = 8;
 	}
 
@@ -803,7 +804,7 @@ void irlmp_do_discovery(int nslots)
 void irlmp_discovery_request(int nslots)
 {
 	/* Return current cached discovery log */
-	irlmp_discovery_confirm(irlmp->cachelog, DISCOVERY_LOG);
+	irlmp_discovery_confirm(irlmp->cachelog);
 
 	/* 
 	 * Start a single discovery operation if discovery is not already
@@ -906,8 +907,7 @@ void irlmp_check_services(discovery_t *discovery)
  * partial/selective discovery based on the hints that it passed to IrLMP.
  */
 static inline void
-irlmp_notify_client(irlmp_client_t *client,
-		    hashbin_t *log, DISCOVERY_MODE mode)
+irlmp_notify_client(irlmp_client_t *client, hashbin_t *log)
 {
 	discovery_t *discovery;
 
@@ -930,7 +930,7 @@ irlmp_notify_client(irlmp_client_t *client,
 		 * bits ;-)
 		 */
 		if (client->hint_mask & discovery->hints.word & 0x7f7f)
-			client->disco_callback(discovery, mode, client->priv);
+			client->disco_callback(discovery, client->priv);
 
 		discovery = (discovery_t *) hashbin_get_next(log);
 	}
@@ -943,7 +943,7 @@ irlmp_notify_client(irlmp_client_t *client,
  *    device it is, and give indication to the client(s)
  * 
  */
-void irlmp_discovery_confirm(hashbin_t *log, DISCOVERY_MODE mode) 
+void irlmp_discovery_confirm(hashbin_t *log) 
 {
 	irlmp_client_t *client;
 	
@@ -957,7 +957,7 @@ void irlmp_discovery_confirm(hashbin_t *log, DISCOVERY_MODE mode)
 	client = (irlmp_client_t *) hashbin_get_first(irlmp->clients);
 	while (client != NULL) {
 		/* Check if we should notify client */
-		irlmp_notify_client(client, log, mode);
+		irlmp_notify_client(client, log);
 			
 		client = (irlmp_client_t *) hashbin_get_next(irlmp->clients);
 	}
@@ -987,8 +987,7 @@ void irlmp_discovery_expiry(discovery_t *expiry)
 		/* Check if we should notify client */
 		if ((client->expir_callback) &&
 		    (client->hint_mask & expiry->hints.word & 0x7f7f))
-			client->expir_callback(expiry, EXPIRY_TIMEOUT,
-					       client->priv);
+			client->expir_callback(expiry, client->priv);
 
 		/* Next client */
 		client = (irlmp_client_t *) hashbin_get_next(irlmp->clients);
@@ -1626,8 +1625,8 @@ LM_REASON irlmp_convert_lap_reason( LAP_REASON lap_reason)
 		reason = LM_CONNECT_FAILURE;
 		break;
 	default:
-		IRDA_DEBUG(1, "%s(), Unknow IrLAP disconnect reason %d!\n", 
-			__FUNCTION__, lap_reason);
+		IRDA_DEBUG(1, __FUNCTION__ 
+		      "(), Unknow IrLAP disconnect reason %d!\n", lap_reason);
 		reason = LM_LAP_DISCONNECT;
 		break;
 	}

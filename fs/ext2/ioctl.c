@@ -31,7 +31,7 @@ int ext2_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
 			return -EROFS;
 
 		if ((current->fsuid != inode->i_uid) && !capable(CAP_FOWNER))
-			return -EACCES;
+			return -EPERM;
 
 		if (get_user(flags, (int *) arg))
 			return -EFAULT;

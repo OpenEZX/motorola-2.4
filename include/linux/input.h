@@ -307,9 +307,6 @@ struct input_event {
 
 #define KEY_UNKNOWN		220
 
-#define KEY_BRIGHTNESSDOWN	224
-#define KEY_BRIGHTNESSUP	225
-
 #define BTN_MISC		0x100
 #define BTN_0			0x100
 #define BTN_1			0x101
@@ -471,7 +468,6 @@ struct input_event {
 #define BUS_PCI			0x01
 #define BUS_ISAPNP		0x02
 #define BUS_USB			0x03
-#define BUS_HIL                 0x04
 
 #define BUS_ISA			0x10
 #define BUS_I8042		0x11
@@ -482,6 +478,7 @@ struct input_event {
 #define BUS_AMIGA		0x16
 #define BUS_ADB			0x17
 #define BUS_I2C			0x18
+#define BUS_MAPLE		0x19
 
 /*
  * Structures used in ioctls to upload effects to a device

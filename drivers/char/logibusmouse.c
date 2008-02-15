@@ -128,28 +128,25 @@ static struct busmouse busmouse = {
 
 static int __init logi_busmouse_init(void)
 {
-	if (!request_region(LOGIBM_BASE, LOGIBM_EXTENT, "busmouse"))
+	if (check_region(LOGIBM_BASE, LOGIBM_EXTENT))
 		return -EIO;
 
 	outb(MSE_CONFIG_BYTE, MSE_CONFIG_PORT);
 	outb(MSE_SIGNATURE_BYTE, MSE_SIGNATURE_PORT);
 	udelay(100L);	/* wait for reply from mouse */
-	if (inb(MSE_SIGNATURE_PORT) != MSE_SIGNATURE_BYTE) {
-		release_region(LOGIBM_BASE, LOGIBM_EXTENT);
+	if (inb(MSE_SIGNATURE_PORT) != MSE_SIGNATURE_BYTE)
 		return -EIO;
-	}
 
 	outb(MSE_DEFAULT_MODE, MSE_CONFIG_PORT);
 	MSE_INT_OFF();
 	
+	request_region(LOGIBM_BASE, LOGIBM_EXTENT, "busmouse");
+
 	msedev = register_busmouse(&busmouse);
-	if (msedev < 0) {
-		release_region(LOGIBM_BASE, LOGIBM_EXTENT);
+	if (msedev < 0)
 		printk(KERN_WARNING "Unable to register busmouse driver.\n");
-	} 
 	else
 		printk(KERN_INFO "Logitech busmouse installed.\n");
-	
 	return msedev < 0 ? msedev : 0;
 }
 

@@ -59,6 +59,7 @@ static unsigned int io[]  = { ~0, ~0, ~0, ~0 };
 static unsigned int irq[] = { 0, 0, 0, 0 };
 static unsigned int dma[] = { 0, 0, 0, 0 };
 
+static int  ali_ircc_probe_43(ali_chip_t *chip, chipio_t *info);
 static int  ali_ircc_probe_53(ali_chip_t *chip, chipio_t *info);
 static int  ali_ircc_init_43(ali_chip_t *chip, chipio_t *info);
 static int  ali_ircc_init_53(ali_chip_t *chip, chipio_t *info);
@@ -254,6 +255,7 @@ static int ali_ircc_open(int i, chipio_t *info)
 	struct ali_ircc_cb *self;
 	struct pm_dev *pmdev;
 	int dongle_id;
+	int ret;
 	int err;
 			
 	IRDA_DEBUG(2, "%s(), ---------------- Start ----------------\n", __FUNCTION__);	
@@ -286,13 +288,15 @@ static int ali_ircc_open(int i, chipio_t *info)
         self->io.fifo_size = 16;		/* SIR: 16, FIR: 32 Benjamin 2000/11/1 */
 	
 	/* Reserve the ioports that we need */
-	if (!request_region(self->io.fir_base, self->io.fir_ext, driver_name)) {
+	ret = check_region(self->io.fir_base, self->io.fir_ext);
+	if (ret < 0) { 
 		WARNING("%s(), can't get iobase of 0x%03x\n",
-			__FUNCTION__, self->io.fir_base);
+				__FUNCTION__, self->io.fir_base);
 		dev_self[i] = NULL;
 		kfree(self);
 		return -ENODEV;
 	}
+	request_region(self->io.fir_base, self->io.fir_ext, driver_name);
 
 	/* Initialize QoS for this device */
 	irda_init_max_qos_capabilies(&self->qos);
@@ -449,6 +453,16 @@ static int ali_ircc_init_53(ali_chip_t *chip, chipio_t *info)
 	 */
 	
 	return 0;
+}
+
+/*
+ * Function ali_ircc_probe_43 (chip, info)
+ *    	
+ *	Probes for the ALi M1543
+ */
+static int ali_ircc_probe_43(ali_chip_t *chip, chipio_t *info)
+{
+	return 0;	
 }
 
 /*

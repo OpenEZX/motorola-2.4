@@ -1,4 +1,4 @@
-/* $Id: jffs2_fs_sb.h,v 1.16.2.1 2002/02/23 14:13:34 dwmw2 Exp $ */
+/* $Id: jffs2_fs_sb.h,v 1.18 2002/01/09 11:44:23 dwmw2 Exp $ */
 
 #ifndef _JFFS2_FS_SB
 #define _JFFS2_FS_SB
@@ -12,7 +12,6 @@
 #define INOCACHE_HASHSIZE 1
 
 #define JFFS2_SB_FLAG_RO 1
-#define JFFS2_SB_FLAG_MOUNTING 2
 
 /* A struct for the overall file system control.  Pointers to
    jffs2_sb_info structs are named `c' in the source code.  
@@ -21,7 +20,7 @@
 struct jffs2_sb_info {
 	struct mtd_info *mtd;
 
-	__u32 highest_ino;
+	uint32_t highest_ino;
 	unsigned int flags;
 	spinlock_t nodelist_lock;
 
@@ -29,28 +28,28 @@ struct jffs2_sb_info {
 	struct task_struct *gc_task;	/* GC task struct */
 	struct semaphore gc_thread_start; /* GC thread start mutex */
 	struct completion gc_thread_exit; /* GC thread exit completion port */
-	//	__u32 gc_minfree_threshold;	/* GC trigger thresholds */
-	//	__u32 gc_maxdirty_threshold;
+	//	uint32_t gc_minfree_threshold;	/* GC trigger thresholds */
+	//	uint32_t gc_maxdirty_threshold;
 
 	struct semaphore alloc_sem;	/* Used to protect all the following 
 					   fields, and also to protect against
 					   out-of-order writing of nodes.
 					   And GC.
 					*/
-	__u32 flash_size;
-	__u32 used_size;
-	__u32 dirty_size;
-	__u32 free_size;
-	__u32 erasing_size;
-	__u32 bad_size;
-	__u32 sector_size;
-	//	__u32 min_free_size;
-	//	__u32 max_chunk_size;
+	uint32_t flash_size;
+	uint32_t used_size;
+	uint32_t dirty_size;
+	uint32_t free_size;
+	uint32_t erasing_size;
+	uint32_t bad_size;
+	uint32_t sector_size;
+	//	uint32_t min_free_size;
+	//	uint32_t max_chunk_size;
 
-	__u32 nr_free_blocks;
-	__u32 nr_erasing_blocks;
+	uint32_t nr_free_blocks;
+	uint32_t nr_erasing_blocks;
 
-	__u32 nr_blocks;
+	uint32_t nr_blocks;
 	struct jffs2_eraseblock *blocks;	/* The whole array of blocks. Used for getting blocks 
 						 * from the offset (blocks[ofs / sector_size]) */
 	struct jffs2_eraseblock *nextblock;	/* The block we're currently filling */
@@ -72,13 +71,5 @@ struct jffs2_sb_info {
 	struct jffs2_inode_cache *inocache_list[INOCACHE_HASHSIZE];
 	spinlock_t inocache_lock;
 };
-
-#ifdef JFFS2_OUT_OF_KERNEL
-#define JFFS2_SB_INFO(sb) ((struct jffs2_sb_info *) &(sb)->u)
-#else
-#define JFFS2_SB_INFO(sb) (&sb->u.jffs2_sb)
-#endif
-
-#define OFNI_BS_2SFFJ(c)  ((struct super_block *) ( ((char *)c) - ((char *)(&((struct super_block *)NULL)->u)) ) )
 
 #endif /* _JFFS2_FB_SB */

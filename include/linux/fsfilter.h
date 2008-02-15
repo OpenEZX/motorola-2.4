@@ -1,7 +1,3 @@
-/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
- * vim:expandtab:shiftwidth=8:tabstop=8:
- */
-
 #ifndef __FILTER_H_
 #define __FILTER_H_ 1
 
@@ -63,13 +59,12 @@ struct filter_fs {
         struct snapshot_ops *o_snops;
 };
 
-#define FILTER_FS_TYPES 6
+#define FILTER_FS_TYPES 5
 #define FILTER_FS_EXT2 0
 #define FILTER_FS_EXT3 1
 #define FILTER_FS_REISERFS 2
 #define FILTER_FS_XFS 3
 #define FILTER_FS_OBDFS 4
-#define FILTER_FS_TMPFS 5
 extern struct filter_fs filter_oppar[FILTER_FS_TYPES];
 
 struct filter_fs *filter_get_filter_fs(const char *cache_type);
@@ -101,7 +96,7 @@ void filter_setup_dentry_ops(struct filter_fs *cache, struct dentry_operations *
 #define PRESTO_DEBUG
 #ifdef PRESTO_DEBUG
 /* debugging masks */
-#define D_SUPER     1  
+#define D_SUPER     1   /* print results returned by Venus */
 #define D_INODE     2   /* print entry and exit into procedure */
 #define D_FILE      4
 #define D_CACHE     8   /* cache debugging */

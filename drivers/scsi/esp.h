@@ -8,8 +8,6 @@
 #ifndef _SPARC_ESP_H
 #define _SPARC_ESP_H
 
-#include <linux/config.h>
-
 /* For dvma controller register definitions. */
 #include <asm/dma.h>
 
@@ -402,7 +400,6 @@ extern int esp_proc_info(char *buffer, char **start, off_t offset, int length,
 			 int hostno, int inout);
 extern int esp_revoke(Scsi_Device* SDptr);
 
-#ifdef CONFIG_SPARC64
 #define SCSI_SPARC_ESP {                                        \
 		proc_name:      "esp",				\
 		proc_info:      &esp_proc_info,			\
@@ -419,29 +416,8 @@ extern int esp_revoke(Scsi_Device* SDptr);
 		sg_tablesize:   SG_ALL,				\
 		cmd_per_lun:    1,				\
 		use_clustering: ENABLE_CLUSTERING,		\
-		use_new_eh_code: 0,				\
-		highmem_io:	1				\
+		use_new_eh_code: 0				\
 }
-#else
-/* Sparc32's iommu code cannot handle highmem pages yet. */
-#define SCSI_SPARC_ESP {                                        \
-		proc_name:      "esp",				\
-		proc_info:      &esp_proc_info,			\
-		name:           "Sun ESP 100/100a/200",		\
-		detect:         esp_detect,			\
-		revoke:		esp_revoke,			\
-		info:           esp_info,			\
-		command:        esp_command,			\
-		queuecommand:   esp_queue,			\
-		abort:          esp_abort,			\
-		reset:          esp_reset,			\
-		can_queue:      7,				\
-		this_id:        7,				\
-		sg_tablesize:   SG_ALL,				\
-		cmd_per_lun:    1,				\
-		use_clustering: ENABLE_CLUSTERING,		\
-}
-#endif
 
 /* For our interrupt engine. */
 #define for_each_esp(esp) \

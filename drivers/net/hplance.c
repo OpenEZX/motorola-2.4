@@ -58,9 +58,9 @@ int hplance_probe(struct net_device *dev);
 static int hplance_init(struct net_device *dev, int scode);
 static int hplance_open(struct net_device *dev);
 static int hplance_close(struct net_device *dev);
-static void hplance_writerap(void *priv, unsigned short value);
-static void hplance_writerdp(void *priv, unsigned short value);
-static unsigned short hplance_readrdp(void *priv);
+static void hplance_writerap(struct hplance_private *lp, unsigned short value);
+static void hplance_writerdp(struct hplance_private *lp, unsigned short value);
+static unsigned short hplance_readrdp(struct hplance_private *lp);
 
 #ifdef MODULE
 static struct hplance_private *root_hplance_dev;
@@ -100,7 +100,8 @@ int __init hplance_probe(struct net_device *dev)
 /* Initialise a single lance board at the given select code */
 static int __init hplance_init(struct net_device *dev, int scode)
 {
-        const char *name = dio_scodetoname(scode);
+        /* const char *name = dio_scodetoname(scode); */
+        static const char name[] = "HP LANCE";
         void *va = dio_scodetoviraddr(scode);
         struct hplance_private *lp;
         int i;
@@ -117,10 +118,10 @@ static int __init hplance_init(struct net_device *dev, int scode)
 #endif
 	SET_MODULE_OWNER(dev);
 
-        printk("%s: %s; select code %d, addr", dev->name, name, scode);
+        printk("%s: HP LANCE; select code %d, addr", dev->name, scode);
 
         /* reset the board */
-        out_8(va+DIO_IDOFF, 0xff);
+        writeb(0xff,va+DIO_IDOFF);
         udelay(100);                              /* ariba! ariba! udelay! udelay! */
 
         /* Fill the dev fields */
@@ -137,8 +138,8 @@ static int __init hplance_init(struct net_device *dev, int scode)
                 /* The NVRAM holds our ethernet address, one nibble per byte,
                  * at bytes NVRAMOFF+1,3,5,7,9...
                  */
-                dev->dev_addr[i] = ((in_8(va + HPLANCE_NVRAMOFF + i*4 + 1) & 0xF) << 4)
-                        | (in_8(va + HPLANCE_NVRAMOFF + i*4 + 3) & 0xF);
+                dev->dev_addr[i] = ((readb(va + HPLANCE_NVRAMOFF + i*4 + 1) & 0xF) << 4)
+                        | (readb(va + HPLANCE_NVRAMOFF + i*4 + 3) & 0xF);
                 printk("%c%2.2x", i == 0 ? ' ' : ':', dev->dev_addr[i]);
         }
         
@@ -174,28 +175,25 @@ static int __init hplance_init(struct net_device *dev, int scode)
 /* This is disgusting. We have to check the DIO status register for ack every
  * time we read or write the LANCE registers.
  */
-static void hplance_writerap(void *priv, unsigned short value)
+static void hplance_writerap(struct hplance_private *lp, unsigned short value)
 {
-	struct hplance_private *lp = (struct hplance_private *)priv;
         struct hplance_reg *hpregs = (struct hplance_reg *)lp->base;
         do {
                 lp->lance.ll->rap = value;
         } while ((hpregs->status & LE_ACK) == 0);
 }
 
-static void hplance_writerdp(void *priv, unsigned short value)
+static void hplance_writerdp(struct hplance_private *lp, unsigned short value)
 {
-	struct hplance_private *lp = (struct hplance_private *)priv;
         struct hplance_reg *hpregs = (struct hplance_reg *)lp->base;
         do {
                 lp->lance.ll->rdp = value;
         } while ((hpregs->status & LE_ACK) == 0);
 }
 
-static unsigned short hplance_readrdp(void *priv)
+static unsigned short hplance_readrdp(struct hplance_private *lp)
 {
         unsigned short val;
-	struct hplance_private *lp = (struct hplance_private *)priv;
         struct hplance_reg *hpregs = (struct hplance_reg *)lp->base;
         do {
                 val = lp->lance.ll->rdp;
@@ -213,7 +211,7 @@ static int hplance_open(struct net_device *dev)
         if (status)
                 return status;
         /* enable interrupts at board level. */
-        out_8(&(hpregs->status), LE_IE);
+        writeb(LE_IE, &(hpregs->status));
 
         return 0;
 }
@@ -222,7 +220,7 @@ static int hplance_close(struct net_device *dev)
 {
         struct hplance_private *lp = (struct hplance_private *)dev->priv;
         struct hplance_reg *hpregs = (struct hplance_reg *)lp->base;
-        out_8(&(hpregs->status), 8);              /* disable interrupts at boardlevel */
+        writeb(0,&(hpregs->status));              /* disable interrupts at boardlevel */
         lance_close(dev);
         return 0;
 }

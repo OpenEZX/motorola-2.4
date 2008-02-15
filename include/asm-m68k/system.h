@@ -4,7 +4,6 @@
 #include <linux/config.h> /* get configuration macros */
 #include <linux/linkage.h>
 #include <linux/kernel.h>
-#include <linux/init.h>
 #include <asm/segment.h>
 #include <asm/entry.h>
 

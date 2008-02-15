@@ -58,6 +58,7 @@ static const char *ias_charset_types[] = {
 };
 #endif	/* CONFIG_IRDA_DEBUG */
 
+//extern int sysctl_modem;
 static hashbin_t *iriap = NULL;
 static __u32 service_handle; 
 
@@ -105,12 +106,12 @@ int __init iriap_init(void)
 	/* 
 	 *  Register some default services for IrLMP 
 	 */
-	hints  = irlmp_service_to_hint(S_COMPUTER);
+	hints  = irlmp_service_to_hint(S_PNP);
 	service_handle = irlmp_register_service(hints);
 
 	/* Register the Device object with LM-IAS */
 	obj = irias_new_object("Device", IAS_DEVICE_ID);
-	irias_add_string_attrib(obj, "DeviceName", "Linux", IAS_KERNEL_ATTR);
+	irias_add_string_attrib(obj, "DeviceName", "A760", IAS_KERNEL_ATTR);
 
 	oct_seq[0] = 0x01;  /* Version 1 */
 	oct_seq[1] = 0x00;  /* IAS support bits */
@@ -333,8 +334,8 @@ void iriap_disconnect_request(struct iriap_cb *self)
 
 	skb = dev_alloc_skb(64);
 	if (skb == NULL) {
-		IRDA_DEBUG(0, "%s(), Could not allocate an sk_buff of length %d\n", 
-			__FUNCTION__, 64);
+		IRDA_DEBUG(0, __FUNCTION__
+		      "(), Could not allocate an sk_buff of length %d\n", 64);
 		return;
 	}
 
@@ -492,8 +493,9 @@ void iriap_getvaluebyclass_confirm(struct iriap_cb *self, struct sk_buff *skb)
 /* 		case CS_ISO_8859_9: */
 /* 		case CS_UNICODE: */
 		default:
-			IRDA_DEBUG(0, "%s(), charset %s, not supported\n",
-				   __FUNCTION__, ias_charset_types[charset]);
+			IRDA_DEBUG(0, __FUNCTION__
+				   "(), charset %s, not supported\n",
+				   ias_charset_types[charset]);
 
 			/* Aborting, close connection! */
 			iriap_disconnect_request(self);
@@ -725,14 +727,16 @@ void iriap_connect_request(struct iriap_cb *self)
 
 	ASSERT(self != NULL, return;);
 	ASSERT(self->magic == IAS_MAGIC, return;);
-
-	ret = irlmp_connect_request(self->lsap, LSAP_IAS, 
+//    if(sysctl_modem)
+//    {  
+      ret = irlmp_connect_request(self->lsap, LSAP_IAS, 
 				    self->saddr, self->daddr, 
 				    NULL, NULL);
-	if (ret < 0) {
+	  if (ret < 0) {
 		IRDA_DEBUG(0, "%s(), connect failed!\n", __FUNCTION__);
 		self->confirm(IAS_DISCONNECT, 0, NULL, self->priv);
-	}
+	  }
+//    }
 }
 
 /*
@@ -897,7 +901,8 @@ static int iriap_data_indication(void *instance, void *sap,
 		}		
 		break;
 	default:
-		IRDA_DEBUG(0, "%s(), Unknown op-code: %02x\n", __FUNCTION__, opcode);
+		IRDA_DEBUG(0, "%s(), Unknown op-code: %02x\n", __FUNCTION__, 
+			   opcode);
 		dev_kfree_skb(skb);
 		break;
 	}
@@ -925,8 +930,8 @@ void iriap_call_indication(struct iriap_cb *self, struct sk_buff *skb)
 
 	opcode = fp[0];
 	if (~opcode & 0x80) {
-		WARNING("%s(), IrIAS multiframe commands or results"
-			"is not implemented yet!\n", __FUNCTION__);
+		WARNING("%s(), IrIAS multiframe commands or results is not "
+				"implemented yet!\n", __FUNCTION__);
 		return;
 	}
 	opcode &= 0x7f; /* Mask away LST bit */
@@ -934,7 +939,7 @@ void iriap_call_indication(struct iriap_cb *self, struct sk_buff *skb)
 	switch (opcode) {
 	case GET_INFO_BASE:
 		WARNING("%s(), GetInfoBaseDetails not implemented yet!\n",
-			__FUNCTION__);
+				__FUNCTION__);
 		break;
 	case GET_VALUE_BY_CLASS:
 		iriap_getvaluebyclass_indication(self, skb);
@@ -1004,21 +1009,24 @@ int irias_proc_read(char *buf, char **start, off_t offset, int len)
 			
 			switch (attrib->value->type) {
 			case IAS_INTEGER:
-				len += sprintf(buf+len, "%d\n", 
+				len += sprintf(buf+len, "%d", 
 					       attrib->value->t.integer);
 				break;
 			case IAS_STRING:
-				len += sprintf(buf+len, "\"%s\"\n", 
+				len += sprintf(buf+len, "\"%s\"", 
 					       attrib->value->t.string);
 				break;
 			case IAS_OCT_SEQ:
-				len += sprintf(buf+len, "octet sequence (%d bytes)\n", attrib->value->len);
+				len += sprintf(buf+len,
+					       "octet sequence (%d bytes)",
+					       attrib->value->len);
 				break;
 			case IAS_MISSING:
-				len += sprintf(buf+len, "missing\n");
+				len += sprintf(buf+len, "missing");
 				break;
 			default:
-				IRDA_DEBUG(0, "%s(), Unknown value type!\n", __FUNCTION__);
+				IRDA_DEBUG(0, __FUNCTION__ 
+				      "(), Unknown value type!");
 				return -1;
 			}
 			len += sprintf(buf+len, "\n");
@@ -1027,6 +1035,7 @@ int irias_proc_read(char *buf, char **start, off_t offset, int len)
 				hashbin_get_next(obj->attribs);
 		}
 	        obj = (struct ias_object *) hashbin_get_next(objects);
+		len += sprintf(buf+len, "\n");
  	} 
 	restore_flags(flags);
 

@@ -2,6 +2,10 @@
 #define _IP_CONNTRACK_TCP_H
 /* TCP tracking. */
 
+#ifndef __KERNEL__
+#error Only in kernel.
+#endif
+
 enum tcp_conntrack {
 	TCP_CONNTRACK_NONE,
 	TCP_CONNTRACK_ESTABLISHED,
@@ -20,8 +24,9 @@ struct ip_ct_tcp
 {
 	enum tcp_conntrack state;
 
-	/* Poor man's window tracking: sequence number of valid ACK
-           handshake completion packet */
+	/* Poor man's window tracking: expected sequence and acknowledge 
+	   number of valid ACK handshake completion packet */
+	u_int32_t handshake_seq;
 	u_int32_t handshake_ack;
 };
 

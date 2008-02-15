@@ -75,8 +75,6 @@
  *   37 HFC 2BDS0 S+/SP         p0=irq p1=iobase
  *   38 Travers Technologies NETspider-U PCI card
  *   39 HFC 2BDS0-SP PCMCIA     p0=irq p1=iobase
- *   40 hotplug interface
- *   41 Formula-n enter:now ISDN PCI a/b   none
  *
  * protocol can be either ISDN_PTYPE_EURO or ISDN_PTYPE_1TR6 or ISDN_PTYPE_NI1
  *
@@ -95,7 +93,6 @@ const char *CardType[] = {
 	"Siemens I-Surf", "Acer P10", "HST Saphir", "Telekom A4T",
 	"Scitel Quadro", "Gazel", "HFC 2BDS0 PCI", "Winbond 6692",
 	"HFC 2BDS0 SX", "NETspider-U", "HFC-2BDS0-SP PCMCIA",
-	"Hotplug", "Formula-n enter:now PCI a/b", 
 };
 
 void HiSax_closecard(int cardnr);
@@ -602,10 +599,6 @@ extern int setup_w6692(struct IsdnCard *card);
 
 #if CARD_NETJET_U
 extern int setup_netjet_u(struct IsdnCard *card);
-#endif
-
-#if CARD_FN_ENTERNOW_PCI
-extern int setup_enternow_pci(struct IsdnCard *card);
 #endif
 
 /*
@@ -1143,11 +1136,6 @@ static int __devinit checkcard(int cardnr, char *id, int *busy_flag)
 		ret = setup_netjet_u(card);
 		break;
 #endif
-#if CARD_FN_ENTERNOW_PCI
-	case ISDN_CTYPE_ENTERNOW:
-		ret = setup_enternow_pci(card);
-		break;
-#endif
 	case ISDN_CTYPE_DYNAMIC:
 		ret = 2;
 		break;
@@ -1261,12 +1249,9 @@ int __devinit HiSax_inithardware(int *busy_flag)
 			foundcards++;
 			i++;
 		} else {
-			/* make sure we don't oops the module */
-			if (cards[i].typ > 0 && cards[i].typ <= ISDN_CTYPE_COUNT) {
-				printk(KERN_WARNING
-			       		"HiSax: Card %s not installed !\n",
-			       		CardType[cards[i].typ]);
-			}
+			printk(KERN_WARNING
+			       "HiSax: Card %s not installed !\n",
+			       CardType[cards[i].typ]);
 			HiSax_shiftcards(i);
 			nrcards--;
 		}
@@ -1526,8 +1511,7 @@ static int __init HiSax_init(void)
 	       nrcards, (nrcards > 1) ? "s" : "");
 
 	/* Install only, if at least one card found */
-	if (!HiSax_inithardware(NULL))
-		return -ENODEV;
+	HiSax_inithardware(NULL);
 	return 0;
 
  out_tei:
@@ -1595,8 +1579,7 @@ int elsa_init_pcmcia(void *pcm_iob, int pcm_irq, int *busy_flag, int prot)
 	printk(KERN_DEBUG "HiSax: Total %d card%s defined\n",
 	       nrcards, (nrcards > 1) ? "s" : "");
 
-	if (!HiSax_inithardware(busy_flag))
-		return -ENODEV;
+	HiSax_inithardware(busy_flag);
 	printk(KERN_NOTICE "HiSax: module installed\n");
 #endif
 	return 0;
@@ -1638,8 +1621,7 @@ int hfc_init_pcmcia(void *pcm_iob, int pcm_irq, int *busy_flag, int prot)
 	printk(KERN_DEBUG "HiSax: Total %d card%s defined\n",
 	       nrcards, (nrcards > 1) ? "s" : "");
 
-	if (!HiSax_inithardware(busy_flag))
-		return -ENODEV;
+	HiSax_inithardware(busy_flag);
 	printk(KERN_NOTICE "HiSax: module installed\n");
 #endif
 	return 0;
@@ -1681,8 +1663,7 @@ int sedl_init_pcmcia(void *pcm_iob, int pcm_irq, int *busy_flag, int prot)
 	printk(KERN_DEBUG "HiSax: Total %d card%s defined\n",
 	       nrcards, (nrcards > 1) ? "s" : "");
 
-	if (!HiSax_inithardware(busy_flag))
-		return -ENODEV;
+	HiSax_inithardware(busy_flag);
 	printk(KERN_NOTICE "HiSax: module installed\n");
 #endif
 	return 0;
@@ -1724,8 +1705,7 @@ int avm_a1_init_pcmcia(void *pcm_iob, int pcm_irq, int *busy_flag, int prot)
 	printk(KERN_DEBUG "HiSax: Total %d card%s defined\n",
 	       nrcards, (nrcards > 1) ? "s" : "");
 
-	if (!HiSax_inithardware(busy_flag))
-		return -ENODEV;
+	HiSax_inithardware(busy_flag);
 	printk(KERN_NOTICE "HiSax: module installed\n");
 #endif
 	return 0;
@@ -2112,9 +2092,6 @@ static struct pci_device_id hisax_pci_tbl[] __initdata = {
 	{PCI_VENDOR_ID_EICON,    PCI_DEVICE_ID_EICON_DIVA20,     PCI_ANY_ID, PCI_ANY_ID},
 	{PCI_VENDOR_ID_EICON,    PCI_DEVICE_ID_EICON_DIVA20_U,   PCI_ANY_ID, PCI_ANY_ID},
 	{PCI_VENDOR_ID_EICON,    PCI_DEVICE_ID_EICON_DIVA201,    PCI_ANY_ID, PCI_ANY_ID},
-//#########################################################################################	
-	{PCI_VENDOR_ID_EICON,    PCI_DEVICE_ID_EICON_DIVA202,    PCI_ANY_ID, PCI_ANY_ID},
-//#########################################################################################	
 #endif
 #ifdef CONFIG_HISAX_ELSA
 	{PCI_VENDOR_ID_ELSA,     PCI_DEVICE_ID_ELSA_MICROLINK,   PCI_ANY_ID, PCI_ANY_ID},
@@ -2173,11 +2150,3 @@ MODULE_DEVICE_TABLE(pci, hisax_pci_tbl);
 
 module_init(HiSax_init);
 module_exit(HiSax_exit);
-
-EXPORT_SYMBOL(FsmNew);
-EXPORT_SYMBOL(FsmFree);
-EXPORT_SYMBOL(FsmEvent);
-EXPORT_SYMBOL(FsmChangeState);
-EXPORT_SYMBOL(FsmInitTimer);
-EXPORT_SYMBOL(FsmDelTimer);
-EXPORT_SYMBOL(FsmRestartTimer);

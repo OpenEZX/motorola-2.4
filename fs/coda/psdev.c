@@ -38,6 +38,7 @@
 #include <linux/list.h>
 #include <linux/smp_lock.h>
 #include <asm/io.h>
+#include <asm/segment.h>
 #include <asm/system.h>
 #include <asm/poll.h>
 #include <asm/uaccess.h>

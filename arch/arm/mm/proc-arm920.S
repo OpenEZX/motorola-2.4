@@ -410,6 +410,10 @@ ENTRY(cpu_arm920_tlb_invalidate_all)
  */
 	.align	5
 ENTRY(cpu_arm920_tlb_invalidate_range)
+	sub	r3, r1, r0
+	cmp	r3, #256 * PAGESIZE		@ arbitary, should be tuned
+	bhi	cpu_arm920_tlb_invalidate_all
+
 	mov	r3, #0
 	mcr	p15, 0, r3, c7, c10, 4		@ drain WB
 
@@ -655,7 +659,7 @@ __arm920_proc_info:
 	b	__arm920_setup
 	.long	cpu_arch_name
 	.long	cpu_elf_name
-	.long	HWCAP_SWP | HWCAP_HALF | HWCAP_26BIT
+	.long	HWCAP_SWP | HWCAP_HALF | HWCAP_THUMB
 	.long	cpu_arm920_info
 	.long	arm920_processor_functions
 	.size	__arm920_proc_info, . - __arm920_proc_info

@@ -1,5 +1,5 @@
 /*
- * BK Id: %F% %I% %G% %U% %#%
+ * BK Id: SCCS/s.pgtable.h 1.34 11/12/01 11:24:50 paulus
  */
 #ifdef __KERNEL__
 #ifndef _PPC_PGTABLE_H
@@ -14,16 +14,19 @@
 #include <asm/mmu.h>
 #include <asm/page.h>
 
-#if defined(CONFIG_4xx)
-extern void local_flush_tlb_all(void);
-extern void local_flush_tlb_mm(struct mm_struct *mm);
-extern void local_flush_tlb_page(struct vm_area_struct *vma, unsigned long vmaddr);
-extern void local_flush_tlb_range(struct mm_struct *mm, unsigned long start,
-				  unsigned long end);
-#define update_mmu_cache(vma, addr, pte)	do { } while (0)
+extern void _tlbie(unsigned long address);
+extern void _tlbia(void);
 
-#elif defined(CONFIG_8xx)
-#define __tlbia()	asm volatile ("tlbia" : : )
+#if defined(CONFIG_4xx)
+#ifdef CONFIG_PIN_TLB
+/* When pinning entries on the 4xx, we have to use a software function
+ * to ensure we don't remove them since there isn't any hardware support
+ * for this.
+ */
+#define __tlbia()      _tlbia()
+#else
+#define __tlbia()	asm volatile ("tlbia; sync" : : : "memory")
+#endif
 
 static inline void local_flush_tlb_all(void)
 	{ __tlbia(); }
@@ -31,7 +34,22 @@ static inline void local_flush_tlb_mm(struct mm_struct *mm)
 	{ __tlbia(); }
 static inline void local_flush_tlb_page(struct vm_area_struct *vma,
 				unsigned long vmaddr)
+	{ _tlbie(vmaddr); }
+static inline void local_flush_tlb_range(struct mm_struct *mm,
+				unsigned long start, unsigned long end)
 	{ __tlbia(); }
+#define update_mmu_cache(vma, addr, pte)	do { } while (0)
+
+#elif defined(CONFIG_8xx)
+#define __tlbia()	asm volatile ("tlbia; sync" : : : "memory")
+
+static inline void local_flush_tlb_all(void)
+	{ __tlbia(); }
+static inline void local_flush_tlb_mm(struct mm_struct *mm)
+	{ __tlbia(); }
+static inline void local_flush_tlb_page(struct vm_area_struct *vma,
+				unsigned long vmaddr)
+	{ _tlbie(vmaddr); }
 static inline void local_flush_tlb_range(struct mm_struct *mm,
 				unsigned long start, unsigned long end)
 	{ __tlbia(); }
@@ -82,14 +100,13 @@ static inline void flush_tlb_pgtables(struct mm_struct *mm,
 #define flush_cache_mm(mm)		do { } while (0)
 #define flush_cache_range(mm, a, b)	do { } while (0)
 #define flush_cache_page(vma, p)	do { } while (0)
-#define flush_page_to_ram(page)		do { } while (0)
+#define flush_icache_page(vma, page)	do { } while (0)
 
-extern void flush_icache_user_range(struct vm_area_struct *vma,
-		struct page *page, unsigned long addr, int len);
 extern void flush_icache_range(unsigned long, unsigned long);
-extern void __flush_dcache_icache(void *page_va);
-extern void flush_dcache_page(struct page *page);
-extern void flush_icache_page(struct vm_area_struct *vma, struct page *page);
+extern void __flush_page_to_ram(unsigned long page_va);
+extern void flush_page_to_ram(struct page *page);
+
+#define flush_dcache_page(page)			do { } while (0)
 
 extern unsigned long va_to_phys(unsigned long address);
 extern pte_t *va_to_pte(unsigned long address);
@@ -127,6 +144,12 @@ extern unsigned long ioremap_bot, ioremap_base;
  * that is where it exists in the MD_TWC, and bit 26 for writethrough.
  * These will get masked from the level 2 descriptor at TLB load time, and
  * copied to the MD_TWC before it gets loaded.
+ * Large page sizes added.  We currently support two sizes, 4K and 8M.
+ * This also allows a TLB hander optimization because we can directly
+ * load the PMD into MD_TWC.  The 8M pages are only used for kernel
+ * mapping of well known areas.  The PMD (PGD) entries contain control
+ * flags in addition to the address, so care must be taken that the
+ * software no longer assumes these are only pointers.
  */
 
 /*
@@ -185,8 +208,19 @@ extern unsigned long ioremap_bot, ioremap_base;
  * we actually run into our mappings setup in the early boot with the VM
  * system.  This really does become a problem for machines with good amounts
  * of RAM.  -- Cort
+ *
+ * For simplicity on 4xx, if we pin some TLB entries we do it
+ * for the lower 32 M (4xx) regardless of the memory present.
+ * Possibly, the normal 16M roundup would work, but we need to ensure we
+ * don't have trouble on smaller than 16M systems.
+ *     -- Dan
  */
+
+#ifdef CONFIG_PIN_TLB
+#define VMALLOC_OFFSET (0x2000000) /* 32M */
+#else
 #define VMALLOC_OFFSET (0x1000000) /* 16M */
+#endif
 #define VMALLOC_START ((((long)high_memory + VMALLOC_OFFSET) & ~(VMALLOC_OFFSET-1)))
 #define VMALLOC_VMADDR(x) ((unsigned long)(x))
 #define VMALLOC_END	ioremap_bot
@@ -197,17 +231,45 @@ extern unsigned long ioremap_bot, ioremap_base;
  */
 
 #if defined(CONFIG_4xx)
+
+/* There are several potential gotchas here.  The 4xx hardware TLBLO
+   field looks like this:
+
+   0  1  2  3  4  ... 18 19 20 21 22 23 24 25 26 27 28 29 30 31
+   RPN.....................  0  0 EX WR ZSEL.......  W  I  M  G
+
+   Where possible we make the Linux PTE bits match up with this
+
+   - bits 20 and 21 must be cleared, because we use 4k pages (4xx can
+     support down to 1k pages), this is done in the TLBMiss exception
+     handler.
+   - We use only zones 0 (for kernel pages) and 1 (for user pages)
+     of the 16 available.  Bit 24-26 of the TLB are cleared in the TLB
+     miss handler.  Bit 27 is PAGE_USER, thus selecting the correct
+     zone.
+   - PRESENT *must* be in the bottom two bits because swap cache
+     entries use the top 30 bits.  Because 4xx doesn't support SMP
+     anyway, M is irrelevant so we borrow it for PAGE_PRESENT.  Bit 30
+     is cleared in the TLB miss handler before the TLB entry is loaded.
+   - All other bits of the PTE are loaded into TLBLO without
+     modification, leaving us only the bits 20, 21, 24, 25, 26, 30 for
+     software PTE bits.  We actually use use bits 20, 24, 25, 26, and
+     30 respectively for the software bits: ACCESSED, DIRTY, RW, EXEC,
+     PRESENT.
+*/
+
 /* Definitions for 4xx embedded chips. */
 #define	_PAGE_GUARDED	0x001	/* G: page is guarded from prefetch */
-#define	_PAGE_COHERENT	0x002	/* M: enforece memory coherence */
+#define _PAGE_PRESENT	0x002	/* software: PTE contains a translation */
 #define	_PAGE_NO_CACHE	0x004	/* I: caching is inhibited */
 #define	_PAGE_WRITETHRU	0x008	/* W: caching is write-through */
 #define	_PAGE_USER	0x010	/* matches one of the zone permission bits */
-#define _PAGE_EXEC	0x020	/* software: i-cache coherency required */
-#define	_PAGE_PRESENT	0x040	/* software: PTE contains a translation */
-#define _PAGE_DIRTY	0x100	/* C: page changed */
-#define	_PAGE_RW	0x200	/* Writes permitted */
-#define _PAGE_ACCESSED	0x400	/* R: page referenced */
+#define	_PAGE_RW	0x040	/* software: Writes permitted */
+#define	_PAGE_DIRTY	0x080	/* software: dirty page */
+#define _PAGE_HWWRITE	0x100	/* hardware: Dirty & RW, set in exception */
+#define _PAGE_HWEXEC	0x200	/* hardware: EX permission */
+#define _PAGE_ACCESSED	0x400	/* software: R: page referenced */
+#define _PMD_PRESENT	PAGE_MASK
 
 #elif defined(CONFIG_8xx)
 /* Definitions for 8xx embedded chips. */
@@ -220,13 +282,20 @@ extern unsigned long ioremap_bot, ioremap_base;
  */
 #define _PAGE_EXEC	0x0008	/* software: i-cache coherency required */
 #define _PAGE_GUARDED	0x0010	/* software: guarded access */
-#define _PAGE_WRITETHRU 0x0020	/* software: use writethrough cache */
+#define _PAGE_DIRTY	0x0020	/* software: page changed */
 #define _PAGE_RW	0x0040	/* software: user write access allowed */
 #define _PAGE_ACCESSED	0x0080	/* software: page referenced */
 
+/* Setting any bits in the nibble with the follow two controls will
+ * require a TLB exception handler change.  It is assumed unused bits
+ * are always zero.
+ */
 #define _PAGE_HWWRITE	0x0100	/* h/w write enable: never set in Linux PTE */
-#define _PAGE_DIRTY	0x0200	/* software: page changed */
 #define _PAGE_USER	0x0800	/* One of the PP bits, the other is USER&~RW */
+
+#define _PMD_PRESENT	0x0001
+#define _PMD_PAGE_MASK	0x000c
+#define _PMD_PAGE_8M	0x000c
 
 #else /* CONFIG_6xx */
 /* Definitions for 60x, 740/750, etc. */
@@ -241,6 +310,7 @@ extern unsigned long ioremap_bot, ioremap_base;
 #define _PAGE_ACCESSED	0x100	/* R: page referenced */
 #define _PAGE_EXEC	0x200	/* software: i-cache coherency required */
 #define _PAGE_RW	0x400	/* software: user write access allowed */
+#define _PMD_PRESENT	PAGE_MASK
 #endif
 
 /* The non-standard PowerPC MMUs, which includes the 4xx and 8xx (and
@@ -263,6 +333,12 @@ extern unsigned long ioremap_bot, ioremap_base;
 #ifndef _PAGE_HWWRITE
 #define _PAGE_HWWRITE	0
 #endif
+#ifndef _PAGE_HWEXEC
+#define _PAGE_HWEXEC	0
+#endif
+#ifndef _PAGE_EXEC
+#define _PAGE_EXEC	0
+#endif
 
 #define _PAGE_CHG_MASK	(PAGE_MASK | _PAGE_ACCESSED | _PAGE_DIRTY)
 
@@ -273,9 +349,13 @@ extern unsigned long ioremap_bot, ioremap_base;
  * another purpose.  -- paulus.
  */
 #define _PAGE_BASE	_PAGE_PRESENT | _PAGE_ACCESSED
+#ifndef CONFIG_8xx
+#define _PAGE_WRENABLE	_PAGE_RW | _PAGE_DIRTY
+#else
 #define _PAGE_WRENABLE	_PAGE_RW | _PAGE_DIRTY | _PAGE_HWWRITE
+#endif
 
-#define _PAGE_KERNEL	_PAGE_BASE | _PAGE_WRENABLE | _PAGE_SHARED
+#define _PAGE_KERNEL	_PAGE_BASE | _PAGE_WRENABLE | _PAGE_SHARED | _PAGE_HWEXEC
 #define _PAGE_IO	_PAGE_KERNEL | _PAGE_NO_CACHE | _PAGE_GUARDED
 
 #define PAGE_NONE	__pgprot(_PAGE_BASE)
@@ -329,11 +409,15 @@ extern unsigned long empty_zero_page[1024];
 #define pte_clear(ptep)		do { set_pte((ptep), __pte(0)); } while (0)
 
 #define pmd_none(pmd)		(!pmd_val(pmd))
-#define	pmd_bad(pmd)		((pmd_val(pmd) & ~PAGE_MASK) != 0)
-#define	pmd_present(pmd)	((pmd_val(pmd) & PAGE_MASK) != 0)
+#define	pmd_bad(pmd)		((pmd_val(pmd) & _PMD_PRESENT) == 0)
+#define	pmd_present(pmd)	((pmd_val(pmd) & _PMD_PRESENT) != 0)
 #define	pmd_clear(pmdp)		do { pmd_val(*(pmdp)) = 0; } while (0)
 
-#define pte_page(x)		(mem_map+(unsigned long)((pte_val(x) >> PAGE_SHIFT)))
+/*
+ * Permanent address of a page.
+ */
+#define page_address(page)	((page)->virtual)
+#define pte_page(x)		(mem_map+(unsigned long)((pte_val(x)-PPC_MEMSTART) >> PAGE_SHIFT))
 
 #ifndef __ASSEMBLY__
 /*
@@ -399,7 +483,7 @@ static inline pte_t mk_pte_phys(unsigned long physpage, pgprot_t pgprot)
 #define mk_pte(page,pgprot) \
 ({									\
 	pte_t pte;							\
-	pte_val(pte) = ((page - mem_map) << PAGE_SHIFT) | pgprot_val(pgprot); \
+	pte_val(pte) = (((page - mem_map) << PAGE_SHIFT) + PPC_MEMSTART) | pgprot_val(pgprot); \
 	pte;							\
 })
 
@@ -423,8 +507,9 @@ static inline unsigned long pte_update(pte_t *p, unsigned long clr,
 	__asm__ __volatile__("\
 1:	lwarx	%0,0,%3\n\
 	andc	%1,%0,%4\n\
-	or	%1,%1,%5\n\
-	stwcx.	%1,0,%3\n\
+	or	%1,%1,%5\n"
+	PPC405_ERR77(0,%3)
+"	stwcx.	%1,0,%3\n\
 	bne-	1b"
 	: "=&r" (old), "=&r" (tmp), "=m" (*p)
 	: "r" (p), "r" (clr), "r" (set), "m" (*p)
@@ -433,18 +518,14 @@ static inline unsigned long pte_update(pte_t *p, unsigned long clr,
 }
 
 /*
- * set_pte stores a linux PTE into the linux page table.
- * On machines which use an MMU hash table we avoid changing the
- * _PAGE_HASHPTE bit.
+ * When a new value is written into a PTE, we may need to flush the
+ * i-cache for the page of memory that the PTE points to.
+ * (Note: machines with software TLB reloads could do the flush in
+ * the instruction TLB miss handler instead.)
+ * Writing a new value into the PTE doesn't disturb the state of the
+ * _PAGE_HASHPTE bit, on those machines which use an MMU hash table.
  */
-static inline void set_pte(pte_t *ptep, pte_t pte)
-{
-#if _PAGE_HASHPTE != 0
-	pte_update(ptep, ~_PAGE_HASHPTE, pte_val(pte) & ~_PAGE_HASHPTE);
-#else
-	*ptep = pte;
-#endif
-}
+extern void set_pte(pte_t *ptep, pte_t pte);
 
 static inline int ptep_test_and_clear_young(pte_t *ptep)
 {
@@ -473,7 +554,7 @@ static inline void ptep_mkdirty(pte_t *ptep)
 
 #define pte_same(A,B)	(((pte_val(A) ^ pte_val(B)) & ~_PAGE_HASHPTE) == 0)
 
-#define pmd_page(pmd)	(pmd_val(pmd))
+#define pmd_page(pmd)	(pmd_val(pmd) & PAGE_MASK)
 
 /* to find an entry in a kernel page-table-directory */
 #define pgd_offset_k(address) pgd_offset(&init_mm, address)
@@ -529,10 +610,10 @@ extern unsigned long mm_ptov(unsigned long addr) __attribute__ ((const));
 /* Values for nocacheflag and cmode */
 /* These are not used by the APUS kernel_map, but prevents
    compilation errors. */
-#define	IOMAP_FULL_CACHING	0
-#define	IOMAP_NOCACHE_SER	1
-#define	IOMAP_NOCACHE_NONSER	2
-#define	IOMAP_NO_COPYBACK	3
+#define	KERNELMAP_FULL_CACHING		0
+#define	KERNELMAP_NOCACHE_SER		1
+#define	KERNELMAP_NOCACHE_NONSER	2
+#define	KERNELMAP_NO_COPYBACK		3
 
 /*
  * Map some physical address range into the kernel address space.

@@ -3,7 +3,7 @@
  *
  *  Copyright (C) 1991, 1992  Linus Torvalds
  *
- *  nfsservctl system-call when nfsd is not compiled in.
+ *  table of configured filesystems
  */
 
 #include <linux/config.h>
@@ -13,28 +13,28 @@
 #include <linux/kmod.h>
 #include <linux/nfsd/interface.h>
 
-#if ! defined(CONFIG_NFSD)
-struct nfsd_linkage *nfsd_linkage;
+#if defined(CONFIG_NFSD_MODULE)
+struct nfsd_linkage *nfsd_linkage = NULL;
 
 long
 asmlinkage sys_nfsservctl(int cmd, void *argp, void *resp)
 {
 	int ret = -ENOSYS;
 	
-#if defined(CONFIG_MODULES)
 	lock_kernel();
 
 	if (nfsd_linkage ||
-	    (request_module ("nfsd") == 0 && nfsd_linkage)) {
-		__MOD_INC_USE_COUNT(nfsd_linkage->owner);
-		unlock_kernel();
+	    (request_module ("nfsd") == 0 && nfsd_linkage))
 		ret = nfsd_linkage->do_nfsservctl(cmd, argp, resp);
-		__MOD_DEC_USE_COUNT(nfsd_linkage->owner);
-	} else
-		unlock_kernel();
-#endif
+
+	unlock_kernel();
 	return ret;
 }
 EXPORT_SYMBOL(nfsd_linkage);
 
+#elif ! defined (CONFIG_NFSD)
+asmlinkage int sys_nfsservctl(int cmd, void *argp, void *resp)
+{
+	return -ENOSYS;
+}
 #endif /* CONFIG_NFSD */

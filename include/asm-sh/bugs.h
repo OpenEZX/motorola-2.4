@@ -28,7 +28,7 @@ static void __init check_bugs(void)
 		break;
 	case CPU_SH7729:
 		*p++ = '3';
-		printk("CPU: SH7709A/SH7729\n");
+		printk("CPU: SH7709A/SH7729/SH7709S/SH7727\n");
 		break;
 	case CPU_SH7750:
 		*p++ = '4';

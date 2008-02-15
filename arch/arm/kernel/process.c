@@ -24,8 +24,11 @@
 #include <linux/interrupt.h>
 #include <linux/init.h>
 
-#include <asm/leds.h>
+#include <linux/trace.h>
+
 #include <asm/system.h>
+#include <asm/io.h>
+#include <asm/leds.h>
 #include <asm/uaccess.h>
 
 /*
@@ -85,7 +88,7 @@ void cpu_idle(void)
 	init_idle();
 	current->nice = 20;
 	current->counter = -100;
-
+	preempt_disable();
 	while (1) {
 		void (*idle)(void) = pm_idle;
 		if (!idle)
@@ -140,7 +143,10 @@ void machine_restart(char * __unused)
 	/*
 	 * Now call the architecture specific reboot code.
 	 */
-	arch_reset(reboot_mode);
+	if (__unused == "f")
+		arch_reset('f');
+	else
+		arch_reset(reboot_mode);
 
 	/*
 	 * Whoops - the architecture was unable to reboot.
@@ -305,7 +311,7 @@ int copy_thread(int nr, unsigned long clone_flags, unsigned long esp,
 
 	atomic_set(&p->thread.refcount, 1);
 
-	childregs = ((struct pt_regs *)((unsigned long)p + 8192)) - 1;
+	childregs = ((struct pt_regs *)((unsigned long)p + 8192 - 8)) - 1;
 	*childregs = *regs;
 	childregs->ARM_r0 = 0;
 	childregs->ARM_sp = esp;
@@ -322,12 +328,18 @@ int copy_thread(int nr, unsigned long clone_flags, unsigned long esp,
 /*
  * fill in the fpe structure for a core dump...
  */
+int dump_task_fpu (struct pt_regs *regs, struct task_struct *tsk,
+		   struct user_fp *fp)
+{
+	if (tsk->used_math)
+		memcpy(fp, &tsk->thread.fpstate.soft, sizeof (*fp));
+
+	return tsk->used_math;
+}
+
 int dump_fpu (struct pt_regs *regs, struct user_fp *fp)
 {
-	if (current->used_math)
-		memcpy(fp, &current->thread.fpstate.soft, sizeof (*fp));
-
-	return current->used_math;
+	return dump_task_fpu (regs, current, fp);
 }
 
 /*
@@ -382,9 +394,14 @@ pid_t kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
 	mov	pc, %3
 	b	sys_exit
 1:	"
-        : "=r" (__ret)
-        : "Ir" (flags), "I" (CLONE_VM), "r" (fn), "r" (arg)
+        : "=&r" (__ret)
+        : "Ir" (flags), "r" (CLONE_VM | CLONE_UNTRACED), "r" (fn), "r" (arg)
 	: "r0", "r1", "lr");
+#if (CONFIG_TRACE || CONFIG_TRACE_MODULE)
+	if (__ret > 0)
+		TRACE_PROCESS(TRACE_EV_PROCESS_KTHREAD, __ret, (int) fn);
+#endif
+	
 	return __ret;
 }
 

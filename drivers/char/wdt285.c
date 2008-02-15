@@ -138,9 +138,11 @@ static int watchdog_ioctl(struct inode *inode, struct file *file,
 		default:
 			return -ENOTTY;
 		case WDIOC_GETSUPPORT:
-			if(copy_to_user((struct watchdog_info *)arg, &ident, sizeof(ident)))
-				return -EFAULT;
-			return 0;
+			i = verify_area(VERIFY_WRITE, (void*) arg, sizeof(struct watchdog_info));
+			if (i)
+				return i;
+			else
+				return copy_to_user((struct watchdog_info *)arg, &ident, sizeof(ident));
 		case WDIOC_GETSTATUS:
 		case WDIOC_GETBOOTSTATUS:
 			return put_user(0,(int *)arg);
@@ -151,7 +153,7 @@ static int watchdog_ioctl(struct inode *inode, struct file *file,
 			if (get_user(new_margin, (int *)arg))
 				return -EFAULT;
 			/* Arbitrary, can't find the card's limits */
-			if ((new_marg < 0) || (new_margin > 60))
+			if ((new_margin < 0) || (new_margin > 60))
 				return -EINVAL;
 			soft_margin = new_margin;
 			watchdog_ping();

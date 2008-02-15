@@ -36,7 +36,7 @@
 extern unsigned long cr_no_alignment;	/* defined in entry-armv.S */
 extern unsigned long cr_alignment;	/* defined in entry-armv.S */
 
-#ifdef __ARM_ARCH_4__
+#if __LINUX_ARM_ARCH__ >= 4
 #define vectors_base()	((cr_alignment & CR_V) ? 0xffff0000 : 0)
 #else
 #define vectors_base()	(0)

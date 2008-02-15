@@ -1,5 +1,5 @@
 /*
- * BK Id: SCCS/s.ptrace.h 1.8 01/17/02 23:05:50 paulus
+ * BK Id: SCCS/s.ptrace.h 1.9 10/15/01 20:29:25 paulus
  */
 #ifndef _PPC_PTRACE_H
 #define _PPC_PTRACE_H
@@ -36,6 +36,13 @@ struct pt_regs {
 	unsigned long dar;		/* Fault registers */
 	unsigned long dsisr;
 	unsigned long result; 		/* Result of a system call */
+
+#if defined(CONFIG_4xx)
+	unsigned long dbcr0;
+	unsigned long dbcr1;
+	unsigned long pad0;
+	unsigned long pad1;
+#endif
 };
 #endif
 
@@ -103,8 +110,5 @@ struct pt_regs {
 #define PT_FPR31 (PT_FPR0 + 2*31)
 #define PT_FPSCR (PT_FPR0 + 2*32 + 1)
 
-/* Get/set all the altivec registers vr0..vr31, vscr, vrsave, in one go */
-#define PTRACE_GETVRREGS	18
-#define PTRACE_SETVRREGS	19
-
 #endif
+

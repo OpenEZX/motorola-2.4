@@ -3,7 +3,7 @@
 
 #include <asm/sockios.h>
 
-/* For setsockopt(2) */
+/* For setsockoptions(2) */
 /*
  * Note: we only bother about making the SOL_SOCKET options
  * same as OSF/1, as that's all that "normal" programs are

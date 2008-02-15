@@ -29,6 +29,7 @@
  * it got moved in 2.3 */
 #include <linux/serial.h>
 #endif
+#include <linux/pm.h>
 
 struct serial_state {
 	int	magic;
@@ -53,6 +54,8 @@ struct serial_state {
 	int	io_type;
 	struct async_struct *info;
 	struct pci_dev	*dev;
+	int	bt_wakeup; 
+	struct pm_dev *pm_dev;
 };
 
 struct async_struct {
@@ -75,6 +78,7 @@ struct async_struct {
 	int			MCR; 	/* Modem control register */
 	int			LCR; 	/* Line control register */
 	int			ACR;	 /* 16950 Additional Control Reg. */
+	int			MSR;    /* add for ezx as DCE */ 
 	unsigned long		event;
 	unsigned long		last_active;
 	int			line;
@@ -157,9 +161,6 @@ struct pci_board_inst {
 	struct pci_dev		*dev;
 };
 
-extern int pci_siig10x_fn(struct pci_dev *dev, struct pci_board *board, int enable);
-extern int pci_siig20x_fn(struct pci_dev *dev, struct pci_board *board, int enable);
-
 #ifndef PCI_ANY_ID
 #define PCI_ANY_ID (~0)
 #endif
@@ -202,3 +203,4 @@ extern int pci_siig20x_fn(struct pci_dev *dev, struct pci_board *board, int enab
 #define SPCI_FL_PNPDEFAULT	(SPCI_FL_IRQRESOURCE|SPCI_FL_ISPNP)
 
 #endif /* _LINUX_SERIAL_H */
+

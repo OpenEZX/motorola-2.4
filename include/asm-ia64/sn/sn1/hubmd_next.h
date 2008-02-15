@@ -4,11 +4,13 @@
  * License.  See the file "COPYING" in the main directory of this archive
  * for more details.
  *
- * Copyright (C) 1992 - 1997, 2000-2002 Silicon Graphics, Inc. All rights reserved.
+ * Copyright (C) 1992 - 1997, 2000 Silicon Graphics, Inc.
+ * Copyright (C) 2000 by Colin Ngam
  */
-#ifndef _ASM_IA64_SN_SN1_HUBMD_NEXT_H
-#define _ASM_IA64_SN_SN1_HUBMD_NEXT_H
+#ifndef _ASM_SN_SN1_HUBMD_NEXT_H
+#define _ASM_SN_SN1_HUBMD_NEXT_H
 
+#ifdef BRINGUP
 /* XXX moved over from SN/SN0/hubmd.h -- each should be checked for SN1 */
 /* In fact, most of this stuff is wrong. Some is correct, such as
  * MD_PAGE_SIZE and MD_PAGE_NUM_SHFT.
@@ -145,7 +147,7 @@
 #define MD_SPROT_REFCNT_GET(value) ( \
         ((value) & MD_SPROT_REFCNT_MASK) >> MD_SPROT_REFCNT_SHFT)
 
-#ifndef __ASSEMBLY__
+#if _LANGUAGE_C
 #ifdef LITTLE_ENDIAN
 
 typedef union md_perf_sel {
@@ -169,8 +171,9 @@ typedef union md_perf_sel {
 } md_perf_sel_t;
 
 #endif
-#endif /* __ASSEMBLY__ */
+#endif /* _LANGUAGE_C */
 
+#endif /* BRINGUP */
 
 /* Like SN0, SN1 supports a mostly-flat address space with 8
    CPU-visible, evenly spaced, contiguous regions, or "software
@@ -297,7 +300,7 @@ typedef union md_perf_sel {
 
 ***********************************************************************/
 
-#ifndef __ASSEMBLY__
+#ifdef _LANGUAGE_C
 
 /* Standard Directory Entries */
 
@@ -530,7 +533,7 @@ typedef union md_pdir {
 	struct	md_pdir_sparse_fmt	pds_fmt;
 } md_pdir_t;
 
-#endif /* __ASSEMBLY__ */
+#endif /* _LANGUAGE_C */
 
 
 /**********************************************************************
@@ -565,7 +568,7 @@ typedef union md_pdir {
 #define MD_DIR_WAIT		(UINT64_CAST 0x6)	/* ptr format, hw-defined */
 #define MD_DIR_POISONED		(UINT64_CAST 0x7)	/* ptr format, hw-defined */
 
-#ifndef __ASSEMBLY__
+#ifdef _LANGUAGE_C
 
 /* Convert format and state fields into a single "cacheline state" value, defined above */
 
@@ -575,7 +578,7 @@ typedef union md_pdir {
    MD_DIR_SHARED)
 #define MD_DIR_STATE(x) MD_FMT_ST_TO_STATE(MD_DIR_FORMAT(x), MD_DIR_STVAL(x))
 
-#endif /* __ASSEMBLY__ */
+#endif /* _LANGUAGE_C */
 
 
 
@@ -809,4 +812,4 @@ typedef union md_pdir {
 
 #define MFC_ADDR_SHFT		6
 
-#endif  /* _ASM_IA64_SN_SN1_HUBMD_NEXT_H */
+#endif  /* _ASM_SN_SN1_HUBMD_NEXT_H */

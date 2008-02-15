@@ -1444,14 +1444,11 @@ vortex_up(struct net_device *dev)
 		/* Read BMSR (reg1) only to clear old status. */
 		mii_reg1 = mdio_read(dev, vp->phys[0], 1);
 		mii_reg5 = mdio_read(dev, vp->phys[0], 5);
-		if (mii_reg5 == 0xffff  ||  mii_reg5 == 0x0000) {
-			netif_carrier_off(dev); /* No MII device or no link partner report */
-		} else {
-			if ((mii_reg5 & 0x0100) != 0	/* 100baseTx-FD */
+		if (mii_reg5 == 0xffff  ||  mii_reg5 == 0x0000)
+			;					/* No MII device or no link partner report */
+		else if ((mii_reg5 & 0x0100) != 0	/* 100baseTx-FD */
 				 || (mii_reg5 & 0x00C0) == 0x0040) /* 10T-FD, but not 100-HD */
-				vp->full_duplex = 1;
-			netif_carrier_on(dev);
-		}
+			vp->full_duplex = 1;
 		vp->partner_flow_ctrl = ((mii_reg5 & 0x0400) != 0);
 		if (vortex_debug > 1)
 			printk(KERN_INFO "%s: MII #%d status %4.4x, link partner capability %4.4x,"
@@ -1532,7 +1529,15 @@ vortex_up(struct net_device *dev)
 		vp->cur_rx = vp->dirty_rx = 0;
 		/* Initialize the RxEarly register as recommended. */
 		outw(SetRxThreshold + (1536>>2), ioaddr + EL3_CMD);
+#ifdef CONFIG_CPU_LX45XXX
+		/*
+		 * We must disable unsupported Memory Write and Invalidate 
+		 * PCI commands
+		 */
+		outl(0x00100020, ioaddr + PktStatus);
+#else	
 		outl(0x0020, ioaddr + PktStatus);
+#endif
 		outl(vp->rx_ring_dma, ioaddr + UpListPtr);
 	}
 	if (vp->full_bus_master_tx) { 		/* Boomerang bus master Tx. */
@@ -1654,16 +1659,13 @@ vortex_timer(unsigned long data)
 	switch (dev->if_port) {
 	case XCVR_10baseT:  case XCVR_100baseTx:  case XCVR_100baseFx:
 		if (media_status & Media_LnkBeat) {
-			netif_carrier_on(dev);
 			ok = 1;
 			if (vortex_debug > 1)
 				printk(KERN_DEBUG "%s: Media %s has link beat, %x.\n",
 					   dev->name, media_tbl[dev->if_port].name, media_status);
-		} else if (vortex_debug > 1) {
-			netif_carrier_off(dev);
+		} else if (vortex_debug > 1)
 			printk(KERN_DEBUG "%s: Media %s has no link beat, %x.\n",
 				   dev->name, media_tbl[dev->if_port].name, media_status);
-		}
 		break;
 	case XCVR_MII: case XCVR_NWAY:
 		{
@@ -1672,7 +1674,7 @@ vortex_timer(unsigned long data)
 			if (vortex_debug > 2)
 				printk(KERN_DEBUG "%s: MII transceiver has status %4.4x.\n",
 					dev->name, mii_status);
-			if (mii_status & BMSR_LSTATUS) {
+			if (mii_status & 0x0004) {
 				int mii_reg5 = mdio_read(dev, vp->phys[0], 5);
 				if (! vp->force_fd  &&  mii_reg5 != 0xffff) {
 					int duplex = (mii_reg5&0x0100) ||
@@ -1694,9 +1696,6 @@ vortex_timer(unsigned long data)
 						/* AKPM: bug: should reset Tx and Rx after setting Duplex.  Page 180 */
 					}
 				}
-				netif_carrier_on(dev);
-			} else {
-				netif_carrier_off(dev);
 			}
 		}
 		break;

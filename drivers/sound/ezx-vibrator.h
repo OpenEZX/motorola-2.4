@@ -1,0 +1,7 @@
+#include <linux/ioctl.h>
+
+
+#define VIBRATOR_MAJOR	108
+#define VIBRATOR_IOCTL_BASE	0xbb
+#define VIBRATOR_ENABLE		_IOW (VIBRATOR_IOCTL_BASE,1,int)
+#define VIBRATOR_DISABLE	_IO (VIBRATOR_IOCTL_BASE,2)

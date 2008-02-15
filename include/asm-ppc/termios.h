@@ -1,5 +1,5 @@
 /*
- * BK Id: %F% %I% %G% %U% %#%
+ * BK Id: SCCS/s.termios.h 1.8 05/17/01 18:14:26 cort
  */
 #ifndef _PPC_TERMIOS_H
 #define _PPC_TERMIOS_H
@@ -173,7 +173,6 @@ struct termio {
 #define TIOCM_OUT1	0x2000
 #define TIOCM_OUT2	0x4000
 #define TIOCM_LOOP	0x8000
-#define TIOCM_MODEM_BITS TIOCM_OUT2
 
 /* ioctl (fd, TIOCSERGETLSR, &result) where result may be as below */
 #define TIOCSER_TEMT    0x01	/* Transmitter physically empty */

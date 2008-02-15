@@ -10,7 +10,7 @@ USE_STANDARD_AS_RULE := true
 HEAD_OBJ  = head-$(PROCESSOR).o
 ENTRY_OBJ = entry-$(PROCESSOR).o
 
-AFLAGS_head-armv.o := -DTEXTADDR=$(TEXTADDR)
+AFLAGS_head-armv.o := -DTEXTADDR=$(TEXTADDR) -DDATAADDR=$(DATAADDR)
 AFLAGS_head-armo.o := -DTEXTADDR=$(TEXTADDR)
 
 # This is depreciated.
@@ -43,11 +43,17 @@ export-objs	:= armksyms.o dma.o ecard.o fiq.o io.o oldlatches.o time.o
 no-irq-arch	:= $(CONFIG_ARCH_INTEGRATOR) $(CONFIG_ARCH_CLPS711X) \
 		   $(CONFIG_FOOTBRIDGE) $(CONFIG_ARCH_EBSA110) \
 		   $(CONFIG_ARCH_SA1100) $(CONFIG_ARCH_CAMELOT) \
+		   $(CONFIG_ARCH_IOP3XX) $(CONFIG_ARCH_ADIFCC) \
+		   $(CONFIG_ARCH_PXA) $(CONFIG_ARCH_IXP1200) \
 		   $(CONFIG_ARCH_MX1ADS)
 
 ifneq ($(findstring y,$(no-irq-arch)),y)
   obj-y		+= irq-arch.o
 endif
+
+obj-$(CONFIG_KGDB) += kgdb-stub.o kgdb-jmp.o
+obj-$(CONFIG_KGDB_SERIAL) += kgdb-serial.o
+obj-$(CONFIG_KGDB_UDP) += kgdb-udp.o
 
 obj-$(CONFIG_ARCH_ACORN) += ecard.o fiq.o time-acorn.o
 obj-$(CONFIG_ARCH_CLPS7500) += time-acorn.o
@@ -56,6 +62,9 @@ obj-$(CONFIG_MODULES)	+= armksyms.o
 obj-$(CONFIG_ARTHUR)	+= arthur.o
 obj-$(CONFIG_ISA_DMA)	+= dma-isa.o
 obj-$(CONFIG_PCI)	+= bios32.o $(pci-$(MACHINE)) $(pci-y)
+
+obj-$(CONFIG_XSCALE_PMU_TIMER) += xscale-time.o
+obj-$(CONFIG_XSCALE_PMU) += xscale-pmu.o
 
 ifneq ($(MACHINE),ebsa110)
   obj-y		+= io.o

@@ -148,7 +148,6 @@ nfsd_proc_read(struct svc_rqst *rqstp, struct nfsd_readargs *argp,
 				argp->count);
 		argp->count = avail << 2;
 	}
-	svc_reserve(rqstp, (19<<2) + argp->count + 4);
 
 	resp->count = argp->count;
 	nfserr = nfsd_read(rqstp, fh_copy(&resp->fh, &argp->fh),
@@ -264,11 +263,11 @@ nfsd_proc_create(struct svc_rqst *rqstp, struct nfsd_createargs *argp,
 					/* this is probably a permission check..
 					 * at least IRIX implements perm checking on
 					 *   echo thing > device-special-file-or-pipe
-					 * by doing a CREATE with type==0
+					 * by does a CREATE with type==0
 					 */
 					nfserr = nfsd_permission(newfhp->fh_export,
 								 newfhp->fh_dentry,
-								 MAY_WRITE|_NFSD_IRIX_BOGOSITY);
+								 MAY_WRITE);
 					if (nfserr && nfserr != nfserr_rofs)
 						goto out_unlock;
 				}
@@ -523,7 +522,7 @@ nfsd_proc_statfs(struct svc_rqst * rqstp, struct nfsd_fhandle   *argp,
 #define nfssvc_release_none	NULL
 struct nfsd_void { int dummy; };
 
-#define PROC(name, argt, rest, relt, cache, respsize)	\
+#define PROC(name, argt, rest, relt, cache)	\
  { (svc_procfunc) nfsd_proc_##name,		\
    (kxdrproc_t) nfssvc_decode_##argt,		\
    (kxdrproc_t) nfssvc_encode_##rest,		\
@@ -531,33 +530,27 @@ struct nfsd_void { int dummy; };
    sizeof(struct nfsd_##argt),			\
    sizeof(struct nfsd_##rest),			\
    0,						\
-   cache,					\
-   respsize,				       	\
+   cache					\
  }
-
-#define ST 1		/* status */
-#define FH 8		/* filehandle */
-#define	AT 18		/* attributes */
-
 struct svc_procedure		nfsd_procedures2[18] = {
-  PROC(null,	 void,		void,		none,		RC_NOCACHE, ST),
-  PROC(getattr,	 fhandle,	attrstat,	fhandle,	RC_NOCACHE, ST+AT),
-  PROC(setattr,  sattrargs,	attrstat,	fhandle,	RC_REPLBUFF, ST+AT),
-  PROC(none,	 void,		void,		none,		RC_NOCACHE, ST),
-  PROC(lookup,	 diropargs,	diropres,	fhandle,	RC_NOCACHE, ST+FH+AT),
-  PROC(readlink, fhandle,	readlinkres,	none,		RC_NOCACHE, ST+1+256),
-  PROC(read,	 readargs,	readres,	fhandle,	RC_NOCACHE, ST+AT+1+NFSSVC_MAXBLKSIZE),
-  PROC(none,	 void,		void,		none,		RC_NOCACHE, ST),
-  PROC(write,	 writeargs,	attrstat,	fhandle,	RC_REPLBUFF, ST+AT),
-  PROC(create,	 createargs,	diropres,	fhandle,	RC_REPLBUFF, ST+FH+AT),
-  PROC(remove,	 diropargs,	void,		none,		RC_REPLSTAT, ST),
-  PROC(rename,	 renameargs,	void,		none,		RC_REPLSTAT, ST),
-  PROC(link,	 linkargs,	void,		none,		RC_REPLSTAT, ST),
-  PROC(symlink,	 symlinkargs,	void,		none,		RC_REPLSTAT, ST),
-  PROC(mkdir,	 createargs,	diropres,	fhandle,	RC_REPLBUFF, ST+FH+AT),
-  PROC(rmdir,	 diropargs,	void,		none,		RC_REPLSTAT, ST),
-  PROC(readdir,	 readdirargs,	readdirres,	none,		RC_REPLBUFF, 0),
-  PROC(statfs,	 fhandle,	statfsres,	none,		RC_NOCACHE, ST+5),
+  PROC(null,	 void,		void,		none,		RC_NOCACHE),
+  PROC(getattr,	 fhandle,	attrstat,	fhandle,	RC_NOCACHE),
+  PROC(setattr,  sattrargs,	attrstat,	fhandle,	RC_REPLBUFF),
+  PROC(none,	 void,		void,		none,		RC_NOCACHE),
+  PROC(lookup,	 diropargs,	diropres,	fhandle,	RC_NOCACHE),
+  PROC(readlink, fhandle,	readlinkres,	none,		RC_NOCACHE),
+  PROC(read,	 readargs,	readres,	fhandle,	RC_NOCACHE),
+  PROC(none,	 void,		void,		none,		RC_NOCACHE),
+  PROC(write,	 writeargs,	attrstat,	fhandle,	RC_REPLBUFF),
+  PROC(create,	 createargs,	diropres,	fhandle,	RC_REPLBUFF),
+  PROC(remove,	 diropargs,	void,		none,		RC_REPLSTAT),
+  PROC(rename,	 renameargs,	void,		none,		RC_REPLSTAT),
+  PROC(link,	 linkargs,	void,		none,		RC_REPLSTAT),
+  PROC(symlink,	 symlinkargs,	void,		none,		RC_REPLSTAT),
+  PROC(mkdir,	 createargs,	diropres,	fhandle,	RC_REPLBUFF),
+  PROC(rmdir,	 diropargs,	void,		none,		RC_REPLSTAT),
+  PROC(readdir,	 readdirargs,	readdirres,	none,		RC_REPLBUFF),
+  PROC(statfs,	 fhandle,	statfsres,	none,		RC_NOCACHE),
 };
 
 

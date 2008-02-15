@@ -182,7 +182,7 @@ struct emu10k1_card
 
 	u8 chiprev;                    /* Chip revision                */
 
-	u8 is_aps;
+	int isaps;
 
 	struct patch_manager mgr;
 	struct pt_data pt;
@@ -210,12 +210,12 @@ extern struct list_head emu10k1_devs;
 
 /* Hardware Abstraction Layer access functions */
 
-void emu10k1_writefn0(struct emu10k1_card *, u32, u32);
+void emu10k1_writefn0(struct emu10k1_card *, u32 , u32);
 u32 emu10k1_readfn0(struct emu10k1_card *, u32);
 
 void emu10k1_timer_set(struct emu10k1_card *, u16);
 
-void sblive_writeptr(struct emu10k1_card *, u32, u32, u32);
+void sblive_writeptr(struct emu10k1_card *, u32 , u32 , u32);
 void sblive_writeptr_tag(struct emu10k1_card *, u32, ...);
 #define TAGLIST_END	0
 

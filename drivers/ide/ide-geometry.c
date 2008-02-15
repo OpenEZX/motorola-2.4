@@ -6,8 +6,6 @@
 #include <linux/mc146818rtc.h>
 #include <asm/io.h>
 
-#ifdef CONFIG_BLK_DEV_IDE
-
 /*
  * We query CMOS about hard disks : it could be that we have a SCSI/ESDI/etc
  * controller that is BIOS compatible with ST-506, and thus showing up in our
@@ -32,7 +30,7 @@
  * for us during initialization.  I have the necessary docs -- any takers?  -ml
  */
 /*
- * I did this, but it doesn't work - there is no reasonable way to find the
+ * I did this, but it doesnt work - there is no reasonable way to find the
  * correspondence between the BIOS numbering of the disks and the Linux
  * numbering. -aeb
  *
@@ -42,11 +40,7 @@
  * Consequently, also the former "drive->present = 1" below was a mistake.
  *
  * Eventually the entire routine below should be removed.
- *
- * 17-OCT-2000 rjohnson@analogic.com Added spin-locks for reading CMOS
- * chip.
  */
-
 void probe_cmos_for_drives (ide_hwif_t *hwif)
 {
 #ifdef __i386__
@@ -86,10 +80,9 @@ void probe_cmos_for_drives (ide_hwif_t *hwif)
 	}
 #endif
 }
-#endif /* CONFIG_BLK_DEV_IDE */
 
 
-#if defined(CONFIG_BLK_DEV_IDE) || defined(CONFIG_BLK_DEV_IDE_MODULE)
+#ifdef CONFIG_BLK_DEV_IDE
 
 extern ide_drive_t * get_info_ptr(kdev_t);
 extern unsigned long current_capacity (ide_drive_t *);
@@ -221,4 +214,4 @@ int ide_xlate_1024 (kdev_t i_rdev, int xparm, int ptheads, const char *msg)
 		       drive->bios_cyl, drive->bios_head, drive->bios_sect);
 	return ret;
 }
-#endif /* defined(CONFIG_BLK_DEV_IDE) || defined(CONFIG_BLK_DEV_IDE_MODULE) */
+#endif /* CONFIG_BLK_DEV_IDE */

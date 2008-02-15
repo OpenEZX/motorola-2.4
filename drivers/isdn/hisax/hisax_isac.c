@@ -44,7 +44,6 @@ static char *ISACVer[] = {
 
 MODULE_AUTHOR("Kai Germaschewski <kai.germaschewski@gmx.de>/Karsten Keil <kkeil@suse.de>");
 MODULE_DESCRIPTION("ISAC/ISAC-SX driver");
-MODULE_LICENSE("GPL");
 
 #define DBG_WARN      0x0001
 #define DBG_IRQ       0x0002

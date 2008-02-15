@@ -40,7 +40,7 @@ void get_rtc_time(struct rtc_time *t)
 	to_tm(nowtime, t);
 
 	t->tm_year -= 1900;
-	t->tm_mon -= 1; /* Make sure userland has a 0-based month */
+	t->tm_mon -= 1; /* Userland expects 0-11 for a month range */
 }
 
 /* Set the current date and time in the real time clock. */

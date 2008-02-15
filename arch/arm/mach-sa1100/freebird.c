@@ -21,6 +21,33 @@
 unsigned long BCR_value = BCR_DB1110;
 EXPORT_SYMBOL(BCR_value);
 
+static void freebird_backlight_power(int on)
+{
+#error FIXME
+	if (on) {
+		BCR_set(BCR_FREEBIRD_LCD_PWR | BCR_FREEBIRD_LCD_DISP);
+		/* Turn on backlight, Chester */
+		BCR_set(BCR_FREEBIRD_LCD_BACKLIGHT);
+	} else {
+		BCR_clear(BCR_FREEBIRD_LCD_PWR | BCR_FREEBIRD_LCD_DISP
+			  /* | BCR_FREEBIRD_LCD_BACKLIGHT */);
+	}
+}
+
+static void freebird_lcd_power(int on)
+{
+}
+
+static int __init freebird_init(void)
+{
+	if (machine_is_freebird()) {
+		sa1100fb_backlight_power = freebird_backlight_power;
+		sa1100fb_lcd_power = freebird_lcd_power;
+	}
+	return 0;
+}
+
+__initcall(freebird_init);
 
 static void __init
 fixup_freebird(struct machine_desc *desc, struct param_struct *params,

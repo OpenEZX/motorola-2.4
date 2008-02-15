@@ -4,7 +4,7 @@
  *
  * (C) 2000 Red Hat. GPL'd
  *
- * $Id: cfi_cmdset_0001.c,v 1.87 2001/10/02 15:05:11 dwmw2 Exp $
+ * $Id: cfi_cmdset_0001.c,v 1.88 2001/11/27 14:55:12 cdavies Exp $
  *
  * 
  * 10/10/2000	Nicolas Pitre <nico@cam.org>
@@ -30,7 +30,49 @@
 #include <linux/mtd/cfi.h>
 #include <linux/mtd/compatmac.h>
 
+#include <linux/pm.h>
+
+/* For P1 and P2 -- Added by Susan to unlock K3 flash chips at Dalhart flash device initialization */
+//	#define K3_ERASE_BLOCK_SIZE   0x20000
+//	#define K3_DATA_REGION_START 0x00920000  // The start for the R/W filesystem //
+//	#define K3_DATA_REGION_END   0x00f20000  // The end for the R/W filesystem   //
+//	#define TIME_OUT   1000000L
+/* End of modification */
+
+/* For P3A(32MB) -- Added by Susan to unlock K3 flash chips at Dalhart flash device initialization */
+//Susan #define CONFIG_K3_DEBUG 1
+
+#define K3_ERASE_BLOCK_SIZE   0x20000
+
+//Susan #define K3_DATA_REGION_START 0x01400000  // The start for the R/W filesystem //
+//Susan #define K3_DATA_REGION_END   0x01C00000  // The end for the R/W filesystem   //
+#define K3_DATA_REGION_START 0x01000000  // The start for the R/W filesystem //
+//Susan -- 8MB --#define K3_DATA_REGION_END   0x01800000  // The end for the R/W filesystem   //
+#ifdef A768
+#define K3_DATA_REGION_END   0x01500000  //Susan -- 5MB in A768 //
+#else
+#define K3_DATA_REGION_END   0x01900000  // Susan -- 9MB --The end for the R/W filesystem   //
+#endif
+
+/* Susan for lockdown rootfs(cramfs) region in the first K3 flash chip */
+#define K3_ROOTFS_REGION_START 0x00100000  //The start of the rootfs region //
+#define K3_ROOTFS_REGION_END 0x01000000  //The end of the rootfs region + 1 byte //
+#define TIME_OUT   1000000L
+
+/* This is for notification of flash status before we are asked entering into sleep mode -- Susan */
+#ifdef CONFIG_PM
+static struct pm_flash_s
+{
+	struct pm_dev *pm_dev;
+	atomic_t pm_flash_count;
+}pm_flash;
+#endif
+
+/* End of modification */
+
 static int cfi_intelext_read (struct mtd_info *, loff_t, size_t, size_t *, u_char *);
+static int cfi_intelext_read_user_prot_reg (struct mtd_info *, loff_t, size_t, size_t *, u_char *);
+static int cfi_intelext_read_fact_prot_reg (struct mtd_info *, loff_t, size_t, size_t *, u_char *);
 static int cfi_intelext_write_words(struct mtd_info *, loff_t, size_t, size_t *, const u_char *);
 static int cfi_intelext_write_buffers(struct mtd_info *, loff_t, size_t, size_t *, const u_char *);
 static int cfi_intelext_erase_varsize(struct mtd_info *, struct erase_info *);
@@ -41,6 +83,10 @@ static int cfi_intelext_suspend (struct mtd_info *);
 static void cfi_intelext_resume (struct mtd_info *);
 
 static void cfi_intelext_destroy(struct mtd_info *);
+extern struct map_info lubbock_map;
+
+/* Added by Susan for K3 UNLOCK mechanism before mtd_info has been setup */
+int cfi_intelext_unlockdown_K3(struct map_info *map, unsigned int start_phys_addr, unsigned int end_phys_addr, unsigned int start_rootfs_addr, unsigned int end_rootfs_addr);
 
 struct mtd_info *cfi_cmdset_0001(struct map_info *, int);
 
@@ -109,6 +155,8 @@ struct mtd_info *cfi_cmdset_0001(struct map_info *map, int primary)
 	struct cfi_private *cfi = map->fldrv_priv;
 	int i;
 	__u32 base = cfi->chips[0].start;
+	/* Added by Susan */
+	int ret_unlock = 0;
 
 	if (cfi->cfi_mode) {
 		/* 
@@ -151,15 +199,16 @@ struct mtd_info *cfi_cmdset_0001(struct map_info *map, int primary)
 		/* Do some byteswapping if necessary */
 		extp->FeatureSupport = cfi32_to_cpu(extp->FeatureSupport);
 		extp->BlkStatusRegMask = cfi32_to_cpu(extp->BlkStatusRegMask);
-		
+		extp->ProtRegAddr = cfi32_to_cpu(extp->ProtRegAddr);
+			
 #ifdef DEBUG_CFI_FEATURES
 		/* Tell the user about it in lots of lovely detail */
 		cfi_tell_features(extp);
 #endif	
 
 		/* Install our own private info structure */
-		cfi->cmdset_priv = extp;
-	}	
+		cfi->cmdset_priv = extp;	
+	}
 
 	for (i=0; i< cfi->numchips; i++) {
 		cfi->chips[i].word_write_time = 128;
@@ -172,6 +221,16 @@ struct mtd_info *cfi_cmdset_0001(struct map_info *map, int primary)
 	
 	/* Make sure it's in read mode */
 	cfi_send_gen_cmd(0xff, 0x55, base, map, cfi, cfi->device_type, NULL);
+
+	/* Added by Susan to unlock the data blocks in K3 flash chip*/
+	ret_unlock = cfi_intelext_unlockdown_K3(map, K3_DATA_REGION_START, K3_DATA_REGION_END, K3_ROOTFS_REGION_START, K3_ROOTFS_REGION_END);
+	if (ret_unlock)
+	{
+			printk(KERN_ERR "Failed to unlock data blocks in K3 flash device\n");
+			return NULL;
+	}
+	/* End of modification */
+	
 	return cfi_intelext_setup(map);
 }
 
@@ -247,6 +306,8 @@ static struct mtd_info *cfi_intelext_setup(struct map_info *map)
 		//printk(KERN_INFO "Using word write method\n" );
 		mtd->write = cfi_intelext_write_words;
 	}
+	mtd->read_user_prot_reg = cfi_intelext_read_user_prot_reg;
+	mtd->read_fact_prot_reg = cfi_intelext_read_fact_prot_reg;
 	mtd->sync = cfi_intelext_sync;
 	mtd->lock = cfi_intelext_lock;
 	mtd->unlock = cfi_intelext_unlock;
@@ -262,12 +323,17 @@ static struct mtd_info *cfi_intelext_setup(struct map_info *map)
 
 static inline int do_read_onechip(struct map_info *map, struct flchip *chip, loff_t adr, size_t len, u_char *buf)
 {
-	__u32 status, status_OK;
+	cfi_word status, status_OK;
 	unsigned long timeo;
 	DECLARE_WAITQUEUE(wait, current);
 	int suspended = 0;
 	unsigned long cmd_addr;
 	struct cfi_private *cfi = map->fldrv_priv;
+
+	//Susan for pm
+#ifdef CONFIG_PM
+	atomic_inc(&(pm_flash.pm_flash_count));
+#endif
 
 	adr += chip->start;
 
@@ -284,6 +350,11 @@ static inline int do_read_onechip(struct map_info *map, struct flchip *chip, lof
 	/* Check that the chip's ready to talk to us.
 	 * If it's in FL_ERASING state, suspend it and make it talk now.
 	 */
+/* Susan for observing flash status */
+#ifdef CONFIG_ROFLASH_DEBUG
+	printk("do_read_onechip: chip->state is %d\n", chip->state);
+#endif
+
 	switch (chip->state) {
 	case FL_ERASING:
 		if (!((struct cfi_pri_intelext *)cfi->cmdset_priv)->FeatureSupport & 2)
@@ -313,6 +384,11 @@ static inline int do_read_onechip(struct map_info *map, struct flchip *chip, lof
 				spin_unlock_bh(chip->mutex);
 				printk(KERN_ERR "Chip not ready after erase "
 				       "suspended: status = 0x%x\n", status);
+
+				//Susan for pm
+#ifdef CONFIG_PM
+				atomic_dec(&(pm_flash.pm_flash_count));
+#endif
 				return -EIO;
 			}
 			
@@ -351,6 +427,11 @@ static inline int do_read_onechip(struct map_info *map, struct flchip *chip, lof
 		if (time_after(jiffies, timeo)) {
 			spin_unlock_bh(chip->mutex);
 			printk(KERN_ERR "waiting for chip to be ready timed out in read. WSM status = %x\n", status);
+
+			//Susan for pm
+#ifdef CONFIG_PM
+			atomic_dec(&(pm_flash.pm_flash_count));
+#endif
 			return -EIO;
 		}
 
@@ -391,6 +472,11 @@ static inline int do_read_onechip(struct map_info *map, struct flchip *chip, lof
 
 	wake_up(&chip->wq);
 	spin_unlock_bh(chip->mutex);
+
+	//Susan for pm
+#ifdef CONFIG_PM
+	atomic_dec(&(pm_flash.pm_flash_count));
+#endif
 	return 0;
 }
 
@@ -433,14 +519,127 @@ static int cfi_intelext_read (struct mtd_info *mtd, loff_t from, size_t len, siz
 	return ret;
 }
 
-static int do_write_oneword(struct map_info *map, struct flchip *chip, unsigned long adr, __u32 datum)
+static int cfi_intelext_read_prot_reg (struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen, u_char *buf, int base_offst, int reg_sz)
+{
+	struct map_info *map = mtd->priv;
+	struct cfi_private *cfi = map->fldrv_priv;
+	struct cfi_pri_intelext *extp=cfi->cmdset_priv;
+	int ofs_factor = cfi->interleave * cfi->device_type;
+	int   count=len;
+	struct flchip *chip;
+	int chip_num,offst;
+	unsigned long timeo;
+	DECLARE_WAITQUEUE(wait, current);
+
+	/* Calculate which chip & protection register offset we need */
+	chip_num=((unsigned int)from/reg_sz);
+	offst=from-(reg_sz*chip_num)+base_offst;
+
+	while(count){
+		
+		if(chip_num>=cfi->numchips)
+			goto out;
+
+		/* Make sure that the chip is in the right state */
+
+		timeo = jiffies + HZ;
+		chip=&cfi->chips[chip_num];
+	retry:		
+		spin_lock_bh(chip->mutex);
+	
+		switch (chip->state) {
+		case FL_READY:
+		case FL_STATUS:
+		case FL_CFI_QUERY:
+		case FL_JEDEC_QUERY:
+			break;
+		
+		default:
+				/* Stick ourselves on a wait queue to be woken when
+				   someone changes the status */
+			set_current_state(TASK_UNINTERRUPTIBLE);
+			add_wait_queue(&chip->wq, &wait);
+			spin_unlock_bh(chip->mutex);
+			schedule();
+			remove_wait_queue(&chip->wq, &wait);
+			timeo = jiffies + HZ;
+			goto retry;
+		}
+			
+		/* Now read the data required from this flash */
+       
+		cfi_send_gen_cmd(0x90, 0x55,chip->start, map, cfi, cfi->device_type, NULL);
+		while(count && ((offst-base_offst)<reg_sz)){
+			*buf=map->read8(map,(chip->start+(extp->ProtRegAddr*ofs_factor)+offst));
+			buf++;
+			offst++;
+			count--;
+		}
+	       
+		chip->state=FL_CFI_QUERY;
+		spin_unlock_bh(chip->mutex);
+		/* Move on to the next chip */
+		chip_num++;
+		offst=base_offst;
+	
+	}
+	
+ out:	
+	wake_up(&chip->wq);
+	return len-count;
+}
+	
+static int cfi_intelext_read_user_prot_reg (struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen, u_char *buf)
+{
+	struct map_info *map = mtd->priv;
+	struct cfi_private *cfi = map->fldrv_priv;
+	struct cfi_pri_intelext *extp=cfi->cmdset_priv;
+	int base_offst,reg_sz;
+	
+	/* Check that we actually have some protection registers */
+	if(!(extp->FeatureSupport&64)){
+		printk(KERN_WARNING "%s: This flash device has no protection data to read!\n",map->name);
+		return 0;
+	}
+
+	base_offst=(1<<extp->FactProtRegSize);
+	reg_sz=(1<<extp->UserProtRegSize);
+
+	return cfi_intelext_read_prot_reg(mtd, from, len, retlen, buf, base_offst, reg_sz);
+}
+
+static int cfi_intelext_read_fact_prot_reg (struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen, u_char *buf)
+{
+	struct map_info *map = mtd->priv;
+	struct cfi_private *cfi = map->fldrv_priv;
+	struct cfi_pri_intelext *extp=cfi->cmdset_priv;
+	int base_offst,reg_sz;
+	
+	/* Check that we actually have some protection registers */
+	if(!(extp->FeatureSupport&64)){
+		printk(KERN_WARNING "%s: This flash device has no protection data to read!\n",map->name);
+		return 0;
+	}
+
+	base_offst=0;
+	reg_sz=(1<<extp->FactProtRegSize);
+
+	return cfi_intelext_read_prot_reg(mtd, from, len, retlen, buf, base_offst, reg_sz);
+}
+
+
+static int do_write_oneword(struct map_info *map, struct flchip *chip, unsigned long adr, cfi_word datum)
 {
 	struct cfi_private *cfi = map->fldrv_priv;
-	__u32 status, status_OK;
+	cfi_word status, status_OK;
 	unsigned long timeo;
 	DECLARE_WAITQUEUE(wait, current);
 	int z;
 
+	//Susan for pm
+#ifdef CONFIG_PM
+	atomic_inc(&(pm_flash.pm_flash_count));
+#endif
 	adr += chip->start;
 
 	/* Let's determine this according to the interleave only once */
@@ -473,6 +672,11 @@ static int do_write_oneword(struct map_info *map, struct flchip *chip, unsigned 
 		if (time_after(jiffies, timeo)) {
 			spin_unlock_bh(chip->mutex);
 			printk(KERN_ERR "waiting for chip to be ready timed out in read\n");
+
+			//Susan for pm
+#ifdef CONFIG_PM
+			atomic_dec(&(pm_flash.pm_flash_count));
+#endif
 			return -EIO;
 		}
 
@@ -527,6 +731,11 @@ static int do_write_oneword(struct map_info *map, struct flchip *chip, unsigned 
 			DISABLE_VPP(map);
 			spin_unlock_bh(chip->mutex);
 			printk(KERN_ERR "waiting for chip to be ready timed out in word write\n");
+
+			//Susan for pm
+#ifdef CONFIG_PM
+			atomic_dec(&(pm_flash.pm_flash_count));
+#endif
 			return -EIO;
 		}
 
@@ -555,10 +764,20 @@ static int do_write_oneword(struct map_info *map, struct flchip *chip, unsigned 
 		cfi_write(map, CMD(0x70), adr);
 		wake_up(&chip->wq);
 		spin_unlock_bh(chip->mutex);
+		
+		//Susan for pm
+#ifdef CONFIG_PM
+		atomic_dec(&(pm_flash.pm_flash_count));
+#endif
 		return -EROFS;
 	}
 	wake_up(&chip->wq);
 	spin_unlock_bh(chip->mutex);
+	
+	//Susan for pm
+#ifdef CONFIG_PM
+	atomic_dec(&(pm_flash.pm_flash_count));
+#endif
 	return 0;
 }
 
@@ -584,7 +803,7 @@ static int cfi_intelext_write_words (struct mtd_info *mtd, loff_t to , size_t le
 		int gap = ofs - bus_ofs;
 		int i = 0, n = 0;
 		u_char tmp_buf[4];
-		__u32 datum;
+		cfi_word datum;
 
 		while (gap--)
 			tmp_buf[i++] = 0xff;
@@ -597,6 +816,8 @@ static int cfi_intelext_write_words (struct mtd_info *mtd, loff_t to , size_t le
 			datum = *(__u16*)tmp_buf;
 		} else if (cfi_buswidth_is_4()) {
 			datum = *(__u32*)tmp_buf;
+		} else if (cfi_buswidth_is_8()) {
+			datum = *(__u64*)tmp_buf;
 		} else {
 			return -EINVAL;  /* should never happen, but be safe */
 		}
@@ -619,7 +840,7 @@ static int cfi_intelext_write_words (struct mtd_info *mtd, loff_t to , size_t le
 	}
 	
 	while(len >= CFIDEV_BUSWIDTH) {
-		__u32 datum;
+		cfi_word datum;
 
 		if (cfi_buswidth_is_1()) {
 			datum = *(__u8*)buf;
@@ -652,7 +873,7 @@ static int cfi_intelext_write_words (struct mtd_info *mtd, loff_t to , size_t le
 	if (len & (CFIDEV_BUSWIDTH-1)) {
 		int i = 0, n = 0;
 		u_char tmp_buf[4];
-		__u32 datum;
+		cfi_word datum;
 
 		while (len--)
 			tmp_buf[i++] = buf[n++];
@@ -663,6 +884,8 @@ static int cfi_intelext_write_words (struct mtd_info *mtd, loff_t to , size_t le
 			datum = *(__u16*)tmp_buf;
 		} else if (cfi_buswidth_is_4()) {
 			datum = *(__u32*)tmp_buf;
+		} else if (cfi_buswidth_is_8()) {
+			datum = *(__u64*)tmp_buf;
 		} else {
 			return -EINVAL;  /* should never happen, but be safe */
 		}
@@ -683,11 +906,16 @@ static inline int do_write_buffer(struct map_info *map, struct flchip *chip,
 				  unsigned long adr, const u_char *buf, int len)
 {
 	struct cfi_private *cfi = map->fldrv_priv;
-	__u32 status, status_OK;
+	cfi_word status, status_OK;
 	unsigned long cmd_adr, timeo;
 	DECLARE_WAITQUEUE(wait, current);
 	int wbufsize, z;
 
+	//Susan for pm
+#ifdef CONFIG_PM
+	atomic_inc(&(pm_flash.pm_flash_count));
+#endif
+	
 	wbufsize = CFIDEV_INTERLEAVE << cfi->cfiq->MaxBufWriteSize;
 	adr += chip->start;
 	cmd_adr = adr & ~(wbufsize-1);
@@ -721,6 +949,11 @@ static inline int do_write_buffer(struct map_info *map, struct flchip *chip,
 		if (time_after(jiffies, timeo)) {
 			spin_unlock_bh(chip->mutex);
 			printk(KERN_ERR "waiting for chip to be ready timed out in buffer write\n");
+
+			//Susan for pm
+#ifdef CONFIG_PM
+			atomic_dec(&(pm_flash.pm_flash_count));
+#endif
 			return -EIO;
 		}
 
@@ -762,6 +995,11 @@ static inline int do_write_buffer(struct map_info *map, struct flchip *chip,
 			DISABLE_VPP(map);
 			spin_unlock_bh(chip->mutex);
 			printk(KERN_ERR "Chip not ready for buffer write. Xstatus = %x, status = %x\n", status, cfi_read(map, cmd_adr));
+
+			//Susan for pm
+#ifdef CONFIG_PM
+			atomic_dec(&(pm_flash.pm_flash_count));
+#endif
 			return -EIO;
 		}
 	}
@@ -777,8 +1015,15 @@ static inline int do_write_buffer(struct map_info *map, struct flchip *chip,
 			map->write16 (map, *((__u16*)buf)++, adr+z);
 		} else if (cfi_buswidth_is_4()) {
 			map->write32 (map, *((__u32*)buf)++, adr+z);
+		} else if (cfi_buswidth_is_8()) {
+			map->write64 (map, *((__u64*)buf)++, adr+z);
 		} else {
 			DISABLE_VPP(map);
+
+			//Susan for pm
+#ifdef CONFIG_PM
+			atomic_dec(&(pm_flash.pm_flash_count));
+#endif
 			return -EINVAL;
 		}
 	}
@@ -815,6 +1060,11 @@ static inline int do_write_buffer(struct map_info *map, struct flchip *chip,
 			DISABLE_VPP(map);
 			spin_unlock_bh(chip->mutex);
 			printk(KERN_ERR "waiting for chip to be ready timed out in bufwrite\n");
+
+			//Susan for pm
+#ifdef CONFIG_PM
+			atomic_dec(&(pm_flash.pm_flash_count));
+#endif
 			return -EIO;
 		}
 		
@@ -843,10 +1093,20 @@ static inline int do_write_buffer(struct map_info *map, struct flchip *chip,
 		cfi_write(map, CMD(0x70), adr);
 		wake_up(&chip->wq);
 		spin_unlock_bh(chip->mutex);
+
+		//Susan for pm
+#ifdef CONFIG_PM
+		atomic_dec(&(pm_flash.pm_flash_count));
+#endif
 		return -EROFS;
 	}
 	wake_up(&chip->wq);
 	spin_unlock_bh(chip->mutex);
+
+	//Susan for pm
+#ifdef CONFIG_PM
+	atomic_dec(&(pm_flash.pm_flash_count));
+#endif
 	return 0;
 }
 
@@ -930,12 +1190,16 @@ static int cfi_intelext_write_buffers (struct mtd_info *mtd, loff_t to,
 static inline int do_erase_oneblock(struct map_info *map, struct flchip *chip, unsigned long adr)
 {
 	struct cfi_private *cfi = map->fldrv_priv;
-	__u32 status, status_OK;
+	cfi_word status, status_OK;
 	unsigned long timeo;
 	int retries = 3;
 	DECLARE_WAITQUEUE(wait, current);
 	int ret = 0;
 
+	//Susan for pm
+#ifdef CONFIG_PM
+	atomic_inc(&(pm_flash.pm_flash_count));
+#endif	
 	adr += chip->start;
 
 	/* Let's determine this according to the interleave only once */
@@ -962,6 +1226,11 @@ retry:
 		if (time_after(jiffies, timeo)) {
 			spin_unlock_bh(chip->mutex);
 			printk(KERN_ERR "waiting for chip to be ready timed out in erase\n");
+
+			//Susan for pm
+#ifdef CONFIG_PM
+			atomic_dec(&(pm_flash.pm_flash_count));
+#endif
 			return -EIO;
 		}
 
@@ -1023,6 +1292,11 @@ retry:
 			printk(KERN_ERR "waiting for erase to complete timed out. Xstatus = %x, status = %x.\n", status, cfi_read(map, adr));
 			DISABLE_VPP(map);
 			spin_unlock_bh(chip->mutex);
+			
+			//Susan for pm
+#ifdef CONFIG_PM
+			atomic_dec(&(pm_flash.pm_flash_count));
+#endif
 			return -EIO;
 		}
 		
@@ -1079,6 +1353,11 @@ retry:
 
 	wake_up(&chip->wq);
 	spin_unlock_bh(chip->mutex);
+
+	//Susan for pm
+#ifdef CONFIG_PM
+	atomic_dec(&(pm_flash.pm_flash_count));
+#endif
 	return ret;
 }
 
@@ -1233,7 +1512,7 @@ static void cfi_intelext_sync (struct mtd_info *mtd)
 static inline int do_lock_oneblock(struct map_info *map, struct flchip *chip, unsigned long adr)
 {
 	struct cfi_private *cfi = map->fldrv_priv;
-	__u32 status, status_OK;
+	cfi_word status, status_OK;
 	unsigned long timeo = jiffies + HZ;
 	DECLARE_WAITQUEUE(wait, current);
 
@@ -1538,6 +1817,7 @@ static int cfi_intelext_suspend(struct mtd_info *mtd)
 			 * with the chip now anyway.
 			 */
 		case FL_PM_SUSPENDED:
+			cfi_write(map, CMD(0xFF), 0);
 			break;
 
 		default:
@@ -1601,6 +1881,233 @@ static void cfi_intelext_destroy(struct mtd_info *mtd)
 	kfree(cfi);
 }
 
+/* Added by Susan for K3 UNLOCK/LOCKDOWN mechanism before mtd_info has been setup */
+int cfi_intelext_unlockdown_K3(struct map_info *map, unsigned int start_phys_addr, unsigned int end_phys_addr, unsigned int start_rootfs_addr, unsigned int end_rootfs_addr)
+{
+	struct cfi_private *cfi = map->fldrv_priv;
+	__u32 timeout = TIME_OUT;
+	__u32 adr = 0;
+	__u32 base = 0;
+	__u32 flash_status;
+	__u32 OK_status = CMD(0x80);
+
+	#ifdef CONFIG_K3_DEBUG
+	printk("Enter into <cfi_intelext_unlockdown_K3>\n");
+	#endif
+
+	/* Check userfs region */
+	if ( start_phys_addr & (K3_ERASE_BLOCK_SIZE - 1) )
+		return -EINVAL;
+	if ( (end_phys_addr >= map->size) || (end_phys_addr & (K3_ERASE_BLOCK_SIZE - 1)) )
+		return -EINVAL;
+
+	/* Check rootfs region */
+	if ( start_rootfs_addr & (K3_ERASE_BLOCK_SIZE - 1) )
+		return -EINVAL;
+	if ( ( end_rootfs_addr >= map->size) || (end_rootfs_addr & (K3_ERASE_BLOCK_SIZE - 1)) )
+		return -EINVAL;
+
+	cfi_write(map, CMD(0x70), adr);
+	flash_status = cfi_read(map, adr);
+	cfi_write(map, CMD(0xff), adr);
+	
+	if ( (flash_status & CMD(0x80)) != OK_status )
+	{
+		cfi_write(map, CMD(0x50), adr);  /* Clear status register */
+		return -EINVAL;
+	}
+
+	/* unlock userfs region in the second K3 chip */
+	adr = start_phys_addr;
+	do
+	{
+		cfi_write(map, CMD(0x60), adr);
+		cfi_write(map, CMD(0xD0), adr);
+
+		while ( timeout -- )
+		{
+			cfi_write(map, CMD(0x70), adr);
+			flash_status = cfi_read(map, adr);
+			if ( (flash_status & CMD(0x80)) == OK_status )
+				break;
+		}
+
+		cfi_write(map, CMD(0xff), adr);  /* Force flash returns to read-array mode */
+		if (!timeout)
+		{
+			#ifdef CONFIG_K3_DEBUG
+			printk("<cfi_intelext_unlockdown_K3> unlock failed at %x\n", adr);
+			#endif
+			cfi_write(map, CMD(0x50), adr);  /* Clear status register before we leave here*/
+			return -EINVAL;
+		}
+
+		#ifdef CONFIG_K3_DEBUG
+		printk("<cfi_intelext_unlockdown_K3> unlock success at %x\n", adr);
+		#endif
+		adr += K3_ERASE_BLOCK_SIZE;
+		timeout = TIME_OUT;
+		
+	} while (adr < end_phys_addr);
+
+	cfi_write(map, CMD(0x50), start_phys_addr);   /* Clear status register before we leave here*/
+
+	/* Lockdown rootfs region in the first K3 chip with wp# being asserted(low) */
+	adr = start_rootfs_addr;
+	do
+	{
+		cfi_write(map, CMD(0x60), adr);
+		cfi_write(map, CMD(0x2F), adr);
+
+		while ( timeout -- )
+		{
+			cfi_write(map, CMD(0x70), adr);
+			flash_status = cfi_read(map, adr);
+			if ( (flash_status & CMD(0x80)) == OK_status )
+				break;
+		}
+
+		cfi_write(map, CMD(0xff), adr);  /* Force flash returns to read-array mode */
+		if (!timeout)
+		{
+			#ifdef CONFIG_K3_DEBUG
+			printk("<cfi_intelext_unlockdown_K3> lockdown failed at %x\n", adr);
+			#endif
+			cfi_write(map, CMD(0x50), adr);  /* Clear status register before we leave here*/
+			return -EINVAL;
+		}
+
+		#ifdef CONFIG_K3_DEBUG
+		printk("<cfi_intelext_unlockdown_K3> lockdown success at %x\n", adr);
+		#endif
+		adr += K3_ERASE_BLOCK_SIZE;
+		timeout = TIME_OUT;
+		
+	} while (adr < end_rootfs_addr);
+
+	cfi_write(map, CMD(0x50), start_rootfs_addr);   /* Clear status register before we leave here*/
+
+	return 0;
+}
+
+
+int cfi_intelext_read_roflash (unsigned long from, size_t len, size_t *retlen, u_char *buf)
+{
+	struct map_info *map = &lubbock_map;
+	struct cfi_private *cfi = map->fldrv_priv;
+	unsigned long ofs;
+	int chipnum;
+	int ret = 0;
+
+	/* ofs: offset within the first chip that the first read should start */
+	chipnum = (from >> cfi->chipshift);
+	ofs = from - (chipnum <<  cfi->chipshift);
+
+	*retlen = 0;
+
+	while (len) {
+		unsigned long thislen;
+
+		if (chipnum >= cfi->numchips)
+			break;
+
+		if ((len + ofs -1) >> cfi->chipshift)
+			thislen = (1<<cfi->chipshift) - ofs;
+		else
+			thislen = len;
+
+		ret = do_read_onechip(map, &cfi->chips[chipnum], ofs, thislen, buf);
+		if (ret)
+			break;
+
+		*retlen += thislen;
+		len -= thislen;
+		buf += thislen;
+		
+		ofs = 0;
+		chipnum++;
+	}
+	return ret;
+}
+
+#ifdef CONFIG_PM
+
+static int msc0_val, sxcnfg_val;
+static int mode = 0;
+
+static int cfi_intelext_pm_ezx(struct pm_dev *dev, pm_request_t rqst, void *data)
+{
+	int flags;
+	int status = 0;
+	struct map_info *map = &lubbock_map;
+	struct cfi_private *cfi = map->fldrv_priv;
+	
+	switch (rqst) 
+	{
+	case PM_SUSPEND: /* return flash status indicating sleep available or inavailable */
+		status = atomic_read(&(pm_flash.pm_flash_count));
+		printk(KERN_NOTICE "flash device refer-count(%d) when try to sleep\n",status);
+		if (!status) {
+			printk("switch to async mode\n");
+
+			local_irq_save(flags);
+
+			msc0_val = MSC0;
+			sxcnfg_val = SXCNFG;
+
+#ifdef A768
+			MSC0 = 0xFFF812bb;
+#else
+			MSC0 = 0x12bb12bb;
+#endif
+			cfi_write(map, CMD(0x60), 0x0001fffe);
+			cfi_write(map, CMD(0x03), 0x0001fffe);
+			cfi_write(map, CMD(0x60), 0x0101fffe);
+			cfi_write(map, CMD(0x03), 0x0101fffe);
+
+			SXCNFG = 0;
+			MDREFR &= ~(MDREFR_K0DB2 | MDREFR_K0RUN | MDREFR_E0PIN);
+
+			cfi_write(map, CMD(0xff), 0x0);
+			cfi_write(map, CMD(0xff), 0x01000000);
+
+			local_irq_restore(flags);
+			mode = 1;
+		}
+		return status;
+		
+		break;
+	case PM_RESUME:  /* flash reset after sleep */
+		if (mode) {
+			printk("switch to sync mode\n");
+
+			local_irq_save(flags);
+
+			cfi_write(map, CMD(0x60), 0x00004b84);
+			cfi_write(map, CMD(0x03), 0x00004b84);
+			cfi_write(map, CMD(0x60), 0x01004b84);
+			cfi_write(map, CMD(0x03), 0x01004b84);
+
+			MSC0 = msc0_val;
+			SXCNFG = sxcnfg_val;
+			MDREFR |= (MDREFR_K0DB2 | MDREFR_K0RUN | MDREFR_E0PIN);
+	
+			local_irq_restore(flags);
+			mode = 0;
+		}
+			
+		printk(KERN_NOTICE "Unlock after reset -- begin(%ld)\n", jiffies);
+		status = cfi_intelext_unlockdown_K3(map, K3_DATA_REGION_START, K3_DATA_REGION_END, K3_ROOTFS_REGION_START, K3_ROOTFS_REGION_END);
+		printk(KERN_NOTICE "Unlock after reset -- end(%ld)\n", jiffies);
+
+		if (status)
+			printk(KERN_NOTICE "Unlock flash fail after reset flash.\n");
+		break;
+	}
+	return status;
+}
+#endif
+
 static char im_name_1[]="cfi_cmdset_0001";
 static char im_name_3[]="cfi_cmdset_0003";
 
@@ -1608,6 +2115,13 @@ int __init cfi_intelext_init(void)
 {
 	inter_module_register(im_name_1, THIS_MODULE, &cfi_cmdset_0001);
 	inter_module_register(im_name_3, THIS_MODULE, &cfi_cmdset_0001);
+	
+	/* Added by Susan for initialization of pm_flash device */
+#ifdef CONFIG_PM
+	pm_flash.pm_dev = pm_register(PM_SYS_DEV, 0, cfi_intelext_pm_ezx);
+	atomic_set(&(pm_flash.pm_flash_count), 0);
+#endif
+	
 	return 0;
 }
 
@@ -1615,6 +2129,9 @@ static void __exit cfi_intelext_exit(void)
 {
 	inter_module_unregister(im_name_1);
 	inter_module_unregister(im_name_3);
+
+	/* Added by Susan for PM mechanism */
+	pm_unregister(pm_flash.pm_dev);
 }
 
 module_init(cfi_intelext_init);

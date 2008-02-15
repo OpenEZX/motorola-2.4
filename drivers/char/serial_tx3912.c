@@ -1,6 +1,8 @@
 /*
  *  drivers/char/serial_tx3912.c
  *
+ *  Copyright (C) 1999 Harald Koerfgen
+ *  Copyright (C) 2000 Jim Pick <jim@jimpick.com>
  *  Copyright (C) 2001 Steven J. Hill (sjhill@realitydiluted.com)
  * 
  * This program is free software; you can redistribute it and/or modify
@@ -13,13 +15,19 @@
 #include <linux/config.h>
 #include <linux/tty.h>
 #include <linux/major.h>
+#include <linux/ptrace.h>
+#include <linux/init.h>
 #include <linux/console.h>
+#include <linux/fs.h>
+#include <linux/mm.h>
 #include <linux/slab.h>
 #include <linux/module.h>
-#include <linux/serial.h>
+#include <linux/delay.h>
+#include <linux/pm.h>
 #include <asm/io.h>
 #include <asm/uaccess.h>
 #include <asm/delay.h>
+#include <asm/wbflush.h>
 #include <asm/tx3912.h>
 #include "serial_tx3912.h"
 
@@ -54,19 +62,35 @@ static struct real_driver rs_real_driver = {
 }; 
 
 /*
- * Structures and usage counts
+ * Structures and such for TTY sessions and usage counts
  */
 static struct tty_driver rs_driver, rs_callout_driver;
-static struct tty_struct **rs_tty;
-static struct termios **rs_termios;
-static struct termios **rs_termios_locked;
-static struct rs_port *rs_port;
-static int rs_refcount;
-static int rs_initialized;
-
+static struct tty_struct * rs_table[TX3912_UART_NPORTS] = { NULL, };
+static struct termios ** rs_termios;
+static struct termios ** rs_termios_locked;
+struct rs_port *rs_ports;
+int rs_refcount;
+int rs_initialized = 0;
 
 /*
- * Receive a character
+ * ----------------------------------------------------------------------
+ *
+ * Here starts the interrupt handling routines.  All of the following
+ * subroutines are declared as inline and are folded into
+ * rs_interrupt().  They were separated out for readability's sake.
+ *
+ * Note: rs_interrupt() is a "fast" interrupt, which means that it
+ * runs with interrupts turned off.  People who may want to modify
+ * rs_interrupt() should try to keep the interrupt handler as fast as
+ * possible.  After you are done making modifications, it is not a bad
+ * idea to do:
+ * 
+ * gcc -S -DKERNEL -Wall -Wstrict-prototypes -O6 -fomit-frame-pointer serial.c
+ *
+ * and look at the resulting assemble code in serial.s.
+ *
+ * 				- Ted Ts'o (tytso@mit.edu), 7-Mar-93
+ * -----------------------------------------------------------------------
  */
 static inline void receive_char_pio(struct rs_port *port)
 {
@@ -74,34 +98,83 @@ static inline void receive_char_pio(struct rs_port *port)
 	unsigned char ch;
 	int counter = 2048;
 
-	/* While there are characters */
-	while (counter > 0) {
-		if (!(inl(TX3912_UARTA_CTRL1) & TX3912_UART_CTRL1_RXHOLDFULL))
+	/* While there are characters, get them ... */
+	while (counter>0) {
+		if (!(inl(port->base + TX3912_UART_CTRL1) & UART_RX_HOLD_FULL))
 			break;
-		ch = inb(TX3912_UARTA_DATA);
+		ch = inb(port->base + TX3912_UART_DATA);
 		if (tty->flip.count < TTY_FLIPBUF_SIZE) {
 			*tty->flip.char_buf_ptr++ = ch;
 			*tty->flip.flag_buf_ptr++ = 0;
 			tty->flip.count++;
 		}
-		udelay(1);
+		udelay(1); /* Allow things to happen - it take a while */
 		counter--;
 	}
+	if (!counter)
+		printk( "Ugh, looped in receive_char_pio!\n" );
 
 	tty_flip_buffer_push(tty);
+
+#if 0
+	/* Now handle error conditions */
+	if (*status & (INTTYPE(UART_RXOVERRUN_INT) |
+			INTTYPE(UART_FRAMEERR_INT) |
+			INTTYPE(UART_PARITYERR_INT) |
+			INTTYPE(UART_BREAK_INT))) {
+
+		/*
+		 * Now check to see if character should be
+		 * ignored, and mask off conditions which
+		 * should be ignored.
+	       	 */
+		if (*status & port->ignore_status_mask) {
+			goto ignore_char;
+		}
+		*status &= port->read_status_mask;
+		
+		if (*status & INTTYPE(UART_BREAK_INT)) {
+			rs_dprintk(TX3912_UART_DEBUG_INTERRUPTS, "handling break....");
+			*tty->flip.flag_buf_ptr = TTY_BREAK;
+		}
+		else if (*status & INTTYPE(UART_PARITYERR_INT)) {
+			*tty->flip.flag_buf_ptr = TTY_PARITY;
+		}
+		else if (*status & INTTYPE(UART_FRAMEERR_INT)) {
+			*tty->flip.flag_buf_ptr = TTY_FRAME;
+		}
+		if (*status & INTTYPE(UART_RXOVERRUN_INT)) {
+			/*
+			 * Overrun is special, since it's
+			 * reported immediately, and doesn't
+			 * affect the current character
+			 */
+			if (tty->flip.count < TTY_FLIPBUF_SIZE) {
+				tty->flip.count++;
+				tty->flip.flag_buf_ptr++;
+				tty->flip.char_buf_ptr++;
+				*tty->flip.flag_buf_ptr = TTY_OVERRUN;
+			}
+		}
+	}
+
+	tty->flip.flag_buf_ptr++;
+	tty->flip.char_buf_ptr++;
+	tty->flip.count++;
+
+ignore_char:
+	tty_flip_buffer_push(tty);
+#endif
 }
 
-/*
- * Transmit a character
- */
 static inline void transmit_char_pio(struct rs_port *port)
 {
-	/* TX while bytes available */
+	/* While I'm able to transmit ... */
 	for (;;) {
-		if (!(inl(TX3912_UARTA_CTRL1) & TX3912_UART_CTRL1_EMPTY))
+		if (!(inl(port->base + TX3912_UART_CTRL1) & UART_TX_EMPTY))
 			break;
 		else if (port->x_char) {
-			outb(port->x_char, TX3912_UARTA_DATA);
+			outb(port->x_char, port->base + TX3912_UART_DATA);
 			port->icount.tx++;
 			port->x_char = 0;
 		}
@@ -111,14 +184,14 @@ static inline void transmit_char_pio(struct rs_port *port)
 		}
 		else {
 			outb(port->gs.xmit_buf[port->gs.xmit_tail++],
-				TX3912_UARTA_DATA);
+				port->base + TX3912_UART_DATA);
 			port->icount.tx++;
 			port->gs.xmit_tail &= SERIAL_XMIT_SIZE-1;
 			if (--port->gs.xmit_cnt <= 0) {
 				break;
 			}
 		}
-		udelay(10);
+		udelay(10); /* Allow things to happen - it take a while */
 	}
 
 	if (port->gs.xmit_cnt <= 0 || port->gs.tty->stopped ||
@@ -130,418 +203,519 @@ static inline void transmit_char_pio(struct rs_port *port)
                 if ((port->gs.tty->flags & (1 << TTY_DO_WRITE_WAKEUP)) &&
                     port->gs.tty->ldisc.write_wakeup)
                         (port->gs.tty->ldisc.write_wakeup)(port->gs.tty);
-                rs_dprintk(TX3912_UART_DEBUG_TRANSMIT, "Waking up.... ldisc (%d)....\n",
+                rs_dprintk (TX3912_UART_DEBUG_TRANSMIT, "Waking up.... ldisc (%d)....\n",
                             port->gs.wakeup_chars); 
                 wake_up_interruptible(&port->gs.tty->write_wait);
        	}	
 }
 
-/*
- * We don't have MSR
- */
+
+
 static inline void check_modem_status(struct rs_port *port)
 {
+        /* We don't have a carrier detect line - but just respond
+           like we had one anyways so that open() becomes unblocked */
 	wake_up_interruptible(&port->gs.open_wait);
 }
 
+int count = 0;
+
 /*
- * RX interrupt handler
+ * This is the serial driver's interrupt routine (inlined, because
+ * there are two different versions of this, one for each serial port,
+ * differing only by the bits used in interrupt status 2 register)
  */
-static inline void rs_rx_interrupt(int irq, void *dev_id, struct pt_regs *regs)
+
+static inline void rs_rx_interrupt(int irq, void *dev_id,
+				  struct pt_regs * regs, int intshift)
 {
-	unsigned long flags, status;
+	struct rs_port * port;
+	unsigned long int2status;
+	unsigned long flags;
+	unsigned long ints;
 
 	save_and_cli(flags);
 
-	rs_dprintk(TX3912_UART_DEBUG_INTERRUPTS, "rs_rx_interrupt...");
+	port = (struct rs_port *)dev_id;
+	rs_dprintk (TX3912_UART_DEBUG_INTERRUPTS, "rs_interrupt (port %p, shift %d)...", port, intshift);
 
-	/* Get the interrupts */
-	status = inl(TX3912_INT2_STATUS);
+	/* Get the interrrupts we have enabled */
+	int2status = IntStatus2 & IntEnable2;
+
+	/* Get interrupts in easy to use form */
+	ints = int2status >> intshift;
 
 	/* Clear any interrupts we might be about to handle */
-	outl(TX3912_INT2_UARTA_RX_BITS, TX3912_INT2_CLEAR);
+	IntClear2 = int2status & (
+		(INTTYPE(UART_RXOVERRUN_INT) |
+		 INTTYPE(UART_FRAMEERR_INT) |
+		 INTTYPE(UART_BREAK_INT) |
+		 INTTYPE(UART_PARITYERR_INT) |
+		 INTTYPE(UART_RX_INT)) << intshift);
 
-	if(!rs_port || !rs_port->gs.tty) {
+	if (!port || !port->gs.tty) {
 		restore_flags(flags);
 		return;
 	}
 
 	/* RX Receiver Holding Register Overrun */
-	if(status & TX3912_INT2_UARTATXOVERRUNINT) {
-		rs_dprintk(TX3912_UART_DEBUG_INTERRUPTS, "overrun");
-		rs_port->icount.overrun++;
+	if (ints & INTTYPE(UART_RXOVERRUN_INT)) {
+		rs_dprintk (TX3912_UART_DEBUG_INTERRUPTS, "overrun");
+		port->icount.overrun++;
 	}
 
 	/* RX Frame Error */
-	if(status & TX3912_INT2_UARTAFRAMEERRINT) {
-		rs_dprintk(TX3912_UART_DEBUG_INTERRUPTS, "frame error");
-		rs_port->icount.frame++;
+	if (ints & INTTYPE(UART_FRAMEERR_INT)) {
+		rs_dprintk (TX3912_UART_DEBUG_INTERRUPTS, "frame error");
+		port->icount.frame++;
 	}
 
 	/* Break signal received */
-	if(status & TX3912_INT2_UARTABREAKINT) {
-		rs_dprintk(TX3912_UART_DEBUG_INTERRUPTS, "break");
-		rs_port->icount.brk++;
+	if (ints & INTTYPE(UART_BREAK_INT)) {
+		rs_dprintk (TX3912_UART_DEBUG_INTERRUPTS, "break");
+		port->icount.brk++;
       	}
 
 	/* RX Parity Error */
-	if(status & TX3912_INT2_UARTAPARITYINT) {
-		rs_dprintk(TX3912_UART_DEBUG_INTERRUPTS, "parity error");
-		rs_port->icount.parity++;
+	if (ints & INTTYPE(UART_PARITYERR_INT)) {
+		rs_dprintk (TX3912_UART_DEBUG_INTERRUPTS, "parity error");
+		port->icount.parity++;
 	}
 
-	/* Byte received */
-	if(status & TX3912_INT2_UARTARXINT) {
-		receive_char_pio(rs_port);
+	/* Receive byte (non-DMA) */
+	if (ints & INTTYPE(UART_RX_INT)) {
+		receive_char_pio(port);
 	}
 
 	restore_flags(flags);
 
-	rs_dprintk(TX3912_UART_DEBUG_INTERRUPTS, "end.\n");
+	rs_dprintk (TX3912_UART_DEBUG_INTERRUPTS, "end.\n");
 }
 
-/*
- * TX interrupt handler
- */
-static inline void rs_tx_interrupt(int irq, void *dev_id, struct pt_regs *regs)
+static inline void rs_tx_interrupt(int irq, void *dev_id,
+				  struct pt_regs * regs, int intshift)
 {
-	unsigned long flags, status;
+	struct rs_port * port;
+	unsigned long int2status;
+	unsigned long flags;
+	unsigned long ints;
 
 	save_and_cli(flags);
 
-	rs_dprintk(TX3912_UART_DEBUG_INTERRUPTS, "rs_tx_interrupt...");
+	port = (struct rs_port *)dev_id;
+	rs_dprintk (TX3912_UART_DEBUG_INTERRUPTS, "rs_interrupt (port %p, shift %d)...", port, intshift);
 
-	/* Get the interrupts */
-	status = inl(TX3912_INT2_STATUS);
+	/* Get the interrrupts we have enabled */
+	int2status = IntStatus2 & IntEnable2;
 
-	if(!rs_port || !rs_port->gs.tty) {
+	if (!port || !port->gs.tty) {
 		restore_flags(flags);
 		return;
 	}
 
-	/* Clear interrupts */
-	outl(TX3912_INT2_UARTA_TX_BITS, TX3912_INT2_CLEAR);
+	/* Get interrupts in easy to use form */
+	ints = int2status >> intshift;
 
-	/* TX holding register empty - transmit a byte */
-	if(status & TX3912_INT2_UARTAEMPTYINT) {
-		transmit_char_pio(rs_port);
+	/* Clear any interrupts we might be about to handle */
+	IntClear2 = int2status & (
+		(INTTYPE(UART_TX_INT) |
+		 INTTYPE(UART_EMPTY_INT) |
+		 INTTYPE(UART_TXOVERRUN_INT)) << intshift);
+
+	/* TX holding register empty, so transmit byte (non-DMA) */
+	if (ints & (INTTYPE(UART_TX_INT) | INTTYPE(UART_EMPTY_INT))) {
+		transmit_char_pio(port);
 	}
 
 	/* TX Transmit Holding Register Overrun (shouldn't happen) */
-	if(status & TX3912_INT2_UARTATXOVERRUNINT) {
-		printk( "rs_tx_interrupt: TX overrun\n");
+	if (ints & INTTYPE(UART_TXOVERRUN_INT)) {
+		printk ( "rs: TX overrun\n");
 	}
+
+	/*
+	check_modem_status();
+	*/
 
 	restore_flags(flags);
 
-	rs_dprintk(TX3912_UART_DEBUG_INTERRUPTS, "end.\n");
+	rs_dprintk (TX3912_UART_DEBUG_INTERRUPTS, "end.\n");
+}
+
+static void rs_rx_interrupt_uarta(int irq, void *dev_id,
+					 struct pt_regs * regs)
+{
+	rs_rx_interrupt(irq, dev_id, regs, UARTA_SHIFT);
+}
+
+static void rs_tx_interrupt_uarta(int irq, void *dev_id,
+					 struct pt_regs * regs)
+{
+	rs_tx_interrupt(irq, dev_id, regs, UARTA_SHIFT);
 }
 
 /*
- * Here are the routines that actually interface with the generic driver
+ ***********************************************************************
+ *                Here are the routines that actually                  *
+ *              interface with the generic_serial driver               *
+ ***********************************************************************
  */
 static void rs_disable_tx_interrupts (void * ptr) 
 {
+	struct rs_port *port = ptr; 
 	unsigned long flags;
 
 	save_and_cli(flags);
+        port->gs.flags &= ~GS_TX_INTEN;
 
-	outl(inl(TX3912_INT2_ENABLE) & ~TX3912_INT2_UARTA_TX_BITS,
-		TX3912_INT2_ENABLE);
-	outl(TX3912_INT2_UARTA_TX_BITS, TX3912_INT2_CLEAR);
+	IntEnable2 &= ~((INTTYPE(UART_TX_INT) |
+			INTTYPE(UART_EMPTY_INT) |
+			INTTYPE(UART_TXOVERRUN_INT)) << port->intshift);
+
+	IntClear2 = (INTTYPE(UART_TX_INT) |
+			INTTYPE(UART_EMPTY_INT) |
+			INTTYPE(UART_TXOVERRUN_INT)) << port->intshift;
 
 	restore_flags(flags);
 }
 
 static void rs_enable_tx_interrupts (void * ptr) 
 {
+	struct rs_port *port = ptr; 
 	unsigned long flags;
 
 	save_and_cli(flags);
 
-	outl(TX3912_INT2_UARTA_TX_BITS, TX3912_INT2_CLEAR);
-	outl(inl(TX3912_INT2_ENABLE) | TX3912_INT2_UARTA_TX_BITS,
-		TX3912_INT2_ENABLE);
-	transmit_char_pio(rs_port);
+	IntClear2 = (INTTYPE(UART_TX_INT) |
+			INTTYPE(UART_EMPTY_INT) |
+			INTTYPE(UART_TXOVERRUN_INT)) << port->intshift;
+
+	IntEnable2 |= (INTTYPE(UART_TX_INT) |
+			INTTYPE(UART_EMPTY_INT) |
+			INTTYPE(UART_TXOVERRUN_INT)) << port->intshift;
+
+	/* Send a char to start TX interrupts happening */
+	transmit_char_pio(port);
 
 	restore_flags(flags);
 }
 
 static void rs_disable_rx_interrupts (void * ptr) 
 {
+	struct rs_port *port = ptr;
 	unsigned long flags;
 
 	save_and_cli(flags);
 
-	outl(inl(TX3912_INT2_ENABLE) & ~TX3912_INT2_UARTA_RX_BITS,
-		TX3912_INT2_ENABLE);
-	outl(TX3912_INT2_UARTA_RX_BITS, TX3912_INT2_CLEAR);
+	IntEnable2 &= ~((INTTYPE(UART_RX_INT) |
+			 INTTYPE(UART_RXOVERRUN_INT) |
+			 INTTYPE(UART_FRAMEERR_INT) |
+			 INTTYPE(UART_BREAK_INT) |
+			 INTTYPE(UART_PARITYERR_INT)) << port->intshift);
+
+	IntClear2 = (INTTYPE(UART_RX_INT) |
+			 INTTYPE(UART_RXOVERRUN_INT) |
+			 INTTYPE(UART_FRAMEERR_INT) |
+			 INTTYPE(UART_BREAK_INT) |
+			 INTTYPE(UART_PARITYERR_INT)) << port->intshift;
 
 	restore_flags(flags);
 }
 
 static void rs_enable_rx_interrupts (void * ptr) 
 {
+	struct rs_port *port = ptr;
 	unsigned long flags;
 
 	save_and_cli(flags);
 
-	outl(inl(TX3912_INT2_ENABLE) | TX3912_INT2_UARTA_RX_BITS,
-		TX3912_INT2_ENABLE);
-	while (inl(TX3912_UARTA_CTRL1) & TX3912_UART_CTRL1_RXHOLDFULL)
-		inb(TX3912_UARTA_DATA);
-	outl(TX3912_INT2_UARTA_RX_BITS, TX3912_INT2_CLEAR);
+	IntEnable2 |= (INTTYPE(UART_RX_INT) |
+			 INTTYPE(UART_RXOVERRUN_INT) |
+			 INTTYPE(UART_FRAMEERR_INT) |
+			 INTTYPE(UART_BREAK_INT) |
+			 INTTYPE(UART_PARITYERR_INT)) << port->intshift;
+
+	/* Empty the input buffer - apparently this is *vital* */
+	while (inl(port->base + TX3912_UART_CTRL1) & UART_RX_HOLD_FULL) { 
+		inb(port->base + TX3912_UART_DATA);
+	}
+
+	IntClear2 = (INTTYPE(UART_RX_INT) |
+			 INTTYPE(UART_RXOVERRUN_INT) |
+			 INTTYPE(UART_FRAMEERR_INT) |
+			 INTTYPE(UART_BREAK_INT) |
+			 INTTYPE(UART_PARITYERR_INT)) << port->intshift;
 
 	restore_flags(flags);
 }
 
-/*
- * We have no CD
- */
+
 static int rs_get_CD (void * ptr) 
 {
-	return 1;
+	/* No Carried Detect in Hardware - just return true */
+	func_exit();
+	return (1);
 }
 
-/*
- * Shut down the port
- */
 static void rs_shutdown_port (void * ptr) 
 {
+	struct rs_port *port = ptr; 
+
 	func_enter();
-	rs_port->gs.flags &= ~GS_ACTIVE;
+
+	port->gs.flags &= ~GS_ACTIVE;
+
 	func_exit();
 }
 
 static int rs_set_real_termios (void *ptr)
 {
-	unsigned int ctrl1 = 0;
-	unsigned int ctrl2 = 0;
+	struct rs_port *port = ptr;
+	int t;
 
-	/* Set baud rate */
-	switch (rs_port->gs.baud) {
-		case 0:
-			goto done;
-		case 1200:
-			ctrl2 = TX3912_UART_CTRL2_B1200;
-			break;
-		case 2400:
-			ctrl2 = TX3912_UART_CTRL2_B2400;
-			break;
-		case 4800:
-			ctrl2 = TX3912_UART_CTRL2_B4800;
-			break;
-		case 9600:
-			ctrl2 = TX3912_UART_CTRL2_B9600;
-			break;
-		case 19200:
-			ctrl2 = TX3912_UART_CTRL2_B19200;
-			break;
-		case 38400:
-			ctrl2 = TX3912_UART_CTRL2_B38400;
-			break;
-		case 57600:
-			ctrl2 = TX3912_UART_CTRL2_B57600;
-			break;
-		case 115200:
-		default:
-			ctrl2 = TX3912_UART_CTRL2_B115200;
-			break;
+	switch (port->gs.baud) {
+		/* Save some typing work... */
+#define e(x) case x:t= TX3912_UART_CTRL2_B ## x ; break
+		e(300);e(600);e(1200);e(2400);e(4800);e(9600);
+		e(19200);e(38400);e(57600);e(76800);e(115200);e(230400);
+	case 0      :t = -1;
+		break;
+	default:
+		/* Can I return "invalid"? */
+		t = TX3912_UART_CTRL2_B9600;
+		printk (KERN_INFO "rs: unsupported baud rate: %d.\n", port->gs.baud);
+		break;
+	}
+#undef e
+	if (t >= 0) {
+		/* Jim: Set Hardware Baud rate - there is some good
+		   code in drivers/char/serial.c */
+
+	  	/* Program hardware for parity, data bits, stop bits (note: these are hardcoded to 8N1 */
+		UartA_Ctrl1 &= 0xf000000f;
+		UartA_Ctrl1 &= ~(UART_DIS_TXD | SER_SEVEN_BIT | SER_EVEN_PARITY | SER_TWO_STOP);
+
+#define CFLAG port->gs.tty->termios->c_cflag
+		if (C_PARENB(port->gs.tty)) {
+			if (!C_PARODD(port->gs.tty))
+				UartA_Ctrl1 |= SER_EVEN_PARITY;
+			else
+				UartA_Ctrl1 |= SER_ODD_PARITY;
+		}
+		if ((CFLAG & CSIZE)==CS6)
+			printk(KERN_ERR "6 bits not supported\n");
+		if ((CFLAG & CSIZE)==CS5)
+			printk(KERN_ERR "5 bits not supported\n");
+		if ((CFLAG & CSIZE)==CS7)
+			UartA_Ctrl1 |= SER_SEVEN_BIT;
+		if (C_CSTOPB(port->gs.tty))
+			UartA_Ctrl1 |= SER_TWO_STOP;
+
+		outl(t, port->base + TX3912_UART_CTRL2);
+		outl(0, port->base + TX3912_UART_DMA_CTRL1);
+		outl(0, port->base + TX3912_UART_DMA_CTRL2);
+        	UartA_Ctrl1 |= TX3912_UART_CTRL1_UARTON;
+
+        /* wait until UARTA is stable */
+        while (~UartA_Ctrl1 & TX3912_UART_CTRL1_UARTON);
 	}
 
-  	/* Clear current UARTA settings */
-	ctrl1 = inl(TX3912_UARTA_CTRL1) & 0xf000000f;
-
-	/* Set parity */
-	if(C_PARENB(rs_port->gs.tty)) {
-		if (!C_PARODD(rs_port->gs.tty))
-			ctrl1 |= (TX3912_UART_CTRL1_ENPARITY |
-				 TX3912_UART_CTRL1_EVENPARITY);
-		else
-			ctrl1 |= TX3912_UART_CTRL1_ENPARITY;
-	}
-
-	/* Set data size */
-	switch(rs_port->gs.tty->termios->c_cflag & CSIZE) {
-		case CS7:
-			ctrl1 |= TX3912_UART_CTRL1_BIT_7;
-			break;
-		case CS5:
-		case CS6:
-			printk(KERN_ERR "Data byte size unsupported. Defaulting to CS8\n");
-		case CS8:
-		default:
-			ctrl1 &= ~TX3912_UART_CTRL1_BIT_7;
-	}
-
-	/* Set stop bits */
-	if(C_CSTOPB(rs_port->gs.tty))
-		ctrl1 |= TX3912_UART_CTRL1_TWOSTOP;
-
-	/* Write the control registers */
-	outl(ctrl2, TX3912_UARTA_CTRL2);
-	outl(0, TX3912_UARTA_DMA_CTRL1);
-	outl(0, TX3912_UARTA_DMA_CTRL2);
-	outl(ctrl1, TX3912_UARTA_CTRL1);
-
-	/* Loop until the UART is on */
-	while(~inl(TX3912_UARTA_CTRL1) & TX3912_UART_CTRL1_UARTON);
-
-done:
-	func_exit();
-	return 0;
+	func_exit ();
+        return 0;
 }
 
-/*
- * Anyone in the buffer?
- */
 static int rs_chars_in_buffer (void * ptr) 
 {
-	return ((inl(TX3912_UARTA_CTRL1) & TX3912_UART_CTRL1_EMPTY) ? 0 : 1);
+	struct rs_port *port = ptr;
+	int scratch;
+
+	scratch = inl(port->base + TX3912_UART_CTRL1);
+
+	return ((scratch & UART_TX_EMPTY) ? 0 : 1);
 }
 
-/*
- * Open the serial port
- */
-static int rs_open(struct tty_struct * tty, struct file * filp)
+/* ********************************************************************** *
+ *                Here are the routines that actually                     *
+ *               interface with the rest of the system                    *
+ * ********************************************************************** */
+static int rs_open  (struct tty_struct * tty, struct file * filp)
 {
-	int retval;
+	struct rs_port *port;
+	int retval, line;
 
 	func_enter();
 
-	if(!rs_initialized) {
+	if (!rs_initialized) {
 		return -EIO;
 	}
 
-	if(MINOR(tty->device) - tty->driver.minor_start) {
+	line = MINOR(tty->device) - tty->driver.minor_start;
+	rs_dprintk (TX3912_UART_DEBUG_OPEN, "%d: opening line %d. tty=%p ctty=%p)\n", 
+	            (int) current->pid, line, tty, current->tty);
+
+	if ((line < 0) || (line >= TX3912_UART_NPORTS))
 		return -ENODEV;
-	}
 
-	rs_dprintk(TX3912_UART_DEBUG_OPEN, "Serial opening...\n");
+	/* Pre-initialized already */
+	port = & rs_ports[line];
 
-	tty->driver_data = rs_port;
-	rs_port->gs.tty = tty;
-	rs_port->gs.count++;
+	rs_dprintk (TX3912_UART_DEBUG_OPEN, "port = %p\n", port);
+
+	tty->driver_data = port;
+	port->gs.tty = tty;
+	port->gs.count++;
+
+	rs_dprintk (TX3912_UART_DEBUG_OPEN, "starting port\n");
 
 	/*
 	 * Start up serial port
 	 */
-	retval = gs_init_port(&rs_port->gs);
-	rs_dprintk(TX3912_UART_DEBUG_OPEN, "Finished gs_init...\n");
-	if(retval) {
-		rs_port->gs.count--;
+	retval = gs_init_port(&port->gs);
+	rs_dprintk (TX3912_UART_DEBUG_OPEN, "done gs_init\n");
+	if (retval) {
+		port->gs.count--;
 		return retval;
 	}
 
-	rs_port->gs.flags |= GS_ACTIVE;
-	if(rs_port->gs.count == 1) {
+	port->gs.flags |= GS_ACTIVE;
+
+	rs_dprintk (TX3912_UART_DEBUG_OPEN, "before inc_use_count (count=%d.\n", 
+	            port->gs.count);
+	if (port->gs.count == 1) {
 		MOD_INC_USE_COUNT;
 	}
+	rs_dprintk (TX3912_UART_DEBUG_OPEN, "after inc_use_count\n");
 
-	rs_enable_rx_interrupts(rs_port);
-	rs_enable_tx_interrupts(rs_port);
+	/* Jim: Initialize port hardware here */
 
-	retval = gs_block_til_ready(&rs_port->gs, filp);
-	if(retval) {
+	/* Enable high-priority interrupts for UARTA */
+	IntEnable6 |= INT6_UARTARXINT; 
+	rs_enable_rx_interrupts(&rs_ports[0]); 
+
+	retval = gs_block_til_ready(&port->gs, filp);
+	rs_dprintk (TX3912_UART_DEBUG_OPEN, "Block til ready returned %d. Count=%d\n", 
+	            retval, port->gs.count);
+
+	if (retval) {
 		MOD_DEC_USE_COUNT;
-		rs_port->gs.count--;
+		port->gs.count--;
 		return retval;
 	}
+	/* tty->low_latency = 1; */
 
-	if((rs_port->gs.count == 1) &&
-		(rs_port->gs.flags & ASYNC_SPLIT_TERMIOS)) {
+	if ((port->gs.count == 1) && (port->gs.flags & ASYNC_SPLIT_TERMIOS)) {
 		if (tty->driver.subtype == SERIAL_TYPE_NORMAL)
-			*tty->termios = rs_port->gs.normal_termios;
+			*tty->termios = port->gs.normal_termios;
 		else 
-			*tty->termios = rs_port->gs.callout_termios;
-		rs_set_real_termios(rs_port);
+			*tty->termios = port->gs.callout_termios;
+		rs_set_real_termios (port);
 	}
 
-	rs_port->gs.session = current->session;
-	rs_port->gs.pgrp = current->pgrp;
+	port->gs.session = current->session;
+	port->gs.pgrp = current->pgrp;
 	func_exit();
+
+	/* Jim */
+/*	cli(); */
 
 	return 0;
+
 }
 
-/*
- * Close the serial port
- */
-static void rs_close(void *ptr)
+
+
+static void rs_close (void *ptr)
 {
-	func_enter();
+	func_enter ();
+
+	/* Anything to do here? */
+
 	MOD_DEC_USE_COUNT;
-	func_exit();
+	func_exit ();
 }
 
-/*
- * Hang up the serial port
- */
-static void rs_hungup(void *ptr)
+
+/* I haven't the foggiest why the decrement use count has to happen
+   here. The whole linux serial drivers stuff needs to be redesigned.
+   My guess is that this is a hack to minimize the impact of a bug
+   elsewhere. Thinking about it some more. (try it sometime) Try
+   running minicom on a serial port that is driven by a modularized
+   driver. Have the modem hangup. Then remove the driver module. Then
+   exit minicom.  I expect an "oops".  -- REW */
+static void rs_hungup (void *ptr)
 {
-	func_enter();
+	func_enter ();
 	MOD_DEC_USE_COUNT;
-	func_exit();
+	func_exit ();
 }
 
-/*
- * Serial ioctl call
- */
-static int rs_ioctl(struct tty_struct * tty, struct file * filp, 
+static int rs_ioctl (struct tty_struct * tty, struct file * filp, 
                      unsigned int cmd, unsigned long arg)
 {
-	int ival, rc;
+	int rc;
+	struct rs_port *port = tty->driver_data;
+	int ival;
 
 	rc = 0;
 	switch (cmd) {
-		case TIOCGSOFTCAR:
-			rc = put_user((tty->termios->c_cflag & CLOCAL) ? 1 : 0,
+	case TIOCGSOFTCAR:
+		rc = put_user(((tty->termios->c_cflag & CLOCAL) ? 1 : 0),
 		              (unsigned int *) arg);
-			break;
-		case TIOCSSOFTCAR:
-			if ((rc = verify_area(VERIFY_READ, (void *) arg,
-				sizeof(int))) == 0) {
-				get_user(ival, (unsigned int *) arg);
-				tty->termios->c_cflag =
-					(tty->termios->c_cflag & ~CLOCAL) |
-					(ival ? CLOCAL : 0);
-			}
-			break;
-		case TIOCGSERIAL:
-			if ((rc = verify_area(VERIFY_WRITE, (void *) arg,
-				sizeof(struct serial_struct))) == 0)
-				rc = gs_getserial(&rs_port->gs, (struct serial_struct *) arg);
-			break;
-		case TIOCSSERIAL:
-			if ((rc = verify_area(VERIFY_READ, (void *) arg,
-				sizeof(struct serial_struct))) == 0)
-				rc = gs_setserial(&rs_port->gs, (struct serial_struct *) arg);
-			break;
-		default:
-			rc = -ENOIOCTLCMD;
-			break;
+		break;
+	case TIOCSSOFTCAR:
+		if ((rc = verify_area(VERIFY_READ, (void *) arg,
+		                      sizeof(int))) == 0) {
+			get_user(ival, (unsigned int *) arg);
+			tty->termios->c_cflag =
+				(tty->termios->c_cflag & ~CLOCAL) |
+				(ival ? CLOCAL : 0);
+		}
+		break;
+	case TIOCGSERIAL:
+		if ((rc = verify_area(VERIFY_WRITE, (void *) arg,
+		                      sizeof(struct serial_struct))) == 0)
+			rc = gs_getserial(&port->gs, (struct serial_struct *) arg);
+		break;
+	case TIOCSSERIAL:
+		if ((rc = verify_area(VERIFY_READ, (void *) arg,
+		                      sizeof(struct serial_struct))) == 0)
+			rc = gs_setserial(&port->gs, (struct serial_struct *) arg);
+		break;
+	default:
+		rc = -ENOIOCTLCMD;
+		break;
 	}
 
+	/* func_exit(); */
 	return rc;
 }
 
+
 /*
- * Send xchar
+ * This function is used to send a high-priority XON/XOFF character to
+ * the device
  */
 static void rs_send_xchar(struct tty_struct * tty, char ch)
 {
-	func_enter();
+	struct rs_port *port = (struct rs_port *)tty->driver_data;
+	func_enter ();
 	
-	rs_port->x_char = ch;
+	port->x_char = ch;
 	if (ch) {
+		/* Make sure transmit interrupts are on */
 		rs_enable_tx_interrupts(tty);
 	}
 
 	func_exit();
 }
 
+
 /*
- * Throttle characters as directed by upper tty layer
+ * ------------------------------------------------------------
+ * rs_throttle()
+ * 
+ * This routine is called by the upper-layer tty layer to signal that
+ * incoming characters should be throttled.
+ * ------------------------------------------------------------
  */
 static void rs_throttle(struct tty_struct * tty)
 {
@@ -552,19 +726,17 @@ static void rs_throttle(struct tty_struct * tty)
 	       tty->ldisc.chars_in_buffer(tty));
 #endif
 
-	func_enter();
+	func_enter ();
 	
 	if (I_IXOFF(tty))
 		rs_send_xchar(tty, STOP_CHAR(tty));
 
-	func_exit();
+	func_exit ();
 }
 
-/*
- * Un-throttle characters as directed by upper tty layer
- */
 static void rs_unthrottle(struct tty_struct * tty)
 {
+	struct rs_port *port = (struct rs_port *)tty->driver_data;
 #ifdef TX3912_UART_DEBUG_THROTTLE
 	char	buf[64];
 	
@@ -575,8 +747,8 @@ static void rs_unthrottle(struct tty_struct * tty)
 	func_enter();
 	
 	if (I_IXOFF(tty)) {
-		if (rs_port->x_char)
-			rs_port->x_char = 0;
+		if (port->x_char)
+			port->x_char = 0;
 		else
 			rs_send_xchar(tty, START_CHAR(tty));
 	}
@@ -584,72 +756,105 @@ static void rs_unthrottle(struct tty_struct * tty)
 	func_exit();
 }
 
-/*
- * Initialize the serial port
- */
-void __init tx3912_rs_init(void)
+
+
+
+
+/* ********************************************************************** *
+ *                    Here are the initialization routines.               *
+ * ********************************************************************** */
+
+void * ckmalloc (int size)
 {
+        void *p;
+
+        p = kmalloc(size, GFP_KERNEL);
+        if (p) 
+                memset(p, 0, size);
+        return p;
+}
+
+
+
+static int rs_init_portstructs(void)
+{
+	struct rs_port *port;
+	int i;
+
+	/* Debugging */
 	func_enter();
-	rs_dprintk(TX3912_UART_DEBUG_INIT, "Initializing serial...\n");
 
-	/* Allocate critical structures */
-	if(!(rs_tty = kmalloc(sizeof(struct tty_struct), GFP_KERNEL))) {
-		return;
-	}
-	if(!(rs_port = kmalloc(sizeof(struct rs_port), GFP_KERNEL))) {
-		kfree(rs_tty);
-		return;
-	}
-	if(!(rs_termios = kmalloc(sizeof(struct termios), GFP_KERNEL))) {
-		kfree(rs_port);
-		kfree(rs_tty);
-		return;
-	}
-	if(!(rs_termios_locked = kmalloc(sizeof(struct termios), GFP_KERNEL))) {
-		kfree(rs_termios);
-		kfree(rs_port);
-		kfree(rs_tty);
-		return;
+	rs_ports          = ckmalloc(TX3912_UART_NPORTS * sizeof (struct rs_port));
+	if (!rs_ports)
+		return -ENOMEM;
+
+	rs_termios        = ckmalloc(TX3912_UART_NPORTS * sizeof (struct termios *));
+	if (!rs_termios) {
+		kfree (rs_ports);
+		return -ENOMEM;
 	}
 
-	/* Zero out the structures */
-	memset(rs_tty, 0, sizeof(struct tty_struct));
-	memset(rs_port, 0, sizeof(struct rs_port));
-	memset(rs_termios, 0, sizeof(struct termios));
-	memset(rs_termios_locked, 0, sizeof(struct termios));
-	memset(&rs_driver, 0, sizeof(rs_driver));
-	memset(&rs_callout_driver, 0, sizeof(rs_callout_driver));
+	rs_termios_locked = ckmalloc(TX3912_UART_NPORTS * sizeof (struct termios *));
+	if (!rs_termios_locked) {
+		kfree (rs_ports);
+		kfree (rs_termios);
+		return -ENOMEM;
+	}
 
-	/* Fill in hardware specific port structure */
-	rs_port->gs.callout_termios = tty_std_termios;
-	rs_port->gs.normal_termios	= tty_std_termios;
-	rs_port->gs.magic = SERIAL_MAGIC;
-	rs_port->gs.close_delay = HZ/2;
-	rs_port->gs.closing_wait = 30 * HZ;
-	rs_port->gs.rd = &rs_real_driver;
+	/* Adjust the values in the "driver" */
+	rs_driver.termios = rs_termios;
+	rs_driver.termios_locked = rs_termios_locked;
+
+	port = rs_ports;
+	for (i=0; i < TX3912_UART_NPORTS;i++) {
+		rs_dprintk (TX3912_UART_DEBUG_INIT, "initing port %d\n", i);
+		port->gs.callout_termios = tty_std_termios;
+		port->gs.normal_termios	= tty_std_termios;
+		port->gs.magic = SERIAL_MAGIC;
+		port->gs.close_delay = HZ/2;
+		port->gs.closing_wait = 30 * HZ;
+		port->gs.rd = &rs_real_driver;
 #ifdef NEW_WRITE_LOCKING
-	rs_port->gs.port_write_sem = MUTEX;
+		port->gs.port_write_sem = MUTEX;
 #endif
 #ifdef DECLARE_WAITQUEUE
-	init_waitqueue_head(&rs_port->gs.open_wait);
-	init_waitqueue_head(&rs_port->gs.close_wait);
+		init_waitqueue_head(&port->gs.open_wait);
+		init_waitqueue_head(&port->gs.close_wait);
 #endif
+		port->base = (i == 0) ? TX3912_UARTA_BASE : TX3912_UARTB_BASE;
+		port->intshift = (i == 0) ? UARTA_SHIFT : UARTB_SHIFT;
+		rs_dprintk (TX3912_UART_DEBUG_INIT, "base 0x%08lx intshift %d\n",
+			    port->base, port->intshift);
+		port++;
+	}
 
-	/* Fill in generic serial driver structures */
+	func_exit();
+	return 0;
+}
+
+static int rs_init_drivers(void)
+{
+	int error;
+
+	func_enter();
+
+	memset(&rs_driver, 0, sizeof(rs_driver));
 	rs_driver.magic = TTY_DRIVER_MAGIC;
 	rs_driver.driver_name = "serial";
 	rs_driver.name = "ttyS";
 	rs_driver.major = TTY_MAJOR;
 	rs_driver.minor_start = 64;
-	rs_driver.num = 1;
+	rs_driver.num = TX3912_UART_NPORTS;
 	rs_driver.type = TTY_DRIVER_TYPE_SERIAL;
 	rs_driver.subtype = SERIAL_TYPE_NORMAL;
 	rs_driver.init_termios = tty_std_termios;
-	rs_driver.init_termios.c_cflag = B115200 | CS8 | CREAD | HUPCL | CLOCAL;
+	rs_driver.init_termios.c_cflag =
+		B115200 | CS8 | CREAD | HUPCL | CLOCAL;
 	rs_driver.refcount = &rs_refcount;
-	rs_driver.table = rs_tty;
+	rs_driver.table = rs_table;
 	rs_driver.termios = rs_termios;
 	rs_driver.termios_locked = rs_termios_locked;
+
 	rs_driver.open	= rs_open;
 	rs_driver.close = gs_close;
 	rs_driver.write = gs_write;
@@ -665,59 +870,92 @@ void __init tx3912_rs_init(void)
 	rs_driver.stop = gs_stop;
 	rs_driver.start = gs_start;
 	rs_driver.hangup = gs_hangup;
+
 	rs_callout_driver = rs_driver;
 	rs_callout_driver.name = "cua";
 	rs_callout_driver.major = TTYAUX_MAJOR;
 	rs_callout_driver.subtype = SERIAL_TYPE_CALLOUT;
 
-	/* Register serial and callout drivers */
-	if(tty_register_driver(&rs_driver)) {
-		printk(KERN_ERR "Unable to register serial driver\n");
-		goto error;
+	if ((error = tty_register_driver(&rs_driver))) {
+		printk(KERN_ERR "Couldn't register serial driver, error = %d\n",
+		       error);
+		return 1;
 	}
-	if(tty_register_driver(&rs_callout_driver)) {
+	if ((error = tty_register_driver(&rs_callout_driver))) {
 		tty_unregister_driver(&rs_driver);
-		printk(KERN_ERR "Unable to register callout driver\n");
-		goto error;
+		printk(KERN_ERR "Couldn't register callout driver, error = %d\n",
+		       error);
+		return 1;
 	}
 
-	/* Assign IRQs */
-	if(request_irq(2, rs_tx_interrupt, SA_SHIRQ,
-		"uarta_tx", rs_port)) {
-		printk(KERN_ERR "Cannot allocate IRQ for UARTA_TX.\n");
-		goto error;
+	func_exit();
+	return 0;
+}
+
+
+void __init tx3912_rs_init(void)
+{
+	int rc;
+
+
+	func_enter();
+	rs_dprintk (TX3912_UART_DEBUG_INIT, "Initing serial module... (rs_debug=%d)\n", rs_debug);
+
+	rc = rs_init_portstructs ();
+	rs_init_drivers ();
+	if (request_irq(2, rs_tx_interrupt_uarta, SA_SHIRQ | SA_INTERRUPT,
+			"serial", &rs_ports[0])) {
+		printk(KERN_ERR "rs: Cannot allocate irq for UARTA.\n");
+		rc = 0;
+	}
+	if (request_irq(3, rs_rx_interrupt_uarta, SA_SHIRQ | SA_INTERRUPT,
+			"serial", &rs_ports[0])) {
+		printk(KERN_ERR "rs: Cannot allocate irq for UARTA.\n");
+		rc = 0;
 	}
 
-	if(request_irq(3, rs_rx_interrupt, SA_SHIRQ,
-		"uarta_rx", rs_port)) {
-		printk(KERN_ERR "Cannot allocate IRQ for UARTA_RX.\n");
-		goto error;
-	}
-
-	/* Enable the serial receive interrupt */
-	rs_enable_rx_interrupts(rs_port); 
+	IntEnable6 |= INT6_UARTARXINT; 
+	rs_enable_rx_interrupts(&rs_ports[0]); 
 
 #ifndef CONFIG_SERIAL_TX3912_CONSOLE
-	/* Write the control registers */
-	outl(TX3912_UART_CTRL2_B115200, TX3912_UARTA_CTRL2);
-	outl(0x00000000, TX3912_UARTA_DMA_CTRL1);
-	outl(0x00000000, TX3912_UARTA_DMA_CTRL2);
-	outl(inl(TX3912_UARTA_CTRL1) | TX3912_UART_CTRL1_ENUART,
-		TX3912_UARTA_CTRL1);
+{
+	unsigned int scratch = 0;
 
-	/* Loop until the UART is on */
-	while(~inl(TX3912_UARTA_CTRL1) & TX3912_UART_CTRL1_UARTON);
+	/* Setup master clock for UART */
+	scratch = inl(TX3912_CLK_CTRL_BASE);
+	scratch &= ~TX3912_CLK_CTRL_SIBMCLKDIV_MASK;
+	scratch |= ((0x2 << TX3912_CLK_CTRL_SIBMCLKDIV_SHIFT) &
+				TX3912_CLK_CTRL_SIBMCLKDIV_MASK)
+			| TX3912_CLK_CTRL_SIBMCLKDIR
+			| TX3912_CLK_CTRL_ENSIBMCLK
+			| TX3912_CLK_CTRL_CSERSEL;
+	outl(scratch, TX3912_CLK_CTRL_BASE);
+
+	/* Configure UARTA clock */
+	scratch = inl(TX3912_CLK_CTRL_BASE);
+	scratch |= ((0x3 << TX3912_CLK_CTRL_CSERDIV_SHIFT) &
+				TX3912_CLK_CTRL_CSERDIV_MASK)
+			| TX3912_CLK_CTRL_ENCSERCLK
+			| TX3912_CLK_CTRL_ENUARTACLK;
+	outl(scratch, TX3912_CLK_CTRL_BASE);
+		
+	/* Setup UARTA for 115200,8N1 */
+	outl(0, TX3912_UARTA_BASE + TX3912_UART_CTRL1);
+	outl(TX3912_UART_CTRL2_B115200, TX3912_UARTA_BASE + TX3912_UART_CTRL2);
+	outl(0, TX3912_UARTA_BASE + TX3912_UART_DMA_CTRL1);
+	outl(0, TX3912_UARTA_BASE + TX3912_UART_DMA_CTRL2);
+
+	/* Enable UARTA */
+	outl(TX3912_UART_CTRL1_ENUART, TX3912_UARTA_BASE + TX3912_UART_CTRL1);
+	while (~inl(TX3912_UARTA_BASE + TX3912_UART_CTRL1) &
+		TX3912_UART_CTRL1_UARTON);
+}
 #endif
 
-	rs_initialized = 1;
-	func_exit();
-	return;
+	/* Note: I didn't do anything to enable the second UART */
+	if (rc >= 0) 
+		rs_initialized++;
 
-error:
-	kfree(rs_termios_locked);
-	kfree(rs_termios);
-	kfree(rs_port);
-	kfree(rs_tty);
 	func_exit();
 }
 
@@ -725,37 +963,55 @@ error:
  * Begin serial console routines
  */
 #ifdef CONFIG_SERIAL_TX3912_CONSOLE
+
 void serial_outc(unsigned char c)
 {
 	int i;
 	unsigned long int2;
+	#define BUSY_WAIT 10000
 
-	/* Disable UARTA_TX interrupts */
-	int2 = inl(TX3912_INT2_ENABLE);
-	outl(inl(TX3912_INT2_ENABLE) & ~TX3912_INT2_UARTA_TX_BITS,
-		 TX3912_INT2_ENABLE);
+	/*
+	 * Turn UARTA interrupts off
+	 */
+	int2 = IntEnable2;
+	IntEnable2 &=
+		~(INT2_UARTATXINT | INT2_UARTATXOVERRUN | INT2_UARTAEMPTY);
 
-	/* Wait for UARTA_TX register to empty */
-	i = 10000;
-	while(!(inl(TX3912_INT2_STATUS) & TX3912_INT2_UARTATXINT) && i--);
-	outl(TX3912_INT2_UARTA_TX_BITS, TX3912_INT2_CLEAR);
+	/*
+	 * The UART_TX_EMPTY bit in UartA_Ctrl1 seems
+	 * not to be very reliable :-(
+	 *
+	 * Wait for the Tx register to become empty
+	 */
+	for (i = 0; !(IntStatus2 & INT2_UARTATXINT) && (i < BUSY_WAIT); i++);
 
-	/* Send the character */
-	outl(c, TX3912_UARTA_DATA);
+	IntClear2 = INT2_UARTATXINT | INT2_UARTATXOVERRUN | INT2_UARTAEMPTY;
+	UartA_Data = c;
+	for (i = 0; !(IntStatus2 & INT2_UARTATXINT) && (i < BUSY_WAIT); i++);
+	IntClear2 = INT2_UARTATXINT | INT2_UARTATXOVERRUN | INT2_UARTAEMPTY;
 
-	/* Wait for UARTA_TX register to empty */
-	i = 10000;
-	while(!(inl(TX3912_INT2_STATUS) & TX3912_INT2_UARTATXINT) && i--);
-	outl(TX3912_INT2_UARTA_TX_BITS, TX3912_INT2_CLEAR);
+	IntEnable2 = int2;
+}
 
-	/* Enable UARTA_TX interrupts */
-	outl(int2, TX3912_INT2_ENABLE);
+static int serial_console_wait_key(struct console *co)
+{
+	unsigned int int2, res;
+
+	int2 = IntEnable2;
+	IntEnable2 = 0;
+
+	while (!(UartA_Ctrl1 & UART_RX_HOLD_FULL));
+	res = UartA_Data;
+	udelay(10);
+	
+	IntEnable2 = int2;
+	return res;
 }
 
 static void serial_console_write(struct console *co, const char *s,
-	unsigned count)
+		unsigned count)
 {
-	unsigned int i;
+    	unsigned int i;
 
 	for (i = 0; i < count; i++) {
 		if (*s == '\n')
@@ -771,78 +1027,36 @@ static kdev_t serial_console_device(struct console *c)
 
 static __init int serial_console_setup(struct console *co, char *options)
 {
-	int baud = 115200;
-	int bits = 8;
-	int parity = 'n';
-	char *s;
-	unsigned int ctrl1 = 0;
-	unsigned int ctrl2 = 0;
+	unsigned int scratch = 0;
 
-	if (options) {
-		baud = simple_strtoul(options, NULL, 10);
-		s = options;
-		while(*s >= '0' && *s <= '9')
-			s++;
-		if (*s) parity = *s++;
-		if (*s) bits   = *s++ - '0';
-	}
+	/* Setup master clock for UART */
+	scratch = inl(TX3912_CLK_CTRL_BASE);
+	scratch &= ~TX3912_CLK_CTRL_SIBMCLKDIV_MASK;
+	scratch |= ((0x2 << TX3912_CLK_CTRL_SIBMCLKDIV_SHIFT) &
+				TX3912_CLK_CTRL_SIBMCLKDIV_MASK)
+			| TX3912_CLK_CTRL_SIBMCLKDIR
+			| TX3912_CLK_CTRL_ENSIBMCLK
+			| TX3912_CLK_CTRL_CSERSEL;
+	outl(scratch, TX3912_CLK_CTRL_BASE);
 
-	switch(baud) {
-		case 1200:
-			ctrl2 = TX3912_UART_CTRL2_B1200;
-			break;
-		case 2400:
-			ctrl2 = TX3912_UART_CTRL2_B2400;
-			break;
-		case 4800:
-			ctrl2 = TX3912_UART_CTRL2_B4800;
-			break;
-		case 9600:
-			ctrl2 = TX3912_UART_CTRL2_B9600;
-			break;
-		case 19200:
-			ctrl2 = TX3912_UART_CTRL2_B19200;
-			break;
-		case 38400:
-			ctrl2 = TX3912_UART_CTRL2_B38400;
-			break;
-		case 57600:
-			ctrl2 = TX3912_UART_CTRL2_B57600;
-			break;
-		case 115200:
-		default:
-			ctrl2 = TX3912_UART_CTRL2_B115200;
-			break;
-	}
+	/* Configure UARTA clock */
+	scratch = inl(TX3912_CLK_CTRL_BASE);
+	scratch |= ((0x3 << TX3912_CLK_CTRL_CSERDIV_SHIFT) &
+				TX3912_CLK_CTRL_CSERDIV_MASK)
+			| TX3912_CLK_CTRL_ENCSERCLK
+			| TX3912_CLK_CTRL_ENUARTACLK;
+	outl(scratch, TX3912_CLK_CTRL_BASE);
+		
+	/* Setup UARTA for 115200,8N1 */
+	outl(0, TX3912_UARTA_BASE + TX3912_UART_CTRL1);
+	outl(TX3912_UART_CTRL2_B115200, TX3912_UARTA_BASE + TX3912_UART_CTRL2);
+	outl(0, TX3912_UARTA_BASE + TX3912_UART_DMA_CTRL1);
+	outl(0, TX3912_UARTA_BASE + TX3912_UART_DMA_CTRL2);
 
-	switch(bits) {
-		case 7:
-			ctrl1 = TX3912_UART_CTRL1_BIT_7;
-			break;
-		default:
-			break;
-	}
-
-	switch(parity) {
-		case 'o': case 'O':
-			ctrl1 |= TX3912_UART_CTRL1_ENPARITY;
-			break;
-		case 'e': case 'E':
-			ctrl1 |= (TX3912_UART_CTRL1_ENPARITY |
-				 TX3912_UART_CTRL1_EVENPARITY);
-			break;
-		default:
-			break;
-	}
-
-	/* Write the control registers */
-	outl(ctrl2, TX3912_UARTA_CTRL2);
-	outl(0x00000000, TX3912_UARTA_DMA_CTRL1);
-	outl(0x00000000, TX3912_UARTA_DMA_CTRL2);
-	outl((ctrl1 | TX3912_UART_CTRL1_ENUART), TX3912_UARTA_CTRL1);
-
-	/* Loop until the UART is on */
-	while(~inl(TX3912_UARTA_CTRL1) & TX3912_UART_CTRL1_UARTON);
+	/* Enable UARTA */
+	outl(TX3912_UART_CTRL1_ENUART, TX3912_UARTA_BASE + TX3912_UART_CTRL1);
+	while (~inl(TX3912_UARTA_BASE + TX3912_UART_CTRL1) &
+		TX3912_UART_CTRL1_UARTON);
 
 	return 0;
 }
@@ -851,6 +1065,7 @@ static struct console sercons = {
 	name:     "ttyS",
 	write:    serial_console_write,
 	device:   serial_console_device,
+	wait_key: serial_console_wait_key,
 	setup:    serial_console_setup,
 	flags:    CON_PRINTBUFFER,
 	index:    -1
@@ -860,4 +1075,5 @@ void __init tx3912_console_init(void)
 {
 	register_console(&sercons);
 }
+
 #endif

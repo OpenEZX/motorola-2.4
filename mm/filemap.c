@@ -23,6 +23,9 @@
 #include <linux/init.h>
 #include <linux/mm.h>
 #include <linux/iobuf.h>
+#include <linux/compiler.h>
+
+#include <linux/trace.h>
 
 #include <asm/pgalloc.h>
 #include <asm/uaccess.h>
@@ -52,7 +55,7 @@ EXPORT_SYMBOL(vm_max_readahead);
 EXPORT_SYMBOL(vm_min_readahead);
 
 
-spinlock_cacheline_t pagecache_lock_cacheline  = {SPIN_LOCK_UNLOCKED};
+spinlock_t pagecache_lock __cacheline_aligned_in_smp = SPIN_LOCK_UNLOCKED;
 /*
  * NOTE: to avoid deadlocking you must never acquire the pagemap_lru_lock 
  *	with the pagecache_lock held.
@@ -62,7 +65,7 @@ spinlock_cacheline_t pagecache_lock_cacheline  = {SPIN_LOCK_UNLOCKED};
  *		pagemap_lru_lock ->
  *			pagecache_lock
  */
-spinlock_cacheline_t pagemap_lru_lock_cacheline = {SPIN_LOCK_UNLOCKED};
+spinlock_t pagemap_lru_lock __cacheline_aligned_in_smp = SPIN_LOCK_UNLOCKED;
 
 #define CLUSTER_PAGES		(1 << page_cluster)
 #define CLUSTER_OFFSET(x)	(((x) >> page_cluster) << page_cluster)
@@ -119,8 +122,13 @@ static inline void remove_page_from_hash_queue(struct page * page)
  */
 void __remove_inode_page(struct page *page)
 {
-	if (PageDirty(page) && !PageSwapCache(page))
+
+	if (DelallocPage(page)) {
+		printk("Delalloc page %p removed from inode\n", page);
 		BUG();
+	}
+
+	if (PageDirty(page)) BUG();
 	remove_page_from_inode_queue(page);
 	remove_page_from_hash_queue(page);
 }
@@ -154,14 +162,11 @@ void set_page_dirty(struct page *page)
 
 		if (mapping) {
 			spin_lock(&pagecache_lock);
-			mapping = page->mapping;
-			if (mapping) {	/* may have been truncated */
-				list_del(&page->list);
-				list_add(&page->list, &mapping->dirty_pages);
-			}
+			list_del(&page->list);
+			list_add(&page->list, &mapping->dirty_pages);
 			spin_unlock(&pagecache_lock);
 
-			if (mapping && mapping->host)
+			if (mapping->host)
 				mark_inode_dirty_pages(mapping->host);
 		}
 	}
@@ -299,6 +304,7 @@ static int truncate_list_pages(struct list_head *head, unsigned long start, unsi
 
 			page_cache_release(page);
 
+			/* we hit this with lock depth of 1 or 2 */
 			if (current->need_resched) {
 				__set_current_state(TASK_RUNNING);
 				schedule();
@@ -409,6 +415,8 @@ static int invalidate_list_pages2(struct list_head *head)
 		}
 
 		page_cache_release(page);
+
+		debug_lock_break(551);
 		if (current->need_resched) {
 			__set_current_state(TASK_RUNNING);
 			schedule();
@@ -558,16 +566,20 @@ int filemap_fdatasync(struct address_space * mapping)
 	spin_lock(&pagecache_lock);
 
         while (!list_empty(&mapping->dirty_pages)) {
-		struct page *page = list_entry(mapping->dirty_pages.prev, struct page, list);
+		struct page *page = list_entry(mapping->dirty_pages.next, struct page, list);
 
 		list_del(&page->list);
 		list_add(&page->list, &mapping->locked_pages);
 
-		if (!PageDirty(page))
-			continue;
-
 		page_cache_get(page);
 		spin_unlock(&pagecache_lock);
+
+		/* BKL is held ... */
+		debug_lock_break(1);
+		conditional_schedule();
+
+		if (!PageDirty(page))
+			goto clean;
 
 		lock_page(page);
 
@@ -579,7 +591,7 @@ int filemap_fdatasync(struct address_space * mapping)
 				ret = err;
 		} else
 			UnlockPage(page);
-
+clean:
 		page_cache_release(page);
 		spin_lock(&pagecache_lock);
 	}
@@ -597,14 +609,27 @@ int filemap_fdatasync(struct address_space * mapping)
 int filemap_fdatawait(struct address_space * mapping)
 {
 	int ret = 0;
+	DEFINE_LOCK_COUNT();
 
 	spin_lock(&pagecache_lock);
 
+restart:
         while (!list_empty(&mapping->locked_pages)) {
 		struct page *page = list_entry(mapping->locked_pages.next, struct page, list);
 
 		list_del(&page->list);
 		list_add(&page->list, &mapping->clean_pages);
+
+		if (TEST_LOCK_COUNT(32)) {
+			RESET_LOCK_COUNT();
+			debug_lock_break(2);
+			if (conditional_schedule_needed()) {
+				page_cache_get(page);
+				break_spin_lock_and_resched(&pagecache_lock);
+				page_cache_release(page);
+				goto restart;
+			}
+		}
 
 		if (!PageLocked(page))
 			continue;
@@ -748,130 +773,41 @@ static int read_cluster_nonblocking(struct file * file, unsigned long offset,
 	return 0;
 }
 
-/*
- * Knuth recommends primes in approximately golden ratio to the maximum
- * integer representable by a machine word for multiplicative hashing.
- * Chuck Lever verified the effectiveness of this technique:
- * http://www.citi.umich.edu/techreports/reports/citi-tr-00-1.pdf
- *
- * These primes are chosen to be bit-sparse, that is operations on
- * them can use shifts and additions instead of multiplications for
- * machines where multiplications are slow.
- */
-#if BITS_PER_LONG == 32
-/* 2^31 + 2^29 - 2^25 + 2^22 - 2^19 - 2^16 + 1 */
-#define GOLDEN_RATIO_PRIME 0x9e370001UL
-#elif BITS_PER_LONG == 64
-/*  2^63 + 2^61 - 2^57 + 2^54 - 2^51 - 2^18 + 1 */
-#define GOLDEN_RATIO_PRIME 0x9e37fffffffc0001UL
-#else
-#error Define GOLDEN_RATIO_PRIME for your wordsize.
-#endif
-
-/*
- * In order to wait for pages to become available there must be
- * waitqueues associated with pages. By using a hash table of
- * waitqueues where the bucket discipline is to maintain all
- * waiters on the same queue and wake all when any of the pages
- * become available, and for the woken contexts to check to be
- * sure the appropriate page became available, this saves space
- * at a cost of "thundering herd" phenomena during rare hash
- * collisions.
- */
-static inline wait_queue_head_t *page_waitqueue(struct page *page)
-{
-	const zone_t *zone = page_zone(page);
-	wait_queue_head_t *wait = zone->wait_table;
-	unsigned long hash = (unsigned long)page;
-
-#if BITS_PER_LONG == 64
-	/*  Sigh, gcc can't optimise this alone like it does for 32 bits. */
-	unsigned long n = hash;
-	n <<= 18;
-	hash -= n;
-	n <<= 33;
-	hash -= n;
-	n <<= 3;
-	hash += n;
-	n <<= 3;
-	hash -= n;
-	n <<= 4;
-	hash += n;
-	n <<= 2;
-	hash += n;
-#else
-	/* On some cpus multiply is faster, on others gcc will do shifts */
-	hash *= GOLDEN_RATIO_PRIME;
-#endif
-	hash >>= zone->wait_table_shift;
-
-	return &wait[hash];
-}
-
 /* 
  * Wait for a page to get unlocked.
  *
  * This must be called with the caller "holding" the page,
  * ie with increased "page->count" so that the page won't
  * go away during the wait..
- *
- * The waiting strategy is to get on a waitqueue determined
- * by hashing. Waiters will then collide, and the newly woken
- * task must then determine whether it was woken for the page
- * it really wanted, and go back to sleep on the waitqueue if
- * that wasn't it. With the waitqueue semantics, it never leaves
- * the waitqueue unless it calls, so the loop moves forward one
- * iteration every time there is
- * (1) a collision 
- * and
- * (2) one of the colliding pages is woken
- *
- * This is the thundering herd problem, but it is expected to
- * be very rare due to the few pages that are actually being
- * waited on at any given time and the quality of the hash function.
  */
 void ___wait_on_page(struct page *page)
 {
-	wait_queue_head_t *waitqueue = page_waitqueue(page);
 	struct task_struct *tsk = current;
 	DECLARE_WAITQUEUE(wait, tsk);
 
-	add_wait_queue(waitqueue, &wait);
+	add_wait_queue(&page->wait, &wait);
 	do {
 		set_task_state(tsk, TASK_UNINTERRUPTIBLE);
 		if (!PageLocked(page))
 			break;
+		TRACE_MEMORY(TRACE_EV_MEMORY_PAGE_WAIT_START, 0);
 		sync_page(page);
 		schedule();
 	} while (PageLocked(page));
-	__set_task_state(tsk, TASK_RUNNING);
-	remove_wait_queue(waitqueue, &wait);
+	tsk->state = TASK_RUNNING;
+	TRACE_MEMORY(TRACE_EV_MEMORY_PAGE_WAIT_END, 0);
+	remove_wait_queue(&page->wait, &wait);
 }
 
-/*
- * unlock_page() is the other half of the story just above
- * __wait_on_page(). Here a couple of quick checks are done
- * and a couple of flags are set on the page, and then all
- * of the waiters for all of the pages in the appropriate
- * wait queue are woken.
- */
 void unlock_page(struct page *page)
 {
-	wait_queue_head_t *waitqueue = page_waitqueue(page);
-	ClearPageLaunder(page);
+	clear_bit(PG_launder, &(page)->flags);
 	smp_mb__before_clear_bit();
 	if (!test_and_clear_bit(PG_locked, &(page)->flags))
 		BUG();
 	smp_mb__after_clear_bit(); 
-
-	/*
-	 * Although the default semantics of wake_up() are
-	 * to wake all, here the specific function is used
-	 * to make it even more explicit that a number of
-	 * pages are being waited on here.
-	 */
-	if (waitqueue_active(waitqueue))
-		wake_up_all(waitqueue);
+	if (waitqueue_active(&(page)->wait))
+	wake_up(&(page)->wait);
 }
 
 /*
@@ -880,11 +816,10 @@ void unlock_page(struct page *page)
  */
 static void __lock_page(struct page *page)
 {
-	wait_queue_head_t *waitqueue = page_waitqueue(page);
 	struct task_struct *tsk = current;
 	DECLARE_WAITQUEUE(wait, tsk);
 
-	add_wait_queue_exclusive(waitqueue, &wait);
+	add_wait_queue_exclusive(&page->wait, &wait);
 	for (;;) {
 		set_task_state(tsk, TASK_UNINTERRUPTIBLE);
 		if (PageLocked(page)) {
@@ -894,9 +829,10 @@ static void __lock_page(struct page *page)
 		if (!TryLockPage(page))
 			break;
 	}
-	__set_task_state(tsk, TASK_RUNNING);
-	remove_wait_queue(waitqueue, &wait);
+	tsk->state = TASK_RUNNING;
+	remove_wait_queue(&page->wait, &wait);
 }
+	
 
 /*
  * Get an exclusive lock on the page, optimistically
@@ -963,6 +899,7 @@ static struct page * __find_lock_page_helper(struct address_space *mapping,
 	 * the hash-list needs a held write-lock.
 	 */
 repeat:
+	break_spin_lock(&pagecache_lock);
 	page = __find_page_nolock(mapping, offset, hash);
 	if (page) {
 		page_cache_get(page);
@@ -1027,6 +964,15 @@ struct page * find_or_create_page(struct address_space *mapping, unsigned long i
 	}
 	return page;	
 }
+
+/*
+ * Returns locked page at given index in given cache, creating it if needed.
+ */
+struct page *grab_cache_page(struct address_space *mapping, unsigned long index)
+{
+	return find_or_create_page(mapping, index, mapping->gfp_mask);
+}
+
 
 /*
  * Same as grab_cache_page, but do not wait if the page is unavailable.
@@ -1310,17 +1256,24 @@ static void generic_file_readahead(int reada_ok,
 /*
  * Mark a page as having seen activity.
  *
- * If it was already so marked, move it to the active queue and drop
- * the referenced bit.  Otherwise, just mark it for future action..
+ * If it was already so marked, move it
+ * to the active queue and drop the referenced
+ * bit. Otherwise, just mark it for future
+ * action..
  */
 void mark_page_accessed(struct page *page)
 {
 	if (!PageActive(page) && PageReferenced(page)) {
 		activate_page(page);
 		ClearPageReferenced(page);
-	} else
-		SetPageReferenced(page);
+		return;
+	}
+
+	/* Mark the page referenced, AFTER checking for previous usage.. */
+	SetPageReferenced(page);
 }
+
+EXPORT_SYMBOL(mark_page_accessed);
 
 /*
  * This is a generic file read routine, and uses the
@@ -1548,7 +1501,6 @@ static ssize_t generic_file_direct_IO(int rw, struct file * filp, char * buf, si
 	struct kiobuf * iobuf;
 	struct address_space * mapping = filp->f_dentry->d_inode->i_mapping;
 	struct inode * inode = mapping->host;
-	loff_t size = inode->i_size;
 
 	new_iobuf = 0;
 	iobuf = filp->f_iobuf;
@@ -1573,9 +1525,6 @@ static ssize_t generic_file_direct_IO(int rw, struct file * filp, char * buf, si
 		goto out_free;
 	if (!mapping->a_ops->direct_IO)
 		goto out_free;
-
-	if ((rw == READ) && (offset + count > size))
-		count = size - offset;
 
 	/*
 	 * Flush to disk exclusively the _data_, metadata must remain
@@ -1607,7 +1556,6 @@ static ssize_t generic_file_direct_IO(int rw, struct file * filp, char * buf, si
 		if (retval >= 0) {
 			count -= retval;
 			buf += retval;
-			/* warning: weird semantics here, we're reporting a read behind the end of the file */
 			progress += retval;
 		}
 
@@ -1697,6 +1645,8 @@ ssize_t generic_file_read(struct file * filp, char * buf, size_t count, loff_t *
 			goto out; /* skip atime */
 		size = inode->i_size;
 		if (pos < size) {
+			if (pos + count > size)
+				count = size - pos;
 			retval = generic_file_direct_IO(READ, filp, buf, count, pos);
 			if (retval > 0)
 				*ppos = pos + retval;
@@ -2114,6 +2064,8 @@ static inline int filemap_sync_pte_range(pmd_t * pmd,
 		address += PAGE_SIZE;
 		pte++;
 	} while (address && (address < end));
+	debug_lock_break(1);
+	break_spin_lock(&vma->vm_mm->page_table_lock);
 	return error;
 }
 
@@ -2144,6 +2096,9 @@ static inline int filemap_sync_pmd_range(pgd_t * pgd,
 		address = (address + PMD_SIZE) & PMD_MASK;
 		pmd++;
 	} while (address && (address < end));
+
+	debug_lock_break(1);
+	break_spin_lock(&vma->vm_mm->page_table_lock);
 	return error;
 }
 
@@ -2194,6 +2149,7 @@ int generic_file_mmap(struct file * file, struct vm_area_struct * vma)
 		return -ENOEXEC;
 	UPDATE_ATIME(inode);
 	vma->vm_ops = &generic_file_vm_ops;
+	vma->vm_flags &= ~VM_IO;
 	return 0;
 }
 
@@ -2215,9 +2171,6 @@ static int msync_interval(struct vm_area_struct * vma,
 {
 	int ret = 0;
 	struct file * file = vma->vm_file;
-
-	if ( (flags & MS_INVALIDATE) && (vma->vm_flags & VM_LOCKED) )
-		return -EBUSY;
 
 	if (file && (vma->vm_flags & VM_SHARED)) {
 		ret = filemap_sync(vma, start, end-start, flags);
@@ -2260,26 +2213,23 @@ asmlinkage long sys_msync(unsigned long start, size_t len, int flags)
 		goto out;
 	if (flags & ~(MS_ASYNC | MS_INVALIDATE | MS_SYNC))
 		goto out;
-	if ((flags & MS_ASYNC) && (flags & MS_SYNC))
-		goto out;
-
 	error = 0;
 	if (end == start)
 		goto out;
 	/*
 	 * If the interval [start,end) covers some unmapped address ranges,
-	 * just ignore them, but return -ENOMEM at the end.
+	 * just ignore them, but return -EFAULT at the end.
 	 */
 	vma = find_vma(current->mm, start);
 	unmapped_error = 0;
 	for (;;) {
 		/* Still start < end. */
-		error = -ENOMEM;
+		error = -EFAULT;
 		if (!vma)
 			goto out;
 		/* Here start < vma->vm_end. */
 		if (start < vma->vm_start) {
-			unmapped_error = -ENOMEM;
+			unmapped_error = -EFAULT;
 			start = vma->vm_start;
 		}
 		/* Here vma->vm_start <= start < vma->vm_end. */
@@ -2427,7 +2377,7 @@ static long madvise_behavior(struct vm_area_struct * vma,
 	int error = 0;
 
 	/* This caps the number of vma's this process can own */
-	if (vma->vm_mm->map_count > max_map_count)
+	if (vma->vm_mm->map_count > MAX_MAP_COUNT)
 		return -ENOMEM;
 
 	if (start == vma->vm_start) {
@@ -2527,7 +2477,7 @@ static long madvise_dontneed(struct vm_area_struct * vma,
 	if (vma->vm_flags & VM_LOCKED)
 		return -EINVAL;
 
-	zap_page_range(vma->vm_mm, start, end - start);
+	zap_page_range(vma->vm_mm, start, end - start, ZPR_PARTITION);
 	return 0;
 }
 
@@ -2975,7 +2925,7 @@ generic_file_write(struct file *file,const char *buf,size_t count, loff_t *ppos)
 	 */
 	err = -EFBIG;
 	
-	if (!S_ISBLK(inode->i_mode) && limit != RLIM_INFINITY) {
+	if (limit != RLIM_INFINITY) {
 		if (pos >= limit) {
 			send_sig(SIGXFSZ, current, 0);
 			goto out;

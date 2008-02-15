@@ -59,8 +59,8 @@ unsigned int aac_response_normal(struct aac_queue * q)
 {
 	struct aac_dev * dev = q->dev;
 	struct aac_entry *entry;
-	struct hw_fib * hwfib;
-	struct fib * fib;
+	struct hw_fib * fib;
+	struct fib * fibctx;
 	int consumed = 0;
 	unsigned long flags;
 
@@ -77,22 +77,22 @@ unsigned int aac_response_normal(struct aac_queue * q)
 		int fast;
 
 		fast = (int) (entry->addr & 0x01);
-		hwfib = addr2fib(entry->addr & ~0x01);
+		fib = (struct hw_fib *) (entry->addr & ~0x01);
 		aac_consumer_free(dev, q, HostNormRespQueue);
-		fib = &dev->fibs[hwfib->header.SenderData];
+		fibctx = (struct fib *)fib->header.SenderData;
 		/*
-		 *	Remove this fib from the Outstanding I/O queue.
+		 *	Remove this fibctx from the Outstanding I/O queue.
 		 *	But only if it has not already been timed out.
 		 *
 		 *	If the fib has been timed out already, then just 
 		 *	continue. The caller has already been notified that
 		 *	the fib timed out.
 		 */
-		if (!(fib->flags & FIB_CONTEXT_FLAG_TIMED_OUT)) {
-			list_del(&fib->queue);
+		if (!(fibctx->flags & FIB_CONTEXT_FLAG_TIMED_OUT)) {
+			list_del(&fibctx->queue);
 			dev->queues->queue[AdapNormCmdQueue].numpending--;
 		} else {
-			printk(KERN_WARNING "aacraid: FIB timeout (%x).\n", fib->flags);
+			printk(KERN_WARNING "aacraid: FIB timeout.\n");
 			continue;
 		}
 		spin_unlock_irqrestore(q->lock, flags);
@@ -101,35 +101,35 @@ unsigned int aac_response_normal(struct aac_queue * q)
 			/*
 			 *	Doctor the fib
 			 */
-			*(u32 *)hwfib->data = cpu_to_le32(ST_OK);
-			hwfib->header.XferState |= cpu_to_le32(AdapterProcessed);
+			*(u32 *)fib->data = cpu_to_le32(ST_OK);
+			fib->header.XferState |= cpu_to_le32(AdapterProcessed);
 		}
 
 		FIB_COUNTER_INCREMENT(aac_config.FibRecved);
 
-		if (hwfib->header.Command == cpu_to_le16(NuFileSystem))
+		if (fib->header.Command == cpu_to_le16(NuFileSystem))
 		{
-			u32 *pstatus = (u32 *)hwfib->data;
+			u32 *pstatus = (u32 *)fib->data;
 			if (*pstatus & cpu_to_le32(0xffff0000))
 				*pstatus = cpu_to_le32(ST_OK);
 		}
-		if (hwfib->header.XferState & cpu_to_le32(NoResponseExpected | Async)) 
+		if (fib->header.XferState & cpu_to_le32(NoResponseExpected | Async)) 
 		{
-	        	if (hwfib->header.XferState & cpu_to_le32(NoResponseExpected))
+	        	if (fib->header.XferState & cpu_to_le32(NoResponseExpected))
 				FIB_COUNTER_INCREMENT(aac_config.NoResponseRecved);
 			else 
 				FIB_COUNTER_INCREMENT(aac_config.AsyncRecved);
 			/*
-			 *	NOTE:  we cannot touch the fib after this
+			 *	NOTE:  we cannot touch the fibctx after this
 			 *	    call, because it may have been deallocated.
 			 */
-			fib->callback(fib->callback_data, fib);
+			fibctx->callback(fibctx->callback_data, fibctx);
 		} else {
 			unsigned long flagv;
-			spin_lock_irqsave(&fib->event_lock, flagv);
-			fib->done = 1;
-			up(&fib->event_wait);
-			spin_unlock_irqrestore(&fib->event_lock, flagv);
+			spin_lock_irqsave(&fibctx->event_lock, flagv);
+			fibctx->done = 1;
+			up(&fibctx->event_wait);
+			spin_unlock_irqrestore(&fibctx->event_lock, flagv);
 			FIB_COUNTER_INCREMENT(aac_config.NormalRecved);
 		}
 		consumed++;
@@ -172,7 +172,7 @@ unsigned int aac_command_normal(struct aac_queue *q)
 	while(aac_consumer_get(dev, q, &entry))
 	{
 		struct hw_fib * fib;
-		fib = addr2fib(entry->addr);
+		fib = (struct hw_fib *)entry->addr;
 
 		if (dev->aif_thread) {
 		        list_add_tail(&fib->header.FibLinks, &q->cmdq);

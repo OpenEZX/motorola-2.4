@@ -11,7 +11,7 @@
 #ifndef _ASM_SGI_SN0_HUBNI_H
 #define _ASM_SGI_SN0_HUBNI_H
 
-#ifndef __ASSEMBLY__
+#ifdef _LANGUAGE_C
 #include <linux/types.h>
 #endif
 
@@ -226,7 +226,7 @@
 
 #define NLT_EXIT_PORT_MASK (UINT64_CAST 0xf)
 
-#ifndef __ASSEMBLY__
+#ifdef _LANGUAGE_C
 
 typedef union	hubni_port_error_u {
 	u64	nipe_reg_value;
@@ -250,6 +250,6 @@ typedef union	hubni_port_error_u {
 #define NI_LLP_CB_MAX		0xff
 #define NI_LLP_SN_MAX		0xff
 
-#endif /* !__ASSEMBLY__ */
+#endif /* LANGUAGE_C */
 
 #endif /* _ASM_SGI_SN0_HUBNI_H */

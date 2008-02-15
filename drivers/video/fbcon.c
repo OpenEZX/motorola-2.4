@@ -75,6 +75,7 @@
 #include <linux/selection.h>
 #include <linux/smp.h>
 #include <linux/init.h>
+#include <linux/vmalloc.h>
 #include <linux/pm.h>
 
 #include <asm/irq.h>
@@ -110,9 +111,19 @@
 #  define DPRINTK(fmt, args...)
 #endif
 
-#define LOGO_H			80
-#define LOGO_W			80
+#define LOGO_H			320
+#define LOGO_W			240
 #define LOGO_LINE	(LOGO_W/8)
+
+//add by zq, for logo
+#define FLASH_ADDR		0x0
+#define FLASH_SIZE		32*1024*1024
+#define FLASH_BLOCK_SIZE	0x20000
+#define IMAGE_SIZE		320*240*2
+#define FILE_SIZE		320*240*2+0x100
+#define LOGO_ADDR	        0x1fc0000
+//#define LOGO_ADDR	        0x1c40000 // for test address
+//end of add
 
 struct display fb_display[MAX_NR_CONSOLES];
 char con2fb_map[MAX_NR_CONSOLES];
@@ -577,6 +588,7 @@ static void fbcon_setup(int con, int init, int logo)
         p->type == FB_TYPE_TEXT)
     	logo = 0;
 
+    vt_cons[conp->vc_num]->vc_mode = KD_GRAPHICS;
     p->var.xoffset = p->var.yoffset = p->yscroll = 0;  /* reset wrap/pan */
 
     if (con == fg_console && p->type != FB_TYPE_TEXT) {   
@@ -637,7 +649,7 @@ static void fbcon_setup(int con, int init, int logo)
     }
     
     if (!fontwidthvalid(p,fontwidth(p))) {
-#if defined(CONFIG_FBCON_MAC) && defined(CONFIG_MAC)
+#ifdef CONFIG_MAC
 	if (MACH_IS_MAC)
 	    /* ++Geert: hack to make 6x11 fonts work on mac */
 	    p->dispsw = &fbcon_mac;
@@ -1571,6 +1583,10 @@ static int fbcon_blank(struct vc_data *conp, int blank)
 
     if (blank < 0)	/* Entering graphics mode */
 	return 0;
+#ifdef CONFIG_PM
+    if (fbcon_sleeping)
+    	return 0;
+#endif /* CONFIG_PM */
 
     fbcon_cursor(p->conp, blank ? CM_ERASE : CM_DRAW);
 
@@ -2138,9 +2154,11 @@ static int __init fbcon_show_logo( void )
     int line = p->next_line;
     unsigned char *fb = p->screen_base;
     unsigned char *logo;
-    unsigned char *dst, *src;
+    unsigned char *dst;
+    unsigned short *src;	
     int i, j, n, x1, y1, x;
     int logo_depth, done = 0;
+    unsigned long base;
 
     /* Return if the frame buffer is not mapped */
     if (!fb)
@@ -2271,27 +2289,44 @@ static int __init fbcon_show_logo( void )
     defined(CONFIG_FBCON_CFB32) || defined(CONFIG_FB_SBUS)
 	if ((depth % 8 == 0) && (p->visual == FB_VISUAL_TRUECOLOR)) {
 	    /* Modes without color mapping, needs special data transformation... */
+/* modified by zq, for show motorola logo */
 	    unsigned int val;		/* max. depth 32! */
 	    int bdepth = depth/8;
+	    int i, buflen, imglen;
+	    unsigned char *image, *temp;
+/*
 	    unsigned char mask[9] = { 0,0x80,0xc0,0xe0,0xf0,0xf8,0xfc,0xfe,0xff };
 	    unsigned char redmask, greenmask, bluemask;
 	    int redshift, greenshift, blueshift;
-		
+*/		
 	    /* Bug: Doesn't obey msb_right ... (who needs that?) */
+/*
 	    redmask   = mask[p->var.red.length   < 8 ? p->var.red.length   : 8];
 	    greenmask = mask[p->var.green.length < 8 ? p->var.green.length : 8];
 	    bluemask  = mask[p->var.blue.length  < 8 ? p->var.blue.length  : 8];
 	    redshift   = p->var.red.offset   - (8-p->var.red.length);
 	    greenshift = p->var.green.offset - (8-p->var.green.length);
 	    blueshift  = p->var.blue.offset  - (8-p->var.blue.length);
-
 	    src = logo;
-	    for( y1 = 0; y1 < LOGO_H; y1++ ) {
+*/
+	   base = (unsigned long)__ioremap(FLASH_ADDR, FLASH_SIZE, 0);
+	   logo = base + LOGO_ADDR;
+	   buflen = FLASH_BLOCK_SIZE;
+	   imglen = FILE_SIZE;
+	   image = vmalloc(imglen);
+	   decompress_logo(logo, image, buflen, imglen);
+
+	   temp = image + 72;  /* discard bitmap header */
+           for( y1 = 0; y1 < LOGO_H; y1++ ) {
 		dst = fb + y1*line + x*bdepth;
+		src = temp + (LOGO_H-1-y1)*line; 
 		for( x1 = 0; x1 < LOGO_W; x1++, src++ ) {
+/*
 		    val = safe_shift((linux_logo_red[*src-32]   & redmask), redshift) |
 		          safe_shift((linux_logo_green[*src-32] & greenmask), greenshift) |
 		          safe_shift((linux_logo_blue[*src-32]  & bluemask), blueshift);
+*/
+			val = *src;
 		    if (bdepth == 4 && !((long)dst & 3)) {
 			/* Some cards require 32bit access */
 			fb_writel (val, dst);
@@ -2310,7 +2345,10 @@ static int __init fbcon_show_logo( void )
 		    }
 		}
 	    }
+	    vfree(image);
+	    iounmap((void *)base);	
 	    done = 1;
+/* end of modified by zq */
 	}
 #endif
 #if defined(CONFIG_FBCON_CFB4)
@@ -2413,7 +2451,7 @@ static int __init fbcon_show_logo( void )
 		else
 		    dst = fb + y1*line + x/8;
 		for( x1 = 0; x1 < LOGO_LINE; ++x1 )
-		    fb_writeb(*src++ ^ inverse, dst++);
+		    fb_writeb(fb_readb(src++) ^ inverse, dst++);
 	    }
 	    done = 1;
 	}

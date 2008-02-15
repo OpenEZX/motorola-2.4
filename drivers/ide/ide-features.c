@@ -127,14 +127,30 @@ byte ide_auto_reduce_xfer (ide_drive_t *drive)
 		case XFER_UDMA_3:	return XFER_UDMA_2;
 		case XFER_UDMA_2:	return XFER_UDMA_1;
 		case XFER_UDMA_1:	return XFER_UDMA_0;
-			/*
-			 * OOPS we do not goto non Ultra DMA modes
-			 * without iCRC's available we force
-			 * the system to PIO and make the user
-			 * invoke the ATA-1 ATA-2 DMA modes.
-			 */
 		case XFER_UDMA_0:
-		default:		return XFER_PIO_4;
+			if (drive->id->dma_mword & 0x0004) return XFER_MW_DMA_2;
+			else if (drive->id->dma_mword & 0x0002) return XFER_MW_DMA_1;
+			else if (drive->id->dma_mword & 0x0001) return XFER_MW_DMA_0;
+			else return XFER_PIO_4;
+		case XFER_MW_DMA_2:	return XFER_MW_DMA_1;
+		case XFER_MW_DMA_1:	return XFER_MW_DMA_0;
+		case XFER_MW_DMA_0:
+			if (drive->id->dma_1word & 0x0004) return XFER_SW_DMA_2;
+			else if (drive->id->dma_1word & 0x0002) return XFER_SW_DMA_1;
+			else if (drive->id->dma_1word & 0x0001) return XFER_SW_DMA_0;
+			else return XFER_PIO_4;
+		case XFER_SW_DMA_2:	return XFER_SW_DMA_1;
+		case XFER_SW_DMA_1:	return XFER_SW_DMA_0;
+		case XFER_SW_DMA_0:
+			{
+				return XFER_PIO_4;
+			}
+		case XFER_PIO_4:	return XFER_PIO_3;
+		case XFER_PIO_3:	return XFER_PIO_2;
+		case XFER_PIO_2:	return XFER_PIO_1;
+		case XFER_PIO_1:	return XFER_PIO_0;
+		case XFER_PIO_0:
+		default:		return XFER_PIO_SLOW;
 	}
 }
 
@@ -200,11 +216,11 @@ int ide_driveid_update (ide_drive_t *drive)
  * in combination with the device (usually a disk) properly detect
  * and acknowledge each end of the ribbon.
  */
-int ide_ata66_check (ide_drive_t *drive, ide_task_t *args)
+int ide_ata66_check (ide_drive_t *drive, byte cmd, byte nsect, byte feature)
 {
-	if ((args->tfRegister[IDE_COMMAND_OFFSET] == WIN_SETFEATURES) &&
-	    (args->tfRegister[IDE_SECTOR_OFFSET] > XFER_UDMA_2) &&
-	    (args->tfRegister[IDE_FEATURE_OFFSET] == SETFEATURES_XFER)) {
+	if ((cmd == WIN_SETFEATURES) &&
+	    (nsect > XFER_UDMA_2) &&
+	    (feature == SETFEATURES_XFER)) {
 		if (!HWIF(drive)->udma_four) {
 			printk("%s: Speed warnings UDMA 3/4/5 is not functional.\n", HWIF(drive)->name);
 			return 1;
@@ -227,11 +243,11 @@ int ide_ata66_check (ide_drive_t *drive, ide_task_t *args)
  * 1 : Safe to update drive->id DMA registers.
  * 0 : OOPs not allowed.
  */
-int set_transfer (ide_drive_t *drive, ide_task_t *args)
+int set_transfer (ide_drive_t *drive, byte cmd, byte nsect, byte feature)
 {
-	if ((args->tfRegister[IDE_COMMAND_OFFSET] == WIN_SETFEATURES) &&
-	    (args->tfRegister[IDE_SECTOR_OFFSET] >= XFER_SW_DMA_0) &&
-	    (args->tfRegister[IDE_FEATURE_OFFSET] == SETFEATURES_XFER) &&
+	if ((cmd == WIN_SETFEATURES) &&
+	    (nsect >= XFER_SW_DMA_0) &&
+	    (feature == SETFEATURES_XFER) &&
 	    (drive->id->dma_ultra ||
 	     drive->id->dma_mword ||
 	     drive->id->dma_1word))
@@ -240,24 +256,17 @@ int set_transfer (ide_drive_t *drive, ide_task_t *args)
 	return 0;
 }
 
-#ifdef CONFIG_BLK_DEV_IDEDMA
 /*
  *  All hosts that use the 80c ribbon mus use!
  */
 byte eighty_ninty_three (ide_drive_t *drive)
 {
-#ifdef CONFIG_BLK_DEV_IDEPCI
-	if (HWIF(drive)->pci_devid.vid==0x105a)
-	    return(HWIF(drive)->udma_four);
-#endif
-	/* PDC202XX: that's because some HDD will return wrong info */
 	return ((byte) ((HWIF(drive)->udma_four) &&
 #ifndef CONFIG_IDEDMA_IVB
 			(drive->id->hw_config & 0x4000) &&
 #endif /* CONFIG_IDEDMA_IVB */
 			(drive->id->hw_config & 0x6000)) ? 1 : 0);
 }
-#endif // CONFIG_BLK_DEV_IDEDMA
 
 /*
  * Similar to ide_wait_stat(), except it never calls ide_error internally.
@@ -278,7 +287,11 @@ int ide_config_drive_speed (ide_drive_t *drive, byte speed)
 
 #if defined(CONFIG_BLK_DEV_IDEDMA) && !defined(CONFIG_DMA_NONPCI)
 	byte unit = (drive->select.b.unit & 0x01);
-	outb(inb(hwif->dma_base+2) & ~(1<<(5+unit)), hwif->dma_base+2);
+	/* Some interfaces would like to use this routine, but don"t have this
+	 * kind of DMA engine. --BenH.
+	 */
+	if (hwif->dma_base)
+		outb(inb(hwif->dma_base+2) & ~(1<<(5+unit)), hwif->dma_base+2);
 #endif /* (CONFIG_BLK_DEV_IDEDMA) && !(CONFIG_DMA_NONPCI) */
 
 	/*
@@ -347,10 +360,15 @@ int ide_config_drive_speed (ide_drive_t *drive, byte speed)
 	drive->id->dma_1word &= ~0x0F00;
 
 #if defined(CONFIG_BLK_DEV_IDEDMA) && !defined(CONFIG_DMA_NONPCI)
-	if (speed > XFER_PIO_4) {
-		outb(inb(hwif->dma_base+2)|(1<<(5+unit)), hwif->dma_base+2);
-	} else {
-		outb(inb(hwif->dma_base+2) & ~(1<<(5+unit)), hwif->dma_base+2);
+	/* Some interfaces would like to use this routine, but don"t have this
+	 * kind of DMA engine. --BenH.
+	 */
+	if (hwif->dma_base) {
+		if (speed > XFER_PIO_4) {
+			outb(inb(hwif->dma_base+2)|(1<<(5+unit)), hwif->dma_base+2);
+		} else {
+			outb(inb(hwif->dma_base+2) & ~(1<<(5+unit)), hwif->dma_base+2);
+		}
 	}
 #endif /* (CONFIG_BLK_DEV_IDEDMA) && !(CONFIG_DMA_NONPCI) */
 
@@ -378,8 +396,5 @@ EXPORT_SYMBOL(ide_auto_reduce_xfer);
 EXPORT_SYMBOL(ide_driveid_update);
 EXPORT_SYMBOL(ide_ata66_check);
 EXPORT_SYMBOL(set_transfer);
-#ifdef CONFIG_BLK_DEV_IDEDMA
 EXPORT_SYMBOL(eighty_ninty_three);
-#endif // CONFIG_BLK_DEV_IDEDMA
 EXPORT_SYMBOL(ide_config_drive_speed);
-

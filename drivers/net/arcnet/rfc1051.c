@@ -68,8 +68,6 @@ void __init arcnet_rfc1051_init(void)
 
 #ifdef MODULE
 
-MODULE_LICENSE("GPL");
-
 int __init init_module(void)
 {
 	printk(VERSION);

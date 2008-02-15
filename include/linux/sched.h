@@ -26,6 +26,7 @@ extern unsigned long event;
 #include <linux/signal.h>
 #include <linux/securebits.h>
 #include <linux/fs_struct.h>
+#include <linux/lock_break.h>
 
 struct exec_domain;
 
@@ -42,7 +43,7 @@ struct exec_domain;
 #define CLONE_VFORK	0x00004000	/* set if the parent wants the child to wake it up on mm_release */
 #define CLONE_PARENT	0x00008000	/* set if we want to have the same parent as the cloner */
 #define CLONE_THREAD	0x00010000	/* Same thread group? */
-#define CLONE_NEWNS	0x00020000	/* New namespace group? */
+#define CLONE_UNTRACED  0x00800000     /* set if the tracing process can't force CLONE_PTRACE on this clone */
 
 #define CLONE_SIGNAL	(CLONE_SIGHAND | CLONE_THREAD)
 
@@ -80,9 +81,7 @@ extern int last_pid;
 #include <linux/time.h>
 #include <linux/param.h>
 #include <linux/resource.h>
-#ifdef __KERNEL__
 #include <linux/timer.h>
-#endif
 
 #include <asm/processor.h>
 
@@ -91,26 +90,17 @@ extern int last_pid;
 #define TASK_UNINTERRUPTIBLE	2
 #define TASK_ZOMBIE		4
 #define TASK_STOPPED		8
+#define PREEMPT_ACTIVE		0x4000000
 
 #define __set_task_state(tsk, state_value)		\
 	do { (tsk)->state = (state_value); } while (0)
-#ifdef CONFIG_SMP
 #define set_task_state(tsk, state_value)		\
 	set_mb((tsk)->state, (state_value))
-#else
-#define set_task_state(tsk, state_value)		\
-	__set_task_state((tsk), (state_value))
-#endif
 
 #define __set_current_state(state_value)			\
 	do { current->state = (state_value); } while (0)
-#ifdef CONFIG_SMP
 #define set_current_state(state_value)		\
 	set_mb(current->state, (state_value))
-#else
-#define set_current_state(state_value)		\
-	__set_current_state(state_value)
-#endif
 
 /*
  * Scheduling policies
@@ -118,6 +108,21 @@ extern int last_pid;
 #define SCHED_OTHER		0
 #define SCHED_FIFO		1
 #define SCHED_RR		2
+#ifdef CONFIG_RTSCHED
+#ifdef CONFIG_MAX_PRI
+#if CONFIG_MAX_PRI < 99
+#define MAX_PRI                 99
+#elif CONFIG_MAX_PRI > 2047
+#define MAX_PRI                 2047
+#else
+#define MAX_PRI                 CONFIG_MAX_PRI
+#endif
+#else
+#define MAX_PRI                 127
+#endif
+#else
+#define MAX_PRI                 99
+#endif
 
 /*
  * This is an additional bit set when we want to
@@ -147,6 +152,7 @@ extern spinlock_t mmlist_lock;
 
 extern void sched_init(void);
 extern void init_idle(void);
+extern int idle_cpu(int cpu); 
 extern void show_state(void);
 extern void cpu_init (void);
 extern void trap_init(void);
@@ -157,6 +163,9 @@ extern void update_one_process(struct task_struct *p, unsigned long user,
 #define	MAX_SCHEDULE_TIMEOUT	LONG_MAX
 extern signed long FASTCALL(schedule_timeout(signed long timeout));
 asmlinkage void schedule(void);
+#ifdef CONFIG_PREEMPT
+asmlinkage void preempt_schedule(void);
+#endif
 
 extern int schedule_task(struct tq_struct *task);
 extern void flush_scheduled_tasks(void);
@@ -169,7 +178,6 @@ extern int current_is_keventd(void);
  */
 #define NR_OPEN_DEFAULT BITS_PER_LONG
 
-struct namespace;
 /*
  * Open file table structure
  */
@@ -203,9 +211,7 @@ struct files_struct {
 }
 
 /* Maximum number of active map areas.. This is a random (large) number */
-#define DEFAULT_MAX_MAP_COUNT	(65536)
-
-extern int max_map_count;
+#define MAX_MAP_COUNT	(65536)
 
 struct mm_struct {
 	struct vm_area_struct * mmap;		/* list of VMAs */
@@ -289,7 +295,7 @@ struct task_struct {
 	 * offsets of these are hardcoded elsewhere - touch with care
 	 */
 	volatile long state;	/* -1 unrunnable, 0 runnable, >0 stopped */
-	unsigned long flags;	/* per process flags, defined below */
+	int preempt_count;	/* 0 => preemptable, <0 => BUG */
 	int sigpending;
 	mm_segment_t addr_limit;	/* thread address space:
 					 	0-0xBFFFFFFF for user-thead
@@ -325,12 +331,16 @@ struct task_struct {
 	 * that's just fine.)
 	 */
 	struct list_head run_list;
+#ifdef CONFIG_RTSCHED
+        int counter_recalc;
+#endif
 	unsigned long sleep_time;
 
 	struct task_struct *next_task, *prev_task;
 	struct mm_struct *active_mm;
 	struct list_head local_pages;
 	unsigned int allocation_order, nr_local_pages;
+	unsigned long flags;
 
 /* task state */
 	struct linux_binfmt *binfmt;
@@ -395,8 +405,6 @@ struct task_struct {
 	struct fs_struct *fs;
 /* open file information */
 	struct files_struct *files;
-/* namespace */
-	struct namespace *namespace;
 /* signal handlers */
 	spinlock_t sigmask_lock;	/* Protects signal and blocked */
 	struct signal_struct *sig;
@@ -409,6 +417,10 @@ struct task_struct {
 	int (*notifier)(void *priv);
 	void *notifier_data;
 	sigset_t *notifier_mask;
+#ifdef CONFIG_RTSCHED
+        int effprio;                    /* effective real time priority */
+        void (*newprio)(struct task_struct*, int);
+#endif
 	
 /* Thread group tracking */
    	u32 parent_exec_id;
@@ -418,6 +430,8 @@ struct task_struct {
 
 /* journalling filesystem info */
 	void *journal_info;
+
+	unsigned long ptrace_message;
 };
 
 /*
@@ -435,6 +449,7 @@ struct task_struct {
 #define PF_MEMDIE	0x00001000	/* Killed for out-of-memory */
 #define PF_FREE_PAGES	0x00002000	/* per process page freeing */
 #define PF_NOIO		0x00004000	/* avoid generating further I/O */
+#define PF_FSTRANS	0x00008000	/* inside a filesystem transaction */
 
 #define PF_USEDFPU	0x00100000	/* task used FPU this quantum (SMP) */
 
@@ -447,6 +462,10 @@ struct task_struct {
 #define PT_DTRACE	0x00000004	/* delayed trace (used on m68k, i386) */
 #define PT_TRACESYSGOOD	0x00000008
 #define PT_PTRACE_CAP	0x00000010	/* ptracer can follow suid-exec */
+#define PT_TRACE_FORK  0x00000100
+#define PT_TRACE_VFORK 0x00000200
+#define PT_TRACE_CLONE 0x00000400
+#define PT_TRACE_EXEC  0x00000800
 
 /*
  * Limit the stack by to some sane default: root can always
@@ -458,7 +477,6 @@ struct task_struct {
 #define MAX_COUNTER	(20*HZ/100)
 #define DEF_NICE	(0)
 
-extern void yield(void);
 
 /*
  * The default (Linux) execution domain.
@@ -610,7 +628,7 @@ extern int FASTCALL(wake_up_process(struct task_struct * tsk));
 #define wake_up_interruptible_nr(x, nr)	__wake_up((x),TASK_INTERRUPTIBLE, nr)
 #define wake_up_interruptible_all(x)	__wake_up((x),TASK_INTERRUPTIBLE, 0)
 #define wake_up_interruptible_sync(x)	__wake_up_sync((x),TASK_INTERRUPTIBLE, 1)
-#define wake_up_interruptible_sync_nr(x, nr) __wake_up_sync((x),TASK_INTERRUPTIBLE,  nr)
+#define wake_up_interruptible_sync_nr(x) __wake_up_sync((x),TASK_INTERRUPTIBLE,  nr)
 asmlinkage long sys_wait4(pid_t pid,unsigned int * stat_addr, int options, struct rusage * ru);
 
 extern int in_group_p(gid_t);
@@ -619,7 +637,6 @@ extern int in_egroup_p(gid_t);
 extern void proc_caches_init(void);
 extern void flush_signals(struct task_struct *);
 extern void flush_signal_handlers(struct task_struct *);
-extern void sig_exit(int, int, struct siginfo *);
 extern int dequeue_signal(sigset_t *, siginfo_t *);
 extern void block_all_signals(int (*notifier)(void *priv), void *priv,
 			      sigset_t *mask);
@@ -796,6 +813,11 @@ extern void exit_sighand(struct task_struct *);
 extern void reparent_to_init(void);
 extern void daemonize(void);
 
+/* Used by core dumps to make sure all the threads the core is taken for
+   are not running.  This just sends SIGSTOP to all the threads.  */
+extern int stop_all_threads(struct mm_struct *mm);
+extern void start_all_threads(struct mm_struct *mm);
+
 extern int do_execve(char *, char **, char **, struct pt_regs *);
 extern int do_fork(unsigned long, unsigned long, struct pt_regs *, unsigned long);
 
@@ -880,20 +902,21 @@ do {									\
 #define for_each_task(p) \
 	for (p = &init_task ; (p = p->next_task) != &init_task ; )
 
-#define for_each_thread(task) \
-	for (task = next_thread(current) ; task != current ; task = next_thread(task))
-
 #define next_thread(p) \
 	list_entry((p)->thread_group.next, struct task_struct, thread_group)
 
-#define thread_group_leader(p)	(p->pid == p->tgid)
-
 static inline void del_from_runqueue(struct task_struct * p)
 {
+#ifdef CONFIG_RTSCHED
+extern void __del_from_runqueue(struct task_struct * p);
+
+        __del_from_runqueue(p);
+#else
 	nr_running--;
 	p->sleep_time = jiffies;
 	list_del(&p->run_list);
 	p->run_list.next = NULL;
+#endif
 }
 
 static inline int task_on_runqueue(struct task_struct *p)
@@ -903,8 +926,7 @@ static inline int task_on_runqueue(struct task_struct *p)
 
 static inline void unhash_process(struct task_struct *p)
 {
-	if (task_on_runqueue(p))
-		out_of_line_bug();
+	if (task_on_runqueue(p)) BUG();
 	write_lock_irq(&tasklist_lock);
 	nr_threads--;
 	unhash_pid(p);
@@ -943,17 +965,11 @@ static inline char * d_path(struct dentry *dentry, struct vfsmount *vfsmnt,
 	return res;
 }
 
-static inline int need_resched(void)
-{
-	return (unlikely(current->need_resched));
-}
-
-extern void __cond_resched(void);
-static inline void cond_resched(void)
-{
-	if (need_resched())
-		__cond_resched();
-}
+#define _TASK_STRUCT_DEFINED
+#include <linux/dcache.h>
+#include <linux/tqueue.h>
+#include <linux/fs_struct.h>
 
 #endif /* __KERNEL__ */
+
 #endif

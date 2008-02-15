@@ -6,15 +6,17 @@
  *	Copyright 1999, 2000 Philipp Rumpf <prumpf@tux.org>
  *
  *	2000/10/26	Debacker Xavier (debackex@esiee.fr)
- *	implemented the psaux and controlled the mouse scancode based on pc_keyb.c
  *			Marteau Thomas (marteaut@esiee.fr)
+ * 			Djoudi Malek (djoudim@esiee.fr)
  *	fixed leds control
- *
- *	2001/12/17	Marteau Thomas (marteaut@esiee.fr)
- *	get nice initialisation procedure
+ *	implemented the psaux and controlled the mouse scancode based on pc_keyb.c
  */
 
 #include <linux/config.h>
+
+#include <asm/hardware.h>
+#include <asm/keyboard.h>
+#include <asm/gsc.h>
 
 #include <linux/types.h>
 #include <linux/ptrace.h>	/* interrupt.h wants struct pt_regs defined */
@@ -26,7 +28,6 @@
 #include <linux/delay.h>
 #include <linux/errno.h>
 #include <linux/init.h>
-#include <linux/module.h>
 #include <linux/pc_keyb.h>
 #include <linux/kbd_kern.h>
 
@@ -36,16 +37,11 @@
 #include <linux/random.h>
 #include <linux/spinlock.h>
 #include <linux/smp_lock.h>
-#include <linux/poll.h>
-
-#include <asm/hardware.h>
-#include <asm/keyboard.h>
-#include <asm/gsc.h>
 #include <asm/uaccess.h>
+#include <linux/poll.h>
 
 /* HP specific LASI PS/2 keyboard and psaux constants */
 #define	AUX_REPLY_ACK	0xFA	/* Command byte ACK. */
-#define	AUX_RESEND	0xFE	/* Sent by the keyb. Asking for resending the last command. */
 #define	AUX_RECONNECT	0xAA	/* scancode when ps2 device is plugged (back) in */
 
 #define	LASI_PSAUX_OFFSET 0x0100 /* offset from keyboard to psaux port */
@@ -73,61 +69,48 @@
 #define LASI_STAT_DATSHD 0x40
 #define LASI_STAT_CLKSHD 0x80
 
-static spinlock_t	kbd_controller_lock = SPIN_LOCK_UNLOCKED;
-static unsigned long lasikbd_hpa;
+static void *lasikbd_hpa;
+static void *lasips2_hpa;
 
-static volatile int cmd_status;
 
-static inline u8 read_input(unsigned long hpa)
+static inline u8 read_input(void *hpa)
 {
 	return gsc_readb(hpa+LASI_RCVDATA);
 }
 
-static inline u8 read_control(unsigned long hpa)
+static inline u8 read_control(void *hpa)
 {
         return gsc_readb(hpa+LASI_CONTROL);
 }
 
-static inline void write_control(u8 val, unsigned long hpa)
+static inline void write_control(u8 val, void *hpa)
 {
 	gsc_writeb(val, hpa+LASI_CONTROL);
 }
 
-static inline u8 read_status(unsigned long hpa)
+static inline u8 read_status(void *hpa)
 {
         return gsc_readb(hpa+LASI_STATUS);
 }
 
-/* XXX should this grab the spinlock? */
-
-static int write_output(u8 val, unsigned long hpa)
+static int write_output(u8 val, void *hpa)
 {
-	int wait = 250;
+	int wait = 0;
 
 	while (read_status(hpa) & LASI_STAT_TBNE) {
-		if (!--wait) {
+		wait++;
+		if (wait>10000) {
+			/* printk(KERN_WARNING "Lasi PS/2 transmit buffer timeout\n"); */
 			return 0;
 		}
-		mdelay(1);
 	}
+
+	if (wait)
+		printk(KERN_DEBUG "Lasi PS/2 wait %d\n", wait);
+	
 	gsc_writeb(val, hpa+LASI_XMTDATA);
 
 	return 1;
-}
-
-/* XXX should this grab the spinlock? */
-
-static u8 wait_input(unsigned long hpa)
-{
-	int wait = 250;
-
-	while (!(read_status(hpa) & LASI_STAT_RBNE)) {
-		if (!--wait) {
-			return 0;
-		}
-		mdelay(1);
-	}
-	return read_input(hpa);      
 }
 
 /* This function is the PA-RISC adaptation of i386 source */
@@ -137,37 +120,11 @@ static inline int aux_write_ack(u8 val)
       return write_output(val, lasikbd_hpa+LASI_PSAUX_OFFSET);
 }
 
-/* This is wrong, should do something like the pc driver, which sends
- * the command up to 3 times at 1 second intervals, checking once
- * per millisecond for an acknowledge.
- */
-
 static void lasikbd_leds(unsigned char leds)
 {
-	int loop = 1000;
-
-	if (!lasikbd_hpa)
-		return;
-
-	cmd_status=2;
-	while (cmd_status!=0 && --loop > 0) {
-		write_output(KBD_CMD_SET_LEDS, lasikbd_hpa);
-		mdelay(5); 
-	}
-   
-	cmd_status=2;
-	while (cmd_status!=0 && --loop > 0) {
-		write_output(leds, lasikbd_hpa);
-		mdelay(5);
-	}
-
-	cmd_status=2;
-	while (cmd_status!=0 && --loop > 0) {
-	   write_output(KBD_CMD_ENABLE, lasikbd_hpa);   
-	   mdelay(5);
-	}
-	if (loop <= 0)
-		printk("lasikbd_leds: timeout\n");
+	write_output(KBD_CMD_SET_LEDS, lasikbd_hpa);
+	write_output(leds, lasikbd_hpa);
+	write_output(KBD_CMD_ENABLE, lasikbd_hpa);
 }
 
 #if 0
@@ -197,30 +154,10 @@ int lasi_ps2_test(void *hpa)
 }
 #endif 
 
-static int init_keyb(unsigned long hpa)
-{
-	int res = 0;
-	unsigned long flags;
-
-	spin_lock_irqsave(&kbd_controller_lock, flags);
-
-	if (write_output(KBD_CMD_SET_LEDS, hpa) &&
-			wait_input(hpa) == AUX_REPLY_ACK &&
-			write_output(0, hpa) &&
-			wait_input(hpa) == AUX_REPLY_ACK &&
-			write_output(KBD_CMD_ENABLE, hpa) &&
-			wait_input(hpa) == AUX_REPLY_ACK)
-		res = 1;
-
-	spin_unlock_irqrestore(&kbd_controller_lock, flags);
-
-	return res;
-}
-
-
-static void __init lasi_ps2_reset(unsigned long hpa)
+static int __init lasi_ps2_reset(void *hpa, int id)
 {
 	u8 control;
+	int ret = 1;
 
 	/* reset the interface */
 	gsc_writeb(0xff, hpa+LASI_RESET);
@@ -229,7 +166,24 @@ static void __init lasi_ps2_reset(unsigned long hpa)
 	/* enable it */
 	control = read_control(hpa);
 	write_control(control | LASI_CTRL_ENBL, hpa);
+
+        /* initializes the leds at the default state */
+        if (id==0) {
+           write_output(KBD_CMD_SET_LEDS, hpa);
+	   write_output(0, hpa);
+	   ret = write_output(KBD_CMD_ENABLE, hpa);
+	}
+
+	return ret;
 }
+
+static int inited;
+
+static void lasi_ps2_init_hw(void)
+{
+	++inited;
+}
+
 
 /* Greatly inspired by pc_keyb.c */
 
@@ -248,6 +202,7 @@ static void __init lasi_ps2_reset(unsigned long hpa)
 #ifdef CONFIG_PSMOUSE
 
 static struct aux_queue	*queue;
+static spinlock_t	kbd_controller_lock = SPIN_LOCK_UNLOCKED;
 static unsigned char	mouse_reply_expected;
 static int 		aux_count;
 
@@ -360,7 +315,7 @@ repeat:
 			schedule();
 			goto repeat;
 		}
-		current->state = TASK_RUNNING;
+		set_current_state(TASK_RUNNING);
 		remove_wait_queue(&queue->proc_list, &wait);
 	}
 	while (i > 0 && !queue_empty()) {
@@ -407,7 +362,7 @@ static int release_aux(struct inode * inode, struct file * file)
 	lock_kernel();
 	fasync_aux(-1, file, 0);
 	if (--aux_count) {
-		unlock_kernel();
+	   unlock_kernel();
 		return 0;
 	}
 	unlock_kernel();
@@ -434,7 +389,7 @@ static struct miscdevice psaux_mouse = {
 
 /* This function is looking at the PS2 controller and empty the two buffers */
 
-static u8 handle_lasikbd_event(unsigned long hpa)
+static u8 handle_lasikbd_event(void *hpa)
 {
         u8 status_keyb,status_mouse,scancode,id;
         extern void handle_at_scancode(int); /* in drivers/char/keyb_at.c */
@@ -443,64 +398,62 @@ static u8 handle_lasikbd_event(unsigned long hpa)
         id = gsc_readb(hpa+LASI_ID) & 0x0f;
         
         if (id==1) 
-		hpa -= LASI_PSAUX_OFFSET; 
-	
+           hpa -= LASI_PSAUX_OFFSET; 
+        lasikbd_hpa = hpa;
+        
+
         status_keyb = read_status(hpa);
         status_mouse = read_status(hpa+LASI_PSAUX_OFFSET);
 
         while ((status_keyb|status_mouse) & LASI_STAT_RBNE){
            
-		while (status_keyb & LASI_STAT_RBNE) {
+           while (status_keyb & LASI_STAT_RBNE) {
 	      
-		scancode = read_input(hpa);
+              scancode = read_input(hpa);
 
-	        /* XXX don't know if this is a valid fix, but filtering
-	         * 0xfa avoids 'unknown scancode' errors on, eg, capslock
-	         * on some keyboards.
-	         */
-	      	      
-		if (scancode == AUX_REPLY_ACK) 
-			cmd_status=0;
-			
-		else if (scancode == AUX_RESEND)
-			cmd_status=1;
-		else 
-			handle_at_scancode(scancode); 
+	      /* XXX don't know if this is a valid fix, but filtering
+	       * 0xfa avoids 'unknown scancode' errors on, eg, capslock
+	       * on some keyboards.
+	       */
+	      if (inited && scancode != 0xfa)
+		 handle_at_scancode(scancode); 
 	      
-		status_keyb =read_status(hpa);
-		}
+	      status_keyb =read_status(hpa);
+           }
 	   
 #ifdef CONFIG_PSMOUSE
-		while (status_mouse & LASI_STAT_RBNE) {
-			scancode = read_input(hpa+LASI_PSAUX_OFFSET);
-			handle_mouse_scancode(scancode);
-			status_mouse = read_status(hpa+LASI_PSAUX_OFFSET);
-		}
-		status_mouse = read_status(hpa+LASI_PSAUX_OFFSET);
+           while (status_mouse & LASI_STAT_RBNE) {
+	      scancode = read_input(hpa+LASI_PSAUX_OFFSET);
+	      handle_mouse_scancode(scancode);
+              status_mouse = read_status(hpa+LASI_PSAUX_OFFSET);
+	   }
+           status_mouse = read_status(hpa+LASI_PSAUX_OFFSET);
 #endif /* CONFIG_PSMOUSE */
-		status_keyb = read_status(hpa);
+           status_keyb = read_status(hpa);
         }
 
         tasklet_schedule(&keyboard_tasklet);
         return (status_keyb|status_mouse);
 }
+
+
+
 	
 extern struct pt_regs *kbd_pt_regs;
 
 static void lasikbd_interrupt(int irq, void *dev, struct pt_regs *regs)
 {
+	lasips2_hpa = dev; /* save "hpa" for lasikbd_leds() */
 	kbd_pt_regs = regs;
-	handle_lasikbd_event((unsigned long) dev);
+	handle_lasikbd_event(lasips2_hpa);
 }
 
+
 extern int pckbd_translate(unsigned char, unsigned char *, char);
-extern int pckbd_setkeycode(unsigned int, unsigned int);
-extern int pckbd_getkeycode(unsigned int);
 
 static struct kbd_ops gsc_ps2_kbd_ops = {
-	setkeycode:     pckbd_setkeycode,
-        getkeycode:     pckbd_getkeycode,
-        translate:	pckbd_translate,
+	translate:	pckbd_translate,
+	init_hw:	lasi_ps2_init_hw,
 	leds:		lasikbd_leds,
 #ifdef CONFIG_MAGIC_SYSRQ
 	sysrq_key:	0x54,
@@ -508,27 +461,13 @@ static struct kbd_ops gsc_ps2_kbd_ops = {
 #endif
 };
 
-
-
-#if 1
-/* XXX: HACK !!!
- * remove this function and the call in hil_kbd.c 
- * if hp_psaux.c/hp_keyb.c is converted to the input layer... */
-int register_ps2_keybfuncs(void)
-{
-	gsc_ps2_kbd_ops.leds = NULL;
-	register_kbd_ops(&gsc_ps2_kbd_ops);
-}
-EXPORT_SYMBOL(register_ps2_keybfuncs);
-#endif
-
-
 static int __init
-lasi_ps2_register(struct parisc_device *dev)
+lasi_ps2_register(struct hp_device *d, struct pa_iodc_driver *dri)
 {
-	unsigned long hpa = dev->hpa;
+	void *hpa = (void *) d->hpa;
+	unsigned int irq;
 	char *name;
-	int device_found = 0;
+	int device_found;
 	u8 id;
 
 	id = gsc_readb(hpa+LASI_ID) & 0x0f;
@@ -536,7 +475,7 @@ lasi_ps2_register(struct parisc_device *dev)
 	switch (id) {
 	case 0:
 		name = "keyboard";
-		lasikbd_hpa = hpa;	/* save "hpa" for lasikbd_leds() */
+		lasikbd_hpa = hpa;
 		break;
 	case 1:
 		name = "psaux";
@@ -548,12 +487,21 @@ lasi_ps2_register(struct parisc_device *dev)
 	}
 	
 	/* reset the PS/2 port */
-	lasi_ps2_reset(hpa);
+	device_found = lasi_ps2_reset(hpa,id);
+
+	/* allocate the irq and memory region for that device */
+	if (!(irq = busdevice_alloc_irq(d)))
+		return -ENODEV;
+		    
+	if (request_irq(irq, lasikbd_interrupt, 0, name, hpa))
+		return -ENODEV;
+	
+	if (!request_mem_region((unsigned long)hpa, LASI_STATUS + 4, name))
+		return -ENODEV;
 
 	switch (id) {
 	case 0:	
-	        device_found = init_keyb(hpa);
-		if (device_found) register_kbd_ops(&gsc_ps2_kbd_ops);
+		register_kbd_ops(&gsc_ps2_kbd_ops);
 		break;
 	case 1:
 #ifdef CONFIG_PSMOUSE
@@ -578,42 +526,26 @@ lasi_ps2_register(struct parisc_device *dev)
 #endif
 	} /* of case */
 	
-	if (device_found) {
-	/* Here we claim only if we have a device attached */   
-		/* allocate the irq and memory region for that device */
-		if (!dev->irq)
-	 	return -ENODEV;
-	   
-	  	if (request_irq(dev->irq, lasikbd_interrupt, 0, name, (void *)hpa))
-	  	return -ENODEV;
-	   
-	  	if (!request_mem_region(hpa, LASI_STATUS + 4, name))
-	  	return -ENODEV;
-	}
-	
-	printk(KERN_INFO "PS/2 %s port at 0x%08lx (irq %d) found, "
+	printk(KERN_INFO "PS/2 %s controller at 0x%08lx (irq %d) found, "
 			 "%sdevice attached.\n",
-			name, hpa, dev->irq, device_found ? "":"no ");
+			name, (unsigned long)hpa, irq,
+			device_found ? "":"no ");
 
 	return 0;
 }
 
-static struct parisc_device_id lasi_psaux_tbl[] = {
-	{ HPHW_FIO, HVERSION_REV_ANY_ID, HVERSION_ANY_ID, 0x00084 },
-	{ 0, } /* 0 terminated list */
-};
 
-MODULE_DEVICE_TABLE(parisc, lasi_psaux_tbl);
-
-static struct parisc_driver lasi_psaux_driver = {
-	name:		"Lasi psaux",
-	id_table:	lasi_psaux_tbl,
-	probe:		lasi_ps2_register,
+static struct pa_iodc_driver lasi_psaux_drivers_for[] __initdata = {
+	{HPHW_FIO, 0x0, 0,0x00084, 0, 0,
+		DRIVER_CHECK_HWTYPE + DRIVER_CHECK_SVERSION,
+		"Lasi psaux", "generic", (void *) lasi_ps2_register},
+	{ 0, }
 };
 
 static int __init gsc_ps2_init(void) 
 {
-	return register_parisc_driver(&lasi_psaux_driver);
+	return pdc_register_driver(lasi_psaux_drivers_for);
 }
 
 module_init(gsc_ps2_init);
+

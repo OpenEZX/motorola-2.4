@@ -1,5 +1,5 @@
-/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
- * vim:expandtab:shiftwidth=8:tabstop=8:
+/*
+ *
  *
  *  Copyright (C) 2000 Stelias Computing, Inc.
  *  Copyright (C) 2000 Red Hat, Inc.
@@ -7,22 +7,6 @@
  *
  *  Extended Attribute Support
  *  Copyright (C) 2001 Shirish H. Phatak, Tacit Networks, Inc.
- *
- *   This file is part of InterMezzo, http://www.inter-mezzo.org.
- *
- *   InterMezzo is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
- *
- *   InterMezzo is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with InterMezzo; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
  */
 
 #include <stdarg.h>
@@ -166,16 +150,6 @@ void filter_setup_journal_ops(struct filter_fs *ops, char *cache_type)
                 FDEBUG(D_SUPER, "ops at %p\n", ops);
         }
 
-        if ( strlen(cache_type) == strlen("tmpfs") &&
-             memcmp(cache_type, "tmpfs", strlen("tmpfs")) == 0 ) {
-#if defined(CONFIG_TMPFS)
-                ops->o_trops = &presto_tmpfs_journal_ops;
-#else
-                ops->o_trops = NULL;
-#endif
-                FDEBUG(D_SUPER, "ops at %p\n", ops);
-        }
-
         if ( strlen(cache_type) == strlen("reiserfs") &&
              memcmp(cache_type, "reiserfs", strlen("reiserfs")) == 0 ) {
 #if 0
@@ -190,7 +164,7 @@ void filter_setup_journal_ops(struct filter_fs *ops, char *cache_type)
         if ( strlen(cache_type) == strlen("xfs") &&
              memcmp(cache_type, "xfs", strlen("xfs")) == 0 ) {
 #if 0
-/*#if defined(CONFIG_XFS_FS) || defined (CONFIG_XFS_FS_MODULE) */
+                //#if defined(CONFIG_XFS_FS) || defined (CONFIG_XFS_FS_MODULE)
                 ops->o_trops = &presto_xfs_journal_ops;
 #else
                 ops->o_trops = NULL;
@@ -233,13 +207,6 @@ struct filter_fs *filter_get_filter_fs(const char *cache_type)
                 ops = &filter_oppar[FILTER_FS_EXT3];
                 FDEBUG(D_SUPER, "ops at %p\n", ops);
         }
-
-        if ( strlen(cache_type) == strlen("tmpfs") &&
-             memcmp(cache_type, "tmpfs", strlen("tmpfs")) == 0 ) {
-                ops = &filter_oppar[FILTER_FS_TMPFS];
-                FDEBUG(D_SUPER, "ops at %p\n", ops);
-        }
-
         if ( strlen(cache_type) == strlen("reiserfs") &&
              memcmp(cache_type, "reiserfs", strlen("reiserfs")) == 0 ) {
                 ops = &filter_oppar[FILTER_FS_REISERFS];
@@ -252,7 +219,7 @@ struct filter_fs *filter_get_filter_fs(const char *cache_type)
         }
 
         if (ops == NULL) {
-                CERROR("prepare to die: unrecognized cache type for Filter\n");
+                printk("prepare to die: unrecognized cache type for Filter\n");
         }
         return ops;
         FEXIT;
@@ -376,7 +343,7 @@ void filter_setup_dir_ops(struct filter_fs *cache, struct inode *inode, struct i
         memcpy(filter_c2udfops(cache), cache_fops, sizeof(*cache_fops));
 
         /* unconditional filtering operations */
-        filter_c2udfops(cache)->ioctl = filter_fops->ioctl;
+        filter_c2udfops(cache)->open = filter_fops->open;
 
         FEXIT;
 }
@@ -407,7 +374,7 @@ void filter_setup_file_ops(struct filter_fs *cache, struct inode *inode, struct 
         memcpy(pr_iops, cache_iops, sizeof(*cache_iops));
 
         /* copy dir fops */
-        CERROR("*** cache file ops at %p\n", cache_fops);
+        printk("*** cache file ops at %p\n", cache_fops);
         memcpy(filter_c2uffops(cache), cache_fops, sizeof(*cache_fops));
 
         /* assign */
@@ -416,8 +383,6 @@ void filter_setup_file_ops(struct filter_fs *cache, struct inode *inode, struct 
                 pr_iops->setattr = filter_iops->setattr;
         if (cache_iops->getattr)
                 pr_iops->getattr = filter_iops->getattr;
-        /* XXX Should this be conditional rmr ? */
-        pr_iops->permission = filter_iops->permission;
 #ifdef CONFIG_FS_EXT_ATTR
     	/* For now we assume that posix acls are handled through extended
 	* attributes. If this is not the case, we must explicitly trap and 
@@ -432,7 +397,6 @@ void filter_setup_file_ops(struct filter_fs *cache, struct inode *inode, struct 
         filter_c2uffops(cache)->open = filter_fops->open;
         filter_c2uffops(cache)->release = filter_fops->release;
         filter_c2uffops(cache)->write = filter_fops->write;
-        filter_c2uffops(cache)->ioctl = filter_fops->ioctl;
 
         FEXIT;
 }
@@ -491,7 +455,7 @@ void filter_setup_dentry_ops(struct filter_fs *cache,
                filter_dop, sizeof(*filter_dop));
         
         if (cache_dop &&  cache_dop != filter_dop && cache_dop->d_revalidate){
-                CERROR("WARNING: filter overriding revalidation!\n");
+                printk("WARNING: filter overriding revalidation!\n");
         }
         return;
 }

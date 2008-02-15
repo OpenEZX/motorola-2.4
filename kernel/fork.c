@@ -19,9 +19,10 @@
 #include <linux/module.h>
 #include <linux/vmalloc.h>
 #include <linux/completion.h>
-#include <linux/namespace.h>
 #include <linux/personality.h>
-#include <linux/compiler.h>
+#include <linux/mman.h>
+
+#include <linux/trace.h>
 
 #include <asm/pgtable.h>
 #include <asm/pgalloc.h>
@@ -87,13 +88,12 @@ static int get_pid(unsigned long flags)
 {
 	static int next_safe = PID_MAX;
 	struct task_struct *p;
-	int pid, beginpid;
+	int pid;
 
 	if (flags & CLONE_PID)
 		return current->pid;
 
 	spin_lock(&lastpid_lock);
-	beginpid = last_pid;
 	if((++last_pid) & 0xffff8000) {
 		last_pid = 300;		/* Skip daemons etc. */
 		goto inside;
@@ -113,16 +113,12 @@ inside:
 						last_pid = 300;
 					next_safe = PID_MAX;
 				}
-				if(unlikely(last_pid == beginpid))
-					goto nomorepids;
 				goto repeat;
 			}
 			if(p->pid > last_pid && next_safe > p->pid)
 				next_safe = p->pid;
 			if(p->pgrp > last_pid && next_safe > p->pgrp)
 				next_safe = p->pgrp;
-			if(p->tgid > last_pid && next_safe > p->tgid)
-				next_safe = p->tgid;
 			if(p->session > last_pid && next_safe > p->session)
 				next_safe = p->session;
 		}
@@ -132,17 +128,13 @@ inside:
 	spin_unlock(&lastpid_lock);
 
 	return pid;
-
-nomorepids:
-	read_unlock(&tasklist_lock);
-	spin_unlock(&lastpid_lock);
-	return 0;
 }
 
 static inline int dup_mmap(struct mm_struct * mm)
 {
 	struct vm_area_struct * mpnt, *tmp, **pprev;
 	int retval;
+	unsigned long charge = 0;
 
 	flush_cache_mm(current->mm);
 	mm->locked_vm = 0;
@@ -171,6 +163,17 @@ static inline int dup_mmap(struct mm_struct * mm)
 		retval = -ENOMEM;
 		if(mpnt->vm_flags & VM_DONTCOPY)
 			continue;
+
+		/*
+		 * FIXME: shared writable map accounting should be one off
+		 */
+		if (mpnt->vm_flags & VM_ACCOUNT) {
+			unsigned int len = (mpnt->vm_end - mpnt->vm_start) >> PAGE_SHIFT;
+			if (!vm_enough_memory(len, 1))
+				goto fail_nomem;
+			charge += len;
+		}
+
 		tmp = kmem_cache_alloc(vm_area_cachep, SLAB_KERNEL);
 		if (!tmp)
 			goto fail_nomem;
@@ -215,9 +218,12 @@ static inline int dup_mmap(struct mm_struct * mm)
 	retval = 0;
 	build_mmap_rb(mm);
 
-fail_nomem:
+out:
 	flush_tlb_mm(current->mm);
 	return retval;
+fail_nomem:
+	vm_unacct_memory(charge);
+	goto out;
 }
 
 spinlock_t mmlist_lock __cacheline_aligned = SPIN_LOCK_UNLOCKED;
@@ -263,7 +269,7 @@ struct mm_struct * mm_alloc(void)
  */
 inline void __mmdrop(struct mm_struct *mm)
 {
-	BUG_ON(mm == &init_mm);
+	if (mm == &init_mm) BUG();
 	pgd_free(mm->pgd);
 	destroy_context(mm);
 	free_mm(mm);
@@ -348,9 +354,6 @@ static int copy_mm(unsigned long clone_flags, struct task_struct * tsk)
 	if (!mm_init(mm))
 		goto fail_nomem;
 
-	if (init_new_context(tsk,mm))
-		goto free_pt;
-
 	down_write(&oldmm->mmap_sem);
 	retval = dup_mmap(mm);
 	up_write(&oldmm->mmap_sem);
@@ -362,6 +365,9 @@ static int copy_mm(unsigned long clone_flags, struct task_struct * tsk)
 	 * child gets a private LDT (if there was an LDT in the parent)
 	 */
 	copy_segments(tsk, mm);
+
+	if (init_new_context(tsk,mm))
+		goto free_pt;
 
 good_mm:
 	tsk->mm = mm;
@@ -565,6 +571,22 @@ static inline void copy_flags(unsigned long clone_flags, struct task_struct *p)
 	p->flags = new_flags;
 }
 
+static inline int fork_traceflag (unsigned clone_flags)
+{
+	if (clone_flags & CLONE_UNTRACED)
+		return 0;
+	else if (clone_flags & CLONE_VFORK) {
+		if (current->ptrace & PT_TRACE_VFORK)
+			return PTRACE_EVENT_VFORK;
+	} else if ((clone_flags & CSIGNAL) != SIGCHLD) {
+		if (current->ptrace & PT_TRACE_CLONE)
+			return PTRACE_EVENT_CLONE;
+	} else if (current->ptrace & PT_TRACE_FORK)
+		return PTRACE_EVENT_FORK;
+
+	return 0;
+}
+
 /*
  *  Ok, this is the main fork-routine. It copies the system process
  * information (task[nr]) and sets up the necessary registers. It also
@@ -580,11 +602,15 @@ int do_fork(unsigned long clone_flags, unsigned long stack_start,
 	int retval;
 	struct task_struct *p;
 	struct completion vfork;
-
-	if ((clone_flags & (CLONE_NEWNS|CLONE_FS)) == (CLONE_NEWNS|CLONE_FS))
-		return -EINVAL;
+	int trace = 0;
 
 	retval = -EPERM;
+
+	if (unlikely(current->ptrace)) {
+		trace = fork_traceflag (clone_flags);
+		if (trace)
+			clone_flags |= CLONE_PTRACE;
+	}
 
 	/* 
 	 * CLONE_PID is only allowed for the initial SMP swapper
@@ -629,14 +655,19 @@ int do_fork(unsigned long clone_flags, unsigned long stack_start,
 	if (p->binfmt && p->binfmt->module)
 		__MOD_INC_USE_COUNT(p->binfmt->module);
 
+#ifdef CONFIG_PREEMPT
+	/*
+	 * Continue with preemption disabled as part of the context
+	 * switch, so start with preempt_count set to 1.
+         */
+	p->preempt_count = 1;
+#endif
 	p->did_exec = 0;
 	p->swappable = 0;
 	p->state = TASK_UNINTERRUPTIBLE;
 
 	copy_flags(clone_flags, p);
 	p->pid = get_pid(clone_flags);
-	if (p->pid == 0 && current->pid != 0)
-		goto bad_fork_cleanup;
 
 	p->run_list.next = NULL;
 	p->run_list.prev = NULL;
@@ -688,11 +719,9 @@ int do_fork(unsigned long clone_flags, unsigned long stack_start,
 		goto bad_fork_cleanup_fs;
 	if (copy_mm(clone_flags, p))
 		goto bad_fork_cleanup_sighand;
-	if (copy_namespace(clone_flags, p))
-		goto bad_fork_cleanup_mm;
 	retval = copy_thread(0, clone_flags, stack_start, stack_size, p, regs);
 	if (retval)
-		goto bad_fork_cleanup_namespace;
+		goto bad_fork_cleanup_mm;
 	p->semundo = NULL;
 	
 	/* Our parent execution domain becomes current domain
@@ -707,14 +736,24 @@ int do_fork(unsigned long clone_flags, unsigned long stack_start,
 
 	/*
 	 * "share" dynamic priority between parent and child, thus the
-	 * total amount of dynamic priorities in the system doesn't change,
+	 * total amount of dynamic priorities in the system doesnt change,
 	 * more scheduling fairness. This is only important in the first
 	 * timeslice, on the long run the scheduling behaviour is unchanged.
 	 */
+        /*
+         * SCHED_FIFO tasks don't count down and have a negative counter.
+         * Don't change these, least they all end up at -1.
+ 	 */
+#ifdef CONFIG_RTSCHED
+        if (p->policy != SCHED_FIFO)
+#endif
+        {
+
 	p->counter = (current->counter + 1) >> 1;
 	current->counter >>= 1;
 	if (!current->counter)
 		current->need_resched = 1;
+        }
 
 	/*
 	 * Ok, add it to the run-queues and make it
@@ -729,10 +768,10 @@ int do_fork(unsigned long clone_flags, unsigned long stack_start,
 	/* Need tasklist lock for parent etc handling! */
 	write_lock_irq(&tasklist_lock);
 
-	/* CLONE_PARENT re-uses the old parent */
+	/* CLONE_PARENT and CLONE_THREAD re-use the old parent */
 	p->p_opptr = current->p_opptr;
 	p->p_pptr = current->p_pptr;
-	if (!(clone_flags & CLONE_PARENT)) {
+	if (!(clone_flags & (CLONE_PARENT | CLONE_THREAD))) {
 		p->p_opptr = current;
 		if (!(p->ptrace & PT_PTRACED))
 			p->p_pptr = current;
@@ -751,16 +790,23 @@ int do_fork(unsigned long clone_flags, unsigned long stack_start,
 	if (p->ptrace & PT_PTRACED)
 		send_sig(SIGSTOP, p, 1);
 
+	/* Trace the event  */
+	TRACE_PROCESS(TRACE_EV_PROCESS_FORK, retval, 0);
+
 	wake_up_process(p);		/* do this last */
 	++total_forks;
+
+	if (unlikely(trace)) {
+		current->ptrace_message = (unsigned long) p->pid;
+		ptrace_notify ((trace << 8) | SIGTRAP);
+	}
+
 	if (clone_flags & CLONE_VFORK)
 		wait_for_completion(&vfork);
 
 fork_out:
 	return retval;
 
-bad_fork_cleanup_namespace:
-	exit_namespace(p);
 bad_fork_cleanup_mm:
 	exit_mm(p);
 bad_fork_cleanup_sighand:

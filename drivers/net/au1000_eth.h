@@ -1,9 +1,12 @@
 /*
+ *
  * Alchemy Semi Au1000 ethernet driver include file
  *
  * Author: Pete Popov <ppopov@mvista.com>
  *
  * Copyright 2001 MontaVista Software Inc.
+ *
+ * ########################################################################
  *
  *  This program is free software; you can distribute it and/or modify it
  *  under the terms of the GNU General Public License (Version 2) as
@@ -17,8 +20,11 @@
  *  You should have received a copy of the GNU General Public License along
  *  with this program; if not, write to the Free Software Foundation, Inc.,
  *  59 Temple Place - Suite 330, Boston MA 02111-1307, USA.
+ *
+ * ########################################################################
+ *
+ * 
  */
-#include <linux/config.h>
 
 
 #define NUM_INTERFACES 2
@@ -57,7 +63,6 @@
 #define MII_LSI_CONFIG 0x0011
 #define MII_LSI_STAT   0x0012
 #define MII_AUX_CNTRL  0x0018
-#define MII_INT        0x001A
 
 /* mii registers specific to AMD 79C901 */
 #define	MII_STATUS_SUMMARY = 0x0018
@@ -122,7 +127,6 @@
 #define MII_STSSUM_SPD   0x0001
 
 /* lsi status register */
-
 #define MII_LSI_STAT_FDX	0x0040
 #define MII_LSI_STAT_SPD	0x0080
 
@@ -131,7 +135,6 @@
 #define MII_AUX_100      0x0002
 #define MII_AUX_F100     0x0004
 #define MII_AUX_ANEG     0x0008
-#define MII_FDX_LED	 0x8000
 
 typedef struct mii_phy {
 	struct mii_phy * next;

@@ -11,7 +11,7 @@
 #include <linux/linkage.h>
 #include <asm/mach-types.h>
 
-		.section        ".start", #alloc, #execinstr
+		.section        ".start", "ax"
 
 __SA1100_start:
 
@@ -28,11 +28,6 @@ __SA1100_start:
 #if defined(CONFIG_SA1100_ADSBITSY) && !defined(CONFIG_ANGELBOOT)
 		mov	r7, #MACH_TYPE_ADSBITSY
 		mov	r8, #0
-#endif
-
-#ifdef CONFIG_SA1100_PFS168
-		@ REVISIT_PFS168: Temporary until firmware updated to use assigned machine number
-		mov	r7, #MACH_TYPE_PFS168
 #endif
 
 #ifdef CONFIG_SA1100_VICTOR

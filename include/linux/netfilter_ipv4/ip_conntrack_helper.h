@@ -5,19 +5,10 @@
 
 struct module;
 
-/* Reuse expectation when max_expected reached */
-#define IP_CT_HELPER_F_REUSE_EXPECT	0x01
-
 struct ip_conntrack_helper
 {	
-	struct list_head list; 		/* Internal use. */
-
-	const char *name;		/* name of the module */
-	unsigned char flags;		/* Flags (see above) */
-	struct module *me;		/* pointer to self */
-	unsigned int max_expected;	/* Maximum number of concurrent 
-					 * expected connections */
-	unsigned int timeout;		/* timeout for expecteds */
+	/* Internal use. */
+	struct list_head list;
 
 	/* Mask of things we will help (compared against server response) */
 	struct ip_conntrack_tuple tuple;
@@ -33,13 +24,11 @@ struct ip_conntrack_helper
 extern int ip_conntrack_helper_register(struct ip_conntrack_helper *);
 extern void ip_conntrack_helper_unregister(struct ip_conntrack_helper *);
 
-extern struct ip_conntrack_helper *ip_ct_find_helper(const struct ip_conntrack_tuple *tuple);
-
-/* Add an expected connection: can have more than one per connection */
+/* Add an expected connection: can only have one per connection */
 extern int ip_conntrack_expect_related(struct ip_conntrack *related_to,
-				       struct ip_conntrack_expect *exp);
-extern int ip_conntrack_change_expect(struct ip_conntrack_expect *expect,
-				      struct ip_conntrack_tuple *newtuple);
-extern void ip_conntrack_unexpect_related(struct ip_conntrack_expect *exp);
+				       const struct ip_conntrack_tuple *tuple,
+				       const struct ip_conntrack_tuple *mask,
+				       int (*expectfn)(struct ip_conntrack *));
+extern void ip_conntrack_unexpect_related(struct ip_conntrack *related_to);
 
 #endif /*_IP_CONNTRACK_HELPER_H*/

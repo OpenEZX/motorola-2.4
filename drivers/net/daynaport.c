@@ -919,4 +919,12 @@ static void slow_sane_block_output(struct net_device *dev, int count, const unsi
 #endif	
 }
 
-MODULE_LICENSE("GPL");
+/*
+ * Local variables:
+ *  compile-command: "gcc -D__KERNEL__ -I/usr/src/linux/net/inet -Wall -Wstrict-prototypes -O6 -m486 -c daynaport.c"
+ *  version-control: t
+ *  c-basic-offset: 4
+ *  tab-width: 4
+ *  kept-new-versions: 5
+ * End:
+ */

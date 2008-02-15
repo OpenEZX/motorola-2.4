@@ -11,7 +11,7 @@
 /* 0x54 is just a magic number to make these relatively unique ('T') */
 
 #define TCGETS		0x5401
-#define TCSETS		0x5402 /* Clashes with SNDCTL_TMR_START sound ioctl */
+#define TCSETS		0x5402
 #define TCSETSW		0x5403
 #define TCSETSF		0x5404
 #define TCGETA		0x5405
@@ -72,6 +72,7 @@
 #define TIOCGICOUNT	0x545D	/* read serial port inline interrupt counts */
 #define TIOCGHAYESESP   0x545E  /* Get Hayes ESP configuration */
 #define TIOCSHAYESESP   0x545F  /* Set Hayes ESP configuration */
+#define FIOQSIZE	0x5460
 
 /* Used for packet mode */
 #define TIOCPKT_DATA		 0

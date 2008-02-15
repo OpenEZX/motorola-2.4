@@ -675,10 +675,17 @@ static void do_shutdown(socket_info_t *s)
 static void parse_events(void *info, u_int events)
 {
     socket_info_t *s = info;
+
     if (events & SS_DETECT) {
 	int status;
 
 	get_socket_status(s, &status);
+
+	/*
+	 * If our socket state indicates that a card is present and
+	 * either the socket has not been suspended (for some reason)
+	 * or the card has been removed, shut down the socket first.
+	 */
 	if ((s->state & SOCKET_PRESENT) &&
 	    (!(s->state & SOCKET_SUSPEND) ||
 	     !(status & SS_DETECT)))
@@ -1268,7 +1275,7 @@ int pcmcia_get_status(client_handle_t handle, cs_status_t *status)
     } else
 	c = CONFIG(handle);
     if ((c != NULL) && (c->state & CONFIG_LOCKED) &&
-	(c->IntType & (INT_MEMORY_AND_IO|INT_ZOOMED_VIDEO))) {
+	(c->IntType & INT_MEMORY_AND_IO)) {
 	u_char reg;
 	if (c->Present & PRESENT_PIN_REPLACE) {
 	    read_cis_mem(s, 1, (c->ConfigBase+CISREG_PRR)>>1, 1, &reg);
@@ -1696,8 +1703,6 @@ int pcmcia_request_configuration(client_handle_t handle,
     c->Attributes = req->Attributes;
     if (req->IntType & INT_MEMORY_AND_IO)
 	s->socket.flags |= SS_IOCARD;
-    if (req->IntType & INT_ZOOMED_VIDEO)
-	s->socket.flags |= SS_ZVCARD|SS_IOCARD;
     if (req->Attributes & CONF_ENABLE_DMA)
 	s->socket.flags |= SS_DMA_MODE;
     if (req->Attributes & CONF_ENABLE_SPKR)

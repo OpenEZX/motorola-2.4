@@ -4,10 +4,11 @@
  * License.  See the file "COPYING" in the main directory of this archive
  * for more details.
  *
- * Copyright (C) 1992 - 1997, 2000-2001 Silicon Graphics, Inc. All rights reserved.
+ * Copyright (C) 1992 - 1997, 2000 Silicon Graphics, Inc.
+ * Copyright (C) 2000 by Colin Ngam
  */
-#ifndef _ASM_IA64_SN_DMAMAP_H
-#define _ASM_IA64_SN_DMAMAP_H
+#ifndef _ASM_SN_DMAMAP_H
+#define _ASM_SN_DMAMAP_H
 
 #include <asm/sn/sv.h>
 
@@ -69,6 +70,7 @@ extern struct map *a32map[];
 extern int a24_mapsize;
 extern int a32_mapsize;
 
+extern lock_t dmamaplock;
 extern sv_t dmamapout;
 
 #ifdef __cplusplus
@@ -85,4 +87,4 @@ extern sv_t dmamapout;
 
 #define	DMAMAP_FLAGS	0x7
 
-#endif /* _ASM_IA64_SN_DMAMAP_H */
+#endif /* _ASM_SN_DMAMAP_H */

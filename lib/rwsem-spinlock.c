@@ -4,8 +4,6 @@
  * Copyright (c) 2001   David Howells (dhowells@redhat.com).
  * - Derived partially from idea by Andrea Arcangeli <andrea@suse.de>
  * - Derived also from comments by Linus
- *
- * Trylock by Brian Watson (Brian.J.Watson@compaq.com).
  */
 #include <linux/rwsem.h>
 #include <linux/sched.h>
@@ -108,6 +106,34 @@ static inline struct rw_semaphore *__rwsem_wake_one_writer(struct rw_semaphore *
 /*
  * get a read lock on the semaphore
  */
+void __try_down_read(struct rw_semaphore *sem, unsigned int *result)
+{
+	struct rwsem_waiter waiter;
+	struct task_struct *tsk;
+
+	rwsemtrace(sem,"Entering __down_read");
+
+	spin_lock(&sem->wait_lock);
+
+	if (sem->activity>=0 && list_empty(&sem->wait_list)) {
+		/* granted */
+		sem->activity++;
+		*result = 1;  //Susan -- get the read lock //
+		spin_unlock(&sem->wait_lock);
+//		goto out;
+	}
+	else
+	{
+		*result = 0;  //Susan -- fail to get the read lock //
+		spin_unlock(&sem->wait_lock);
+	}
+ out:
+	rwsemtrace(sem,"Leaving __down_read");
+}
+
+/*
+ * get a read lock on the semaphore
+ */
 void __down_read(struct rw_semaphore *sem)
 {
 	struct rwsem_waiter waiter;
@@ -148,28 +174,6 @@ void __down_read(struct rw_semaphore *sem)
 
  out:
 	rwsemtrace(sem,"Leaving __down_read");
-}
-
-/*
- * trylock for reading -- returns 1 if successful, 0 if contention
- */
-int __down_read_trylock(struct rw_semaphore *sem)
-{
-	int ret = 0;
-	rwsemtrace(sem,"Entering __down_read_trylock");
-
-	spin_lock(&sem->wait_lock);
-
-	if (sem->activity>=0 && list_empty(&sem->wait_list)) {
-		/* granted */
-		sem->activity++;
-		ret = 1;
-	}
-
-	spin_unlock(&sem->wait_lock);
-
-	rwsemtrace(sem,"Leaving __down_read_trylock");
-	return ret;
 }
 
 /*
@@ -216,28 +220,6 @@ void __down_write(struct rw_semaphore *sem)
 
  out:
 	rwsemtrace(sem,"Leaving __down_write");
-}
-
-/*
- * trylock for writing -- returns 1 if successful, 0 if contention
- */
-int __down_write_trylock(struct rw_semaphore *sem)
-{
-	int ret = 0;
-	rwsemtrace(sem,"Entering __down_write_trylock");
-
-	spin_lock(&sem->wait_lock);
-
-	if (sem->activity==0 && list_empty(&sem->wait_list)) {
-		/* granted */
-		sem->activity = -1;
-		ret = 1;
-	}
-
-	spin_unlock(&sem->wait_lock);
-
-	rwsemtrace(sem,"Leaving __down_write_trylock");
-	return ret;
 }
 
 /*

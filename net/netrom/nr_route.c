@@ -19,7 +19,6 @@
  *			Alan Cox(GW4PTS) Added the firewall hooks.
  *	NET/ROM 006	Jonathan(G4KLX)	Added the setting of digipeated neighbours.
  *			Tomi(OH2BNS)	Routing quality and link failure changes.
- *					Device refcnt fixes.
  */
 
 #include <linux/errno.h>
@@ -67,15 +66,11 @@ static int nr_add_node(ax25_address *nr, const char *mnemonic, ax25_address *ax2
 	struct nr_node  *nr_node;
 	struct nr_neigh *nr_neigh;
 	struct nr_route nr_route;
-	struct net_device *tdev;
 	unsigned long flags;
 	int i, found;
 
-	/* Can't add routes to ourself */
-	if ((tdev = nr_dev_get(nr)) != NULL) {
-		dev_put(tdev);
+	if (nr_dev_get(nr) != NULL)	/* Can't add routes to ourself */
 		return -EINVAL;
-	}
 
 	for (nr_node = nr_node_list; nr_node != NULL; nr_node = nr_node->next)
 		if (ax25cmp(nr, &nr_node->callsign) == 0)
@@ -128,8 +123,6 @@ static int nr_add_node(ax25_address *nr, const char *mnemonic, ax25_address *ax2
 			}
 			memcpy(nr_neigh->digipeat, ax25_digi, sizeof(ax25_digi));
 		}
-
-		dev_hold(nr_neigh->dev);
 
 		save_flags(flags);
 		cli();
@@ -301,7 +294,6 @@ static void nr_remove_neigh(struct nr_neigh *nr_neigh)
 	if ((s = nr_neigh_list) == nr_neigh) {
 		nr_neigh_list = nr_neigh->next;
 		restore_flags(flags);
-		dev_put(nr_neigh->dev);
 		if (nr_neigh->digipeat != NULL)
 			kfree(nr_neigh->digipeat);
 		kfree(nr_neigh);
@@ -312,7 +304,6 @@ static void nr_remove_neigh(struct nr_neigh *nr_neigh)
 		if (s->next == nr_neigh) {
 			s->next = nr_neigh->next;
 			restore_flags(flags);
-			dev_put(nr_neigh->dev);
 			if (nr_neigh->digipeat != NULL)
 				kfree(nr_neigh->digipeat);
 			kfree(nr_neigh);
@@ -412,8 +403,6 @@ static int nr_add_neigh(ax25_address *callsign, ax25_digi *ax25_digi, struct net
 		}
 		memcpy(nr_neigh->digipeat, ax25_digi, sizeof(ax25_digi));
 	}
-
-	dev_hold(nr_neigh->dev);
 
 	save_flags(flags);
 	cli();
@@ -581,10 +570,6 @@ struct net_device *nr_dev_first(void)
 			if (first == NULL || strncmp(dev->name, first->name, 3) < 0)
 				first = dev;
 	}
-
-	if (first != NULL)
-		dev_hold(first);
-
 	read_unlock(&dev_base_lock);
 
 	return first;
@@ -635,7 +620,6 @@ int nr_rt_ioctl(unsigned int cmd, void *arg)
 {
 	struct nr_route_struct nr_route;
 	struct net_device *dev;
-	int ret;
 
 	switch (cmd) {
 
@@ -644,30 +628,23 @@ int nr_rt_ioctl(unsigned int cmd, void *arg)
 				return -EFAULT;
 			if ((dev = nr_ax25_dev_get(nr_route.device)) == NULL)
 				return -EINVAL;
-			if (nr_route.ndigis < 0 || nr_route.ndigis > AX25_MAX_DIGIS) {
-				dev_put(dev);
+			if (nr_route.ndigis < 0 || nr_route.ndigis > AX25_MAX_DIGIS)
 				return -EINVAL;
-			}
 			switch (nr_route.type) {
 				case NETROM_NODE:
-					ret = nr_add_node(&nr_route.callsign,
+					return nr_add_node(&nr_route.callsign,
 						nr_route.mnemonic,
 						&nr_route.neighbour,
 						nr_call_to_digi(nr_route.ndigis, nr_route.digipeaters),
 						dev, nr_route.quality,
 						nr_route.obs_count);
-					break;
 				case NETROM_NEIGH:
-					ret = nr_add_neigh(&nr_route.callsign,
+					return nr_add_neigh(&nr_route.callsign,
 						nr_call_to_digi(nr_route.ndigis, nr_route.digipeaters),
 						dev, nr_route.quality);
-					break;
 				default:
-					ret = -EINVAL;
-					break;
+					return -EINVAL;
 			}
-			dev_put(dev);
-			return ret;
 
 		case SIOCDELRT:
 			if (copy_from_user(&nr_route, arg, sizeof(struct nr_route_struct)))
@@ -676,19 +653,14 @@ int nr_rt_ioctl(unsigned int cmd, void *arg)
 				return -EINVAL;
 			switch (nr_route.type) {
 				case NETROM_NODE:
-					ret = nr_del_node(&nr_route.callsign,
+					return nr_del_node(&nr_route.callsign,
 						&nr_route.neighbour, dev);
-					break;
 				case NETROM_NEIGH:
-					ret = nr_del_neigh(&nr_route.callsign,
+					return nr_del_neigh(&nr_route.callsign,
 						dev, nr_route.quality);
-					break;
 				default:
-					ret = -EINVAL;
-					break;
+					return -EINVAL;
 			}
-			dev_put(dev);
-			return ret;
 
 		case SIOCNRDECOBS:
 			return nr_dec_obs();
@@ -745,15 +717,10 @@ int nr_route_frame(struct sk_buff *skb, ax25_cb *ax25)
 			    ax25->ax25_dev->dev, 0, sysctl_netrom_obsolescence_count_initialiser);
 
 	if ((dev = nr_dev_get(nr_dest)) != NULL) {	/* Its for me */
-		int ret;
-
 		if (ax25 == NULL)			/* Its from me */
-			ret = nr_loopback_queue(skb);
+			return nr_loopback_queue(skb);
 		else
-			ret = nr_rx_frame(skb, dev);
-
-		dev_put(dev);
-		return ret;
+			return nr_rx_frame(skb, dev);
 	}
 
 	if (!sysctl_netrom_routing_control && ax25 != NULL)
@@ -779,8 +746,6 @@ int nr_route_frame(struct sk_buff *skb, ax25_cb *ax25)
 	*dptr = AX25_P_NETROM;
 
 	nr_neigh->ax25 = ax25_send_frame(skb, 256, (ax25_address *)dev->dev_addr, &nr_neigh->callsign, nr_neigh->digipeat, nr_neigh->dev);
-
-	dev_put(dev);
 
 	return (nr_neigh->ax25 != NULL);
 }

@@ -612,7 +612,6 @@ no:
                      (is_dir_out(cmd))?DATA_OUT_DIR:DATA_IN_DIR))
             write_wd33c93_count(regs, 0); /* guarantee a DATA_PHASE interrupt */
          else {
-            write_wd33c93_count(regs, cmd->SCp.this_residual);
             write_wd33c93(regs, WD_CONTROL, CTRL_IDI | CTRL_EDI | CTRL_DMA);
             hostdata->dma = D_DMA_RUNNING;
             }
@@ -734,7 +733,6 @@ use_transfer_pio:
       hostdata->dma_cnt++;
 #endif
       write_wd33c93(regs, WD_CONTROL, CTRL_IDI | CTRL_EDI | CTRL_DMA);
-      write_wd33c93_count(regs, cmd->SCp.this_residual);
 
       if ((hostdata->level2 >= L2_DATA) ||
           (hostdata->level2 == L2_BASIC && cmd->SCp.phase == 0)) {
@@ -2054,5 +2052,3 @@ void wd33c93_release(void)
 {
    MOD_DEC_USE_COUNT;
 }
-
-MODULE_LICENSE("GPL");

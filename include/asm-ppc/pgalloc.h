@@ -1,5 +1,5 @@
 /*
- * BK Id: SCCS/s.pgalloc.h 1.9 05/17/01 18:14:25 cort
+ * BK Id: SCCS/s.pgalloc.h 1.12 09/20/01 18:07:54 dan
  */
 #ifdef __KERNEL__
 #ifndef _PPC_PGALLOC_H
@@ -68,20 +68,26 @@ extern __inline__ pgd_t *get_pgd_fast(void)
 {
         unsigned long *ret;
 
+	preempt_disable();
         if ((ret = pgd_quicklist) != NULL) {
                 pgd_quicklist = (unsigned long *)(*ret);
-                ret[0] = 0;
                 pgtable_cache_size--;
-        } else
+                ret[0] = 0;
+		preempt_enable();
+        } else {
+		preempt_enable();
                 ret = (unsigned long *)get_pgd_slow();
+	}
         return (pgd_t *)ret;
 }
 
 extern __inline__ void free_pgd_fast(pgd_t *pgd)
 {
+	preempt_disable();
         *(unsigned long **)pgd = pgd_quicklist;
         pgd_quicklist = (unsigned long *) pgd;
         pgtable_cache_size++;
+	preempt_enable();
 }
 
 extern __inline__ void free_pgd_slow(pgd_t *pgd)
@@ -120,29 +126,40 @@ static inline pte_t *pte_alloc_one_fast(struct mm_struct *mm, unsigned long addr
 {
         unsigned long *ret;
 
+	preempt_disable();
         if ((ret = pte_quicklist) != NULL) {
                 pte_quicklist = (unsigned long *)(*ret);
                 ret[0] = 0;
                 pgtable_cache_size--;
 	}
+	preempt_enable();
         return (pte_t *)ret;
 }
 
+#if 0	/* Just checking to see if anyone calls this.... */
 extern __inline__ void pte_free_fast(pte_t *pte)
 {
+	preempt_disable();
         *(unsigned long **)pte = pte_quicklist;
         pte_quicklist = (unsigned long *) pte;
         pgtable_cache_size++;
+	preempt_enable();
 }
+#endif
 
 extern __inline__ void pte_free_slow(pte_t *pte)
 {
-	free_page((unsigned long)pte);
+	free_page((unsigned long)pte & PAGE_MASK);
 }
 
 #define pte_free(pte)    pte_free_slow(pte)
 
-#define pmd_populate(mm, pmd, pte)	(pmd_val(*(pmd)) = (unsigned long) (pte))
+extern __inline__ void pmd_populate(struct mm_struct *mm, pmd_t *pmd, pte_t *pte)
+{
+	pmd_val(*(pmd)) = (unsigned long) (pte);
+	if (_PMD_PRESENT != PAGE_MASK)
+		(pmd_val(*(pmd)) |= _PMD_PRESENT);
+}
 
 extern int do_check_pgt_cache(int, int);
 

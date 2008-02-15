@@ -1,5 +1,5 @@
 /*
- * BK Id: SCCS/s.atomic.h 1.15 10/28/01 10:37:22 trini
+ * BK Id: SCCS/s.atomic.h 1.21 11/28/01 13:29:57 paulus
  */
 /*
  * PowerPC atomic operations
@@ -15,10 +15,8 @@ typedef struct { volatile int counter; } atomic_t;
 #define ATOMIC_INIT(i)	{ (i) }
 
 #define atomic_read(v)		((v)->counter)
-#define atomic_set(v,i)		(((v)->counter) = (i))
 
 extern void atomic_clear_mask(unsigned long mask, unsigned long *addr);
-extern void atomic_set_mask(unsigned long mask, unsigned long *addr);
 
 #ifdef CONFIG_SMP
 #define SMP_ISYNC	"\n\tisync"
@@ -26,14 +24,26 @@ extern void atomic_set_mask(unsigned long mask, unsigned long *addr);
 #define SMP_ISYNC
 #endif
 
+/* Erratum #77 on the 405 means we need a sync or dcbt before every stwcx.
+ * The old ATOMIC_SYNC_FIX covered some but not all of this.
+ */
+#ifdef CONFIG_IBM405_ERR77
+#define PPC405_ERR77(ra,rb)	"dcbt " #ra "," #rb ";"
+#else
+#define PPC405_ERR77(ra,rb)
+#endif
+
+#define atomic_set(v,i)		(((v)->counter) = (i))
+
 static __inline__ void atomic_add(int a, atomic_t *v)
 {
 	int t;
 
 	__asm__ __volatile__(
 "1:	lwarx	%0,0,%3		# atomic_add\n\
-	add	%0,%2,%0\n\
-	stwcx.	%0,0,%3\n\
+	add	%0,%2,%0\n"
+	PPC405_ERR77(0,%3)
+"	stwcx.	%0,0,%3 \n\
 	bne-	1b"
 	: "=&r" (t), "=m" (v->counter)
 	: "r" (a), "r" (&v->counter), "m" (v->counter)
@@ -46,8 +56,9 @@ static __inline__ int atomic_add_return(int a, atomic_t *v)
 
 	__asm__ __volatile__(
 "1:	lwarx	%0,0,%2		# atomic_add_return\n\
-	add	%0,%1,%0\n\
-	stwcx.	%0,0,%2\n\
+	add	%0,%1,%0\n"
+	PPC405_ERR77(0,%2)
+"	stwcx.	%0,0,%2 \n\
 	bne-	1b"
 	SMP_ISYNC
 	: "=&r" (t)
@@ -63,8 +74,9 @@ static __inline__ void atomic_sub(int a, atomic_t *v)
 
 	__asm__ __volatile__(
 "1:	lwarx	%0,0,%3		# atomic_sub\n\
-	subf	%0,%2,%0\n\
-	stwcx.	%0,0,%3\n\
+	subf	%0,%2,%0\n"
+	PPC405_ERR77(0,%3)
+"	stwcx.	%0,0,%3 \n\
 	bne-	1b"
 	: "=&r" (t), "=m" (v->counter)
 	: "r" (a), "r" (&v->counter), "m" (v->counter)
@@ -77,8 +89,9 @@ static __inline__ int atomic_sub_return(int a, atomic_t *v)
 
 	__asm__ __volatile__(
 "1:	lwarx	%0,0,%2		# atomic_sub_return\n\
-	subf	%0,%1,%0\n\
-	stwcx.	%0,0,%2\n\
+	subf	%0,%1,%0\n"
+	PPC405_ERR77(0,%2)
+"	stwcx.	%0,0,%2 \n\
 	bne-	1b"
 	SMP_ISYNC
 	: "=&r" (t)
@@ -94,8 +107,9 @@ static __inline__ void atomic_inc(atomic_t *v)
 
 	__asm__ __volatile__(
 "1:	lwarx	%0,0,%2		# atomic_inc\n\
-	addic	%0,%0,1\n\
-	stwcx.	%0,0,%2\n\
+	addic	%0,%0,1\n"
+	PPC405_ERR77(0,%2)
+"	stwcx.	%0,0,%2 \n\
 	bne-	1b"
 	: "=&r" (t), "=m" (v->counter)
 	: "r" (&v->counter), "m" (v->counter)
@@ -108,8 +122,9 @@ static __inline__ int atomic_inc_return(atomic_t *v)
 
 	__asm__ __volatile__(
 "1:	lwarx	%0,0,%1		# atomic_inc_return\n\
-	addic	%0,%0,1\n\
-	stwcx.	%0,0,%1\n\
+	addic	%0,%0,1\n"
+	PPC405_ERR77(0,%1)
+"	stwcx.	%0,0,%1 \n\
 	bne-	1b"
 	SMP_ISYNC
 	: "=&r" (t)
@@ -125,8 +140,9 @@ static __inline__ void atomic_dec(atomic_t *v)
 
 	__asm__ __volatile__(
 "1:	lwarx	%0,0,%2		# atomic_dec\n\
-	addic	%0,%0,-1\n\
-	stwcx.	%0,0,%2\n\
+	addic	%0,%0,-1\n"
+	PPC405_ERR77(0,%2)\
+"	stwcx.	%0,0,%2\n\
 	bne-	1b"
 	: "=&r" (t), "=m" (v->counter)
 	: "r" (&v->counter), "m" (v->counter)
@@ -139,8 +155,9 @@ static __inline__ int atomic_dec_return(atomic_t *v)
 
 	__asm__ __volatile__(
 "1:	lwarx	%0,0,%1		# atomic_dec_return\n\
-	addic	%0,%0,-1\n\
-	stwcx.	%0,0,%1\n\
+	addic	%0,%0,-1\n"
+	PPC405_ERR77(0,%1)
+"	stwcx.	%0,0,%1\n\
 	bne-	1b"
 	SMP_ISYNC
 	: "=&r" (t)
@@ -164,8 +181,9 @@ static __inline__ int atomic_dec_if_positive(atomic_t *v)
 	__asm__ __volatile__(
 "1:	lwarx	%0,0,%1		# atomic_dec_if_positive\n\
 	addic.	%0,%0,-1\n\
-	blt-	2f\n\
-	stwcx.	%0,0,%1\n\
+	blt-	2f\n"
+	PPC405_ERR77(0,%1)
+"	stwcx.	%0,0,%1\n\
 	bne-	1b"
 	SMP_ISYNC
 	"\n\

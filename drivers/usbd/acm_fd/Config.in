@@ -1,0 +1,31 @@
+#
+# CDC ACM Function Driver
+#
+# Copyright (C) 2003 Belcarra
+#
+
+mainmenu_option next_comment
+comment "CDC ACM Function"
+
+dep_tristate '  CDC ACM Function' CONFIG_USBD_ACM $CONFIG_USBD
+if [ "$CONFIG_USBD_ACM" = "y" -o "$CONFIG_USBD_ACM" = "m" ]; then
+   hex     ' Overide VendorID (hex value)' CONFIG_USBD_ACM_VENDORID "0000"
+   hex     ' Overide ProductID (hex value)' CONFIG_USBD_ACM_PRODUCTID "0000"
+   hex     ' Override bcdDevice (binary-coded decimal)' CONFIG_USBD_ACM_BCDDEVICE "0000"
+
+   string '    Override iConfiguration (string)' CONFIG_USBD_ACM_DESC "Acm Cfg"
+   string '    Override Data Interface iInterface (string)' CONFIG_USBD_ACM_COMM_INTF "Comm Intf"
+   string '    Override Comm Interface iInterface (string)' CONFIG_USBD_ACM_DATA_INTF "Data Intf"
+
+   comment ''
+
+   int     '   IN  PacketSize (16, 32, 64)' CONFIG_USBD_ACM_IN_PKTSIZE "64"
+   int     '   OUT PacketSize (16, 32, 64)' CONFIG_USBD_ACM_OUT_PKTSIZE "64"
+
+   if [ ! "$CONFIG_ARCH_SA1100" = "y" -a ! "$CONFIG_ARCH_L7200" = "y" ]; then
+      int  '   INT PacketSize (8, 16)' CONFIG_USBD_ACM_INT_PKTSIZE "16"
+   fi
+
+fi
+
+endmenu
