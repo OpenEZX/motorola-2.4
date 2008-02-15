@@ -23,6 +23,8 @@
  *
  *  2006-MAR-03 - Modified aploger flow control 
  *
+ *  2006-Jul-10 - MaxPower change to 0xFA from 0x0a for charging
+ *
  */
 
 
@@ -96,7 +98,7 @@ extern int motusbd_status;  //added by Jordan to Support CFG11 bplog
 #endif
 
 #undef BMAXPOWER
-#define BMAXPOWER                               0x0a
+#define BMAXPOWER                               0xFA 
 
 /*
  * setup some default values for pktsizes and endpoint addresses.

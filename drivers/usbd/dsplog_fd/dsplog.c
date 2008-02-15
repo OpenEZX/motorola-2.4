@@ -1,7 +1,7 @@
 /*
  * linux/drivers/usbd/dsplog_fd/dsplog.c - Motorola DSP LOG USB function driver
  *
- *  Copyright (C) 2004 - Motorola
+ *  Copyright (C) 2004-2006 - Motorola
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,10 +17,9 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * Motorola DSP LOG USB Function Driver is Created by: 
- *     Sun Bonnie (a5035c@motorola.com)
- *     Liu Weijie (a19553@motorola.com)
- *     02/25/2004
+ *  Feb-25-2004 - Motorola Network Monitor USB Function Driver created
+ *  Jul-10-2006 - change to 0xFA from 0x0a for charging 
+ *
  */
 
 #include <linux/config.h>
@@ -325,7 +324,7 @@ static __u8 dsplog_configuration_descriptor[sizeof(struct usb_configuration_desc
         0x01,          /* bConfigurationValue  */
         0x00,          /* iConfiguration       */
         0xc0,          /* bmAttributes  0xC0   */
-        0x0a,          /* bMaxPower 0x0a*2 MA  */
+        0xFA,          /* bMaxPower 0x0a*2 MA  */ /* change to 0xFA from 0x0a for charging */
 
 };
 

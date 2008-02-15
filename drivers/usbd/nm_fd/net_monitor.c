@@ -1,7 +1,7 @@
 /*
  *  /drivers/usbd/nm_fd/net_monitor.c - Motorola Netork Monitor USB function driver
  *
- *  Copyright (C) 2004 - Motorola
+ *  Copyright (C) 2004-2006 - Motorola
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,10 +17,9 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- *  Motorola Network Monitor USB Function Driver is Created by:
- *     Liu Weijie (a19553@motorola.com)
- *     sun bonnie (a5035c@motorola.com)
- *     02/25/2004
+ *  Feb-25-2004 - Motorola Network Monitor USB Function Driver created
+ *  Jul-10-2006 - modify for charging and inform uplayer emumanager
+ *
  */
 
 #include <linux/config.h>
@@ -56,6 +55,8 @@ MODULE_DESCRIPTION ("Motorola Network Monitor Function");
 #include <usbd.h>
 #include <usbd-func.h>
 #include "../pst_fd/pst-usb.h"
+
+#include <linux/ezxusbd.h> /* for queue_motusbd_event(USB_NM_READY); */
 
 
 USBD_MODULE_INFO ("Mot Network Monitor 1.0");
@@ -466,7 +467,7 @@ static __u8 nm_configuration_descriptor[sizeof(struct usb_configuration_descript
   0x01,          /* bConfigurationValue  */
   0x19,          /* iConfiguration       */
   0xC0,          /* bmAttributes  0xC0   */
-  0x0A           /* bMaxPower 0x0a*2 MA  */
+  0xFA           /* bMaxPower 0x0a*2 MA  */ /* change to 0xFA from 0x0a for charging*/
 };
 
 struct usb_configuration_description nm_configuration_description[] = {
@@ -759,6 +760,11 @@ static void nm_event_irq(struct usb_function_instance *function,usb_device_event
         case DEVICE_CONFIGURED:
              nm_cable_connected = 1;
 	         PRINTK("Netmonitor: NM Cable connect!\n");
+		
+#ifdef CONFIG_ARCH_EZXBASE
+             queue_motusbd_event(USB_NM_READY); /* inform uplayer emumanager */
+#endif
+
              urb = usbd_alloc_urb(function,INDEX_OF_NM_OUT_EP, NM_OUT_PACKET_SIZE,nm_recv_urb);
 	         if (!urb)
 	         return;
