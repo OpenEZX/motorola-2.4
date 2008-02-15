@@ -2,7 +2,7 @@
  * linux/drivers/video/ezx_lcd/pxafb.h
  * Intel Bulverde/PXA250/210 LCD Controller Frame Buffer Device
  *
- * Copyright (C) 2004-2005 - Motorola
+ * Copyright (C) 2004-2006 - Motorola
  *
  * Copyright 2003 MontaVista Software Inc.
  * Author: MontaVista Software, Inc.
@@ -33,12 +33,14 @@
  *  with this program; if not, write  to the Free Software Foundation, Inc.,
  *  675 Mass Ave, Cambridge, MA 02139, USA.
  *
+ *   2004/06/28  Susan
+ *      - Initial version
  *   2005/12/12  Wang limei
  *      - Support overlay2 multiplication constant setting adjusting;
  *	 - Support backlight dutycycle range setting;
  *	 - Support CLI partial display mode;
- *   2004/06/28  Susan
- *      - Initial version
+ *   2006/01/26  Wang limei
+ *      - bug fix for CR libhh66447
  */
 
 #ifndef _PXA_FB_H_
@@ -209,6 +211,7 @@ struct global_state
 	pxa_panel  active_panel;
 	struct pxafb_info *pxafb_current;
 	unsigned char main_ovl2_status;
+	int ovl2_user_count;	/*support overlay2 multi user*/
 	pxa_panel_state  main_state;
 	pxa_panel_state  smart_state;
 	unsigned long bklight_main_dutycycle;

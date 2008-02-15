@@ -3,7 +3,7 @@
  *
  *  Micron MI-2010SOC Camera Module driver.
  *
- *  Copyright (C) 2005 Motorola Inc.
+ *  Copyright (C) 2005, 2006 Motorola Inc.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@ Revision History:
 Author                 Date          Number     Description of Changes
 ----------------   ------------    ----------   -------------------------
 Mu Chenliang        4/30/2005                   Created, for EZX platform
+Sang suduo          2/10/2006                   bug fix for CR libhh80825
  *
 */
 
@@ -710,10 +711,12 @@ int mi2010soc_set_flicker(int flicker)
     if(flicker==50)
     {
         mi2010soc_var_write8(4, 4, fd_mode | 0x40);     // set bit 6
+        mi2010soc_var_write16(2, 47, 122);
     }
     else if(flicker==60)
     {
         mi2010soc_var_write8(4, 4, fd_mode & (~0x40));  // clear bit 6
+        mi2010soc_var_write16(2, 47, 102);
     }
     else
         return -EINVAL;

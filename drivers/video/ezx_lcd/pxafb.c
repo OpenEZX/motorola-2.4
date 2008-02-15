@@ -2,7 +2,7 @@
  * linux/drivers/video/ezx_lcd/pxafb.c
  * Intel Bulverde/PXA250/210 LCD Controller Frame Buffer Driver
  * 
- * Copyright (C) 2002-2005 - Motorola
+ * Copyright (C) 2002-2006 - Motorola
  * 
  * Copyright 2003 MontaVista Software Inc.
  * Author: MontaVista Software, Inc.
@@ -42,13 +42,8 @@
  *  with this program; if not, write  to the Free Software Foundation, Inc.,
  *  675 Mass Ave, Cambridge, MA 02139, USA.
  * 
- * 2005/12/26  w20535@motorola.com
-	-  Implemented Errata 62 and ipm related tuning.
- * 2004/06/28  Susan
- *      - add double buffering for LCD controller
  * 2002/06/30: lilij
  *      - Ported to EZX LCD
- *
  * 2003/05/19: zxf
  *	- Add timer to turn on backlight until lcd controller is ready
  * 2003/10/17: sdavis3
@@ -66,7 +61,11 @@
  *	 - Support Logo is showed by MBM instead of kernel, it is configurable;
  * 2005/12/12  Wang Jordan
  *	 - IPM releated code is polished after 312M freq point is added;
-*/
+ * 2005/12/26  w20535@motorola.com
+ *	-  Implemented Errata 62 and ipm related tuning.
+ * 2006/1/26  Wang limei
+ *	-  bug fix for CR libhh66447.
+ */
 
 #include <linux/config.h>
 #include <linux/module.h>
@@ -1715,10 +1714,15 @@ DPRINTK("DISABLE2BFS:AFTER releaes #2 framebuffer, fbi->double_buffers = 0\n");
 	    down(&pxafb_global_state.g_sem);
 	    val = overlay2fb_enable( (struct fb_info *)(((struct pxafb_info *)info)->overlay2fb) );
 	    put_user(val, (u8*)arg);
-
-	    pxafb_global_state.main_ovl2_status = (unsigned char)PXAFB_OVL2_ON;
+	
+      	    pxafb_global_state.main_ovl2_status = (unsigned char)PXAFB_OVL2_ON;
 	    DPRINTK("pxafb_ioctl: FBIOENABLEOVL2 -- main_ovl2_status = PXAFB_OVL2_ON\n");
-	    ret = ovl2_ipm_hook(); /*Hook ovl2 to PM for keeping HIGH cpu freq when ovl2 is enabled*/
+		
+	    if (pxafb_global_state.ovl2_user_count == 0){		
+		       ret = ovl2_ipm_hook(); /*Hook ovl2 to PM for keeping HIGH cpu freq when ovl2 is enabled*/
+	    }	
+	    pxafb_global_state.ovl2_user_count	++;		
+	   
 	    up(&pxafb_global_state.g_sem);
 	    DPRINTK("After FBIOENABLEOVL2 -- LCCR0(0x%x)LCCR1(0x%x)LCCR2(0x%x)LCCR3(0x%x)LCCR4(0x%x)LCCR5(0x%x)OVL2C1(0x%x)OVL2C2(0x%x)\n", LCCR0,LCCR1,LCCR2,LCCR3,LCCR4,LCCR5,OVL2C1,OVL2C2);
 	    return 0;
@@ -1727,12 +1731,22 @@ DPRINTK("DISABLE2BFS:AFTER releaes #2 framebuffer, fbi->double_buffers = 0\n");
 	{
 	    DPRINTK("FBIODISABLEOVL2:\n");
 	    down(&pxafb_global_state.g_sem);
-	    val = overlay2fb_disable( (struct fb_info *)(((struct pxafb_info *)info)->overlay2fb) );
-	    put_user(val, (u8*)arg);
 
-	    pxafb_global_state.main_ovl2_status = (unsigned char)PXAFB_OVL2_OFF;
-	    DPRINTK("pxafb_ioctl: FBIODISABLEOVL2 -- main_ovl2_status = PXAFB_OVL2_OFF(%d)\n", pxafb_global_state.main_ovl2_status);
-	    ovl2_ipm_unhook(); /*Unhook ovl2 from PM, restore cpu freq scaling*/
+	    pxafb_global_state.ovl2_user_count --;		
+		
+	    if (pxafb_global_state.ovl2_user_count == 0){
+		    	val = overlay2fb_disable( (struct fb_info *)(((struct pxafb_info *)info)->overlay2fb) );
+	  		put_user(val, (u8*)arg);
+
+			pxafb_global_state.main_ovl2_status = (unsigned char)PXAFB_OVL2_OFF;
+			DPRINTK("pxafb_ioctl: FBIODISABLEOVL2 -- main_ovl2_status = PXAFB_OVL2_OFF(%d)\n", pxafb_global_state.main_ovl2_status);
+	
+  		       ovl2_ipm_unhook(); /*Unhook ovl2 from PM, restore cpu freq scaling*/
+	    }	else{
+		       val = 0;
+			put_user(val, (u8*)arg);
+	    }
+	
 	    up(&pxafb_global_state.g_sem);
 	    return 0;
 	}
@@ -6613,6 +6627,7 @@ void pxafb_init_global(void)
 	pxafb_global_state.bklight_main_dutycycle = DEFAULT_DUTYCYCLE;
 	pxafb_global_state.bklight_cli_dutycycle = DEFAULT_DUTYCYCLE;
 	pxafb_global_state.main_ovl2_status = PXAFB_OVL2_OFF;  //at the very being, overlay2 is not enabled -- Susan//
+	pxafb_global_state.ovl2_user_count = 0;
 	pxafb_global_state.trans_value = 0x00DB;  /* Default k1=k2=k3=011, namely multipilation constant = 4/8  */
 	pxafb_global_state.bkduty_range.min = MIN_DUTYCYCLE; /* Set visible backlight dutycycle range to default value*/
 	pxafb_global_state.bkduty_range.max = MAX_DUTYCYCLE;

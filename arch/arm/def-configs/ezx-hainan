@@ -8,6 +8,7 @@
 # Changed by            Date             Description of Changes
 #----------------   ------------      -------------------------
 # jiang Lili         2005/2/28           add for new product config
+# Zhao Liang         2006/1/28           remove usb network support
 
 CONFIG_ARM=y
 # CONFIG_EISA is not set
@@ -1238,10 +1239,10 @@ CONFIG_USBD_DSP_LOG_BCDDEVICE=0001
 #
 # Motorola Network Monitor USB Function
 #
-CONFIG_USBD_NM=y
-CONFIG_USBD_NM_VENDORID=22b8
-CONFIG_USBD_NM_PRODUCTID=1004
-CONFIG_USBD_NM_BCDDEVICE=0002
+# CONFIG_USBD_NM is not set
+# CONFIG_USBD_NM_VENDORID is not set
+# CONFIG_USBD_NM_PRODUCTID is not set
+# CONFIG_USBD_NM_BCDDEVICE is not set
 
 #
 # Motorola Modem Connections /proc interface
