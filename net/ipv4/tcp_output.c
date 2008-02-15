@@ -7,6 +7,8 @@
  *
  * Version:	$Id: tcp_output.c,v 1.144 2001/11/06 22:21:08 davem Exp $
  *
+ * Portions Copyright (C) Motorola 2004
+ *
  * Authors:	Ross Biro, <bir7@leland.Stanford.Edu>
  *		Fred N. van Kempen, <waltje@uWalt.NL.Mugnet.ORG>
  *		Mark Evans, <evansmp@uhura.aston.ac.uk>
@@ -18,6 +20,8 @@
  *		Matthew Dillon, <dillon@apollo.west.oic.com>
  *		Arnt Gulbrandsen, <agulbra@nvg.unit.no>
  *		Jorge Cwik, <jorge@laser.satlink.net>
+ *
+ * 2004-Jul-14 - (Motorola) Change to solve compatiblity issue with CMCC 
  */
 
 /*
@@ -90,7 +94,7 @@ static __u16 tcp_advertise_mss(struct sock *sk)
 	int mss = tp->advmss;
 
     /* 
-     * changed by xia weizhong
+     * changed by Motorola
      * to solve compatiblity issue with CMCC 
      */
     if( mss > 0x055C )

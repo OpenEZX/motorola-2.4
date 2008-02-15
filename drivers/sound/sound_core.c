@@ -32,6 +32,11 @@
  *
  *	FIXME: we have to resolve modules and fine grained load/unload
  *	locking at some point in 2.3.x.
+ *
+ *  Copyright (C) 2002-2005 Motorola
+ * 
+ *  2002-Jun-19 - (Motorola) Added sound device dsp16 and audio
+ * 
  */
 
 #include <linux/config.h>
@@ -349,7 +354,7 @@ int register_sound_dsp(struct file_operations *fops, int dev)
 				 "dsp", S_IWUSR | S_IRUSR);
 }
 
-/* add by zq, 2002-6-19, 
+/* add 2002-6-19, 
    add sound device audio */
 int register_sound_audio(struct file_operations *fops, int dev)
 {
@@ -357,7 +362,7 @@ int register_sound_audio(struct file_operations *fops, int dev)
 				 "audio", S_IWUSR | S_IRUSR);
 }
 
-/* add by zq, 2002-6-19, 
+/* add 2002-6-19, 
    add sound device dsp16 */
 int register_sound_dsp16(struct file_operations *fops, int dev)
 {
@@ -448,14 +453,14 @@ void unregister_sound_dsp(int unit)
 	return sound_remove_unit(&chains[3], unit);
 }
 
-/* add by zq, 2002-6-19, 
+/* add 2002-6-19, 
    add sound device audio */
 void unregister_sound_audio(int unit)
 {
 	return sound_remove_unit(&chains[4], unit);
 }
 
-/* add by zq, 2002-6-19, 
+/* add 2002-6-19, 
    add sound device dsp16 */
 void unregister_sound_dsp16(int unit)
 {
@@ -513,7 +518,7 @@ int soundcore_open(struct inode *inode, struct file *file)
 	struct sound_unit *s;
 	struct file_operations *new_fops = NULL;
 
-/*  modified by zq, 2002-6-19  
+/*  modified, 2002-6-19  
    add sound device dsp16 and audio
 */
 

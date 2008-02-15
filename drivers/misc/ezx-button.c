@@ -1,19 +1,28 @@
 /*
- * 	linux/drivers/char/ezx-button.c --- button driver on ezx
+ * linux/drivers/misc/ezx-button.c
  *
- *  Support for the Motorola Ezx A780 Development Platform.
- *  
- *  Author:	    Zhou Qiong, Jay Jia
- *  Created:	Dec 16, 2003
- *  Copyright:	Motorola Inc.
- *  
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation. 
- *
- *  Jin Lihong(w20076) Mar.15,2004,LIBdd86574  headset judgement condition reverse
- *  Jin Lihong(w20076) Apr.13,2004,LIBdd96876  reorganise file header
- *
+ * Support for the Motorola Ezx A780 Development Platform.
+ * 
+ * Copyright (C) 2003-2004 Motorola
+ * 
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ * Dec 16,2003 - (Motorola) Created
+ * Mar 15,2004 - (Motorola) Headset judgement condition reverse
+ * Apr 13,2004 - (Motorola) Reorganise file header
+ * 
  */
 
 #include <linux/init.h>

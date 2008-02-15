@@ -3,6 +3,7 @@
  *	and XScale PXA250/210.
  *
  *	Copyright (c) 2000 Nils Faerber
+ *  Copyright (C) 2004-2005 Motorola
  *
  *	Based on rtc.c by Paul Gortmaker
  *	Date/time conversion routines taken from arch/arm/kernel/time.c
@@ -15,7 +16,7 @@
  *	as published by the Free Software Foundation; either version
  *	2 of the License, or (at your option) any later version.
  *
- *	1.03	2004-01-12	Zhuang Xiaofan <w19962@motorola.com>
+ *	1.03	2004-01-12	Motorola
  *	- add queue apm event
  *
  *      1.02    2002-07-15      Andrew Christian <andrew.christian@hp.com>

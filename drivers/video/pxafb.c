@@ -2,7 +2,7 @@
  * linux/drivers/video/pxafb.c
  * Intel Bulverde/PXA250/210 LCD Controller Frame Buffer Driver
  * 
- * (c) Copyright Motorola 2003, All rights reserved.
+ * Copyright (C) Motorola 2002-2004
  * 
  * Copyright 2003 MontaVista Software Inc.
  * Author: MontaVista Software, Inc.
@@ -42,15 +42,10 @@
  *  with this program; if not, write  to the Free Software Foundation, Inc.,
  *  675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * 2004/06/28  Susan
- *      - add double buffering for LCD controller
- * 2002/06/30: lilij
- *      - Ported to EZX LCD
- *
- * 2003/05/19: zxf
- *	- Add timer to turn on backlight until lcd controller is ready
- * 2003/10/17: sdavis3
- * 	- Added 18bpp/19bpp packed support
+ * 2002-Jun-30 - (Motorola) Ported to the LCD hardware on Motorola phone
+ * 2003-May-19 - (Motorola) Added timer to turn on backlight until LCD controller is ready
+ * 2003-Oct-17 - (Motorola) Added 18bpp/19bpp packed support
+ * 2004-Jun-28 - (Motorola) Added double buffering for LCD controller
  */
 
 #include <linux/config.h>
@@ -101,7 +96,7 @@ void (*pxafb_blank_helper)(int blank);
 EXPORT_SYMBOL(pxafb_blank_helper);
 
 extern int handshake_pass();
-/* For double buffering supports -- Susan*/
+/* Added by Motorola for double buffering supports */
 unsigned long double_buffers = 0;
 static unsigned long wpaper_enabled = 0;
 
@@ -2172,7 +2167,7 @@ static void pxafb_disable_controller(struct pxafb_info *fbi)
 	
 	mdelay(41);
 	
-#if (0)  //Susan -- original sequence //
+#if (0)  //Motorola -- original sequence //
 	LCCR0 &= ~LCCR0_LDM;	/* Enable LCD Disable Done Interrupt */
 	LCCR0 &= ~LCCR0_ENB;	/* Disable LCD Controller */
 #endif	

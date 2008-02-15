@@ -5,6 +5,12 @@
 #ifndef __LINUX_MTD_MAP_H__
 #define __LINUX_MTD_MAP_H__
 
+/*
+ * Portions Copyright (C) Motorola 2004
+ *
+ * 2004-Apr-21 - (Motorola) Added a function to invalidate all cache lines
+ */
+
 #include <linux/config.h>
 #include <linux/types.h>
 #include <linux/mtd/mtd.h>

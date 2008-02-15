@@ -4,6 +4,7 @@
  *
  * (C) 2000 Red Hat. GPL'd
  * (C) 2003 Intel Corporation. GPL'd
+ * Copyright (C) 2004 Motorola. GPL'd
  *
  * $Id: cfi_cmdset_0001_mp.c,v 1.1.4.2 2003/12/31 02:03:45 tpoynor Exp $
  *
@@ -18,6 +19,9 @@
  *	- reworked lock/unlock/erase support for var size flash
  * 08/15/2003  Yu Tang <yu.tang@intel.com>, Dan Post <daniel.j.post@intel.com>
  *      - added multi-partition support for Intel Strata Flash
+ * 
+ * Sept 1,2004 - (Motorola) Add defines specific to EZX hardware
+ *                          Added code for L18 UNLOCK/LOCKDOWN mechanism
  */
 
 #include <linux/module.h>
@@ -45,7 +49,7 @@
 #ifdef CONFIG_PANIC_LOG
 #define L18_RW_REGION_END   0x01FE0000  
 #else
-#define L18_RW_REGION_END   0x01F80000  // Susan -- 0x580000 --The end offset for the R/W filesystem   //
+#define L18_RW_REGION_END   0x01F80000  // 0x580000 --The end offset for the R/W filesystem   //
 #endif	// CONFIG_PANIC_LOG
 #endif
 
@@ -54,16 +58,16 @@
 #ifdef CONFIG_PANIC_LOG
 #define L18_RW_REGION_END   0x01FE0000  
 #else
-#define L18_RW_REGION_END   0x01F80000  // Susan -- 0x580000 --The end offset for the R/W filesystem   //
+#define L18_RW_REGION_END   0x01F80000  // 0x580000 --The end offset for the R/W filesystem   //
 #endif // CONFIG_PANIC_LOG
 #endif
 
-/* Susan for lockdown rootfs(cramfs) region in the first K3 flash chip */
+/* For lockdown rootfs(cramfs) region in the first K3 flash chip */
 //#define K3_ROOTFS_REGION_START 0x00100000  //The start of the rootfs region //
 //#define K3_ROOTFS_REGION_END 0x01000000  //The end of the rootfs region + 1 byte //
 #define TIME_OUT   1000000L
 
-/* This is for notification of flash status before we are asked entering into sleep mode -- Susan */
+/* This is for notification of flash status before we are asked entering into sleep mode */
 #ifdef CONFIG_PM
 static struct pm_flash_s
 {
@@ -73,8 +77,8 @@ static struct pm_flash_s
 #endif
 
 struct mtd_info *ezx_mymtd;
-extern struct map_info bulverde_map;  //Susan
-extern unsigned long bulverde_map_cacheable;  //Susan
+extern struct map_info bulverde_map;
+extern unsigned long bulverde_map_cacheable;
 int cfi_intelext_read_roflash(void *priv_map, unsigned long from, size_t len, size_t *retlen, u_char *buf);
 
 #endif
@@ -428,7 +432,7 @@ static inline int do_read_onechip(struct map_info *map, struct flchip *chip, lof
 	struct cfi_private *cfi = map->fldrv_priv;
 	struct flpartition *partition;
 
-//Susan for pm
+// For pm
 #ifdef CONFIG_PM
 	atomic_inc(&(pm_flash.pm_flash_count));
 #endif
@@ -436,7 +440,7 @@ static inline int do_read_onechip(struct map_info *map, struct flchip *chip, lof
 	partition = PARTITION_SEL(chip, adr);
 	if (!partition)
 	{
-//Susan for pm
+// for pm
 #ifdef CONFIG_PM
 		atomic_dec(&(pm_flash.pm_flash_count));
 #endif
@@ -497,7 +501,7 @@ static inline int do_read_onechip(struct map_info *map, struct flchip *chip, lof
 				spin_unlock_bh(partition->mutex);
 				printk(KERN_ERR "Chip not ready after erase "
 				       "suspended: status = 0x%llx\n", (__u64)status);
-				//Susan for pm
+				// for pm
 #ifdef CONFIG_PM
 				atomic_dec(&(pm_flash.pm_flash_count));
 #endif
@@ -576,7 +580,7 @@ static inline int do_read_onechip(struct map_info *map, struct flchip *chip, lof
 		   sending the 0x70 (Read Status) command to an erasing
 		   chip and expecting it to be ignored, that's what we 
 		   do. */
-		/* Susan -- clear status register before resume from erase-suspending */
+		/* clear status register before resume from erase-suspending */
 		cfi_write(map, CMD(0x50), cmd_addr);
 			
 		cfi_write(map, CMD(0xd0), cmd_addr);
@@ -646,7 +650,7 @@ static int cfi_intelext_read_prot_reg (struct mtd_info *mtd, loff_t from, size_t
 	struct flpartition *partition;
 	struct flprivate *priv;
 
-	//Susan for pm
+	// for pm
 #ifdef CONFIG_PM
 	atomic_inc(&(pm_flash.pm_flash_count));
 #endif
@@ -670,7 +674,7 @@ static int cfi_intelext_read_prot_reg (struct mtd_info *mtd, loff_t from, size_t
 		partition = PARTITION_SEL(chip, 0);
 		if (!partition)
 		{
-//Susan for pm
+// for pm
 #ifdef CONFIG_PM
 			atomic_dec(&(pm_flash.pm_flash_count));
 #endif
@@ -805,7 +809,7 @@ static int do_write_oneword(struct map_info *map, struct flchip *chip, unsigned 
 	struct flpartition *partition;
 	struct flprivate *priv = (struct flprivate*) chip->priv;
 
-//Susan for pm
+// for pm
 #ifdef CONFIG_PM
 	atomic_inc(&(pm_flash.pm_flash_count));
 #endif
@@ -813,7 +817,7 @@ static int do_write_oneword(struct map_info *map, struct flchip *chip, unsigned 
 	partition = PARTITION_SEL(chip,adr);
 	if (!partition) 
 	{
-//Susan for pm
+// for pm
 #ifdef CONFIG_PM
 		atomic_dec(&(pm_flash.pm_flash_count));
 #endif
@@ -1122,7 +1126,7 @@ static inline int do_write_buffer(struct map_info *map, struct flchip *chip,
 	struct flpartition *partition;
 	struct flprivate *priv = (struct flprivate*) chip->priv;
 
-//Susan for pm
+// for pm
 #ifdef CONFIG_PM
 	atomic_inc(&(pm_flash.pm_flash_count));
 #endif
@@ -1227,9 +1231,9 @@ static inline int do_write_buffer(struct map_info *map, struct flchip *chip,
 		if ((status & mask) == status_OK[0])
 			break;
 
-//Susan -- to avoid two-cmd sequence be interrupted by one write cmd		spin_unlock_bh(partition->mutex);
-//Susan -- to avoid two-cmd sequence be interrupted by one write cmd		cfi_udelay(1);
-//Susan -- to avoid two-cmd sequence be interrupted by one write cmd		spin_lock_bh(partition->mutex);
+// -- to avoid two-cmd sequence be interrupted by one write cmd		spin_unlock_bh(partition->mutex);
+// -- to avoid two-cmd sequence be interrupted by one write cmd		cfi_udelay(1);
+// -- to avoid two-cmd sequence be interrupted by one write cmd		spin_lock_bh(partition->mutex);
 
 		if (++z > 20) {
 			/* Argh. Not ready for write to buffer */
@@ -1537,7 +1541,7 @@ static int do_erase_oneblock(struct map_info *map, struct flchip *chip, unsigned
 	struct flpartition *partition;
 	struct flprivate *priv = (struct flprivate*) chip->priv;
 
-//Susan for pm
+// for pm
 #ifdef CONFIG_PM
 	atomic_inc(&(pm_flash.pm_flash_count));
 #endif
@@ -1779,7 +1783,7 @@ static void cfi_intelext_sync (struct mtd_info *mtd)
 	struct flpartition *partition;
 	int ret = 0;
 
-//Susan for pm
+// for pm
 #ifdef CONFIG_PM
 	atomic_inc(&(pm_flash.pm_flash_count));
 #endif
@@ -1875,7 +1879,7 @@ static int do_xxlock_oneblock(struct map_info *map, struct flchip *chip,
 	DECLARE_WAITQUEUE(wait, current);
 	struct flpartition *partition;
 
-//Susan for pm
+// for pm
 #ifdef CONFIG_PM
 	atomic_inc(&(pm_flash.pm_flash_count));
 #endif
@@ -2125,7 +2129,7 @@ static int cfi_intelext_suspend(struct mtd_info *mtd)
 	
 	return status;
 
-#if (0)  //Susan -- use cfi_intelext_pm_ezx suspend function
+#if (0)  // -- use cfi_intelext_pm_ezx suspend function
 	for (i=0; !ret && i<cfi->numchips; i++) {
 		chip = &cfi->chips[i];
 		priv = (struct flprivate*) chip->priv;
@@ -2243,7 +2247,7 @@ static void cfi_intelext_resume(struct mtd_info *mtd)
 		mode = 0;
 	}
 	
-#if (0)  //Susan -- use cfi_intelext_pm_ezx resume function which contains lockdown/unlock
+#if (0)  // -- use cfi_intelext_pm_ezx resume function which contains lockdown/unlock
 	for (i=0; i<cfi->numchips; i++) {
 	
 		chip = &cfi->chips[i];
@@ -2256,7 +2260,7 @@ static void cfi_intelext_resume(struct mtd_info *mtd)
 		
 			/* Go to known state. Chip may have been power cycled */
 			if (partition->state == FL_PM_SUSPENDED) {
-				// cfi_write(map, CMD(0xFF), 0);  //Susan -- is it an issue??
+				// cfi_write(map, CMD(0xFF), 0);  
 				cfi_write(map, CMD(0xFF), chip->start + partition->offset );
 				partition->state = FL_READY;
 				wake_up(&partition->wq);
@@ -2284,7 +2288,7 @@ static void cfi_intelext_destroy(struct mtd_info *mtd)
 }
 
 #ifdef CONFIG_ARCH_EZX
-/* Added by Susan for L18 UNLOCK/LOCKDOWN mechanism */
+/* Added for L18 UNLOCK/LOCKDOWN mechanism */
 int cfi_intelext_unlockdown_L18(struct mtd_info *mymtd)
 {
 	struct map_info *map;
@@ -2299,7 +2303,7 @@ int cfi_intelext_unlockdown_L18(struct mtd_info *mymtd)
 	__u32 flash_status;
 	__u32 OK_status = CMD(0x80);
 
-//Susan for pm
+// for pm
 #ifdef CONFIG_PM
 	atomic_inc(&(pm_flash.pm_flash_count));
 #endif
@@ -2487,7 +2491,7 @@ static int cfi_intelext_pm_ezx(struct pm_dev *dev, pm_request_t rqst, void *data
 
 			local_irq_save(flags);
 
-			/* zxf -- Disable MMU cache and buffer */
+			/* Disable MMU cache and buffer */
 			__asm__ __volatile__("mrc	p15, 0, r0, c1, c0, 0\n\
 				bic	r0, r0, #0x000c\n\
 				mcr	p15, 0, r0, c1, c0, 0":::"r0","memory");
@@ -2508,8 +2512,8 @@ static int cfi_intelext_pm_ezx(struct pm_dev *dev, pm_request_t rqst, void *data
 			SXCNFG = 0;
 			MDREFR &= ~(MDREFR_K0DB2 | MDREFR_K0RUN | MDREFR_E0PIN);
 
-//no necessary			cfi_write(map, CMD(0xff), 0x0);
-//no necessary			cfi_write(map, CMD(0xff), 0x01000000);
+//not necessary			cfi_write(map, CMD(0xff), 0x0);
+//not necessary			cfi_write(map, CMD(0xff), 0x01000000);
 
 			/* zxf -- Enable MMU cache and buffer */
 			__asm__ __volatile__("mrc	p15, 0, r0, c1, c0, 0\n\
@@ -2529,7 +2533,7 @@ static int cfi_intelext_pm_ezx(struct pm_dev *dev, pm_request_t rqst, void *data
 
 			local_irq_save(flags);
 
-			/* zxf -- Disable MMU cache and buffer */
+			/*Disable MMU cache and buffer */
 			__asm__ __volatile__("mrc	p15, 0, r0, c1, c0, 0\n\
 				bic	r0, r0, #0x000c\n\
 				mcr	p15, 0, r0, c1, c0, 0":::"r0","memory");
@@ -2549,7 +2553,7 @@ static int cfi_intelext_pm_ezx(struct pm_dev *dev, pm_request_t rqst, void *data
 			if (status)
 				printk(KERN_NOTICE "Unlock flash fail after reset flash.\n");
 				
-			/* zxf -- Enable MMU cache and buffer */
+			/* Enable MMU cache and buffer */
 			__asm__ __volatile__("mrc	p15, 0, r0, c1, c0, 0\n\
 				orr	r0, r0, #0x000c\n\
 				mcr	p15, 0, r0, c1, c0, 0":::"r0","memory");
@@ -2574,11 +2578,11 @@ static int __init cfi_intelext_init(void)
 {
 	inter_module_register(im_name_1_mp, THIS_MODULE, &cfi_cmdset_0001_mp);
 
-	/* Added by Susan for initialization of pm_flash device */
+	/* Added for initialization of pm_flash device */
 #ifdef CONFIG_PM
-//ss -- replace cfi_intelext_suspend/resume with cfi_intelext_pm_ezx
+//replace cfi_intelext_suspend/resume with cfi_intelext_pm_ezx
 
-//ss	pm_flash.pm_dev = pm_register(PM_SYS_DEV, 0, cfi_intelext_pm_ezx);
+//pm_flash.pm_dev = pm_register(PM_SYS_DEV, 0, cfi_intelext_pm_ezx);
 	atomic_set(&(pm_flash.pm_flash_count), 0);
 #endif
 

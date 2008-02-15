@@ -5,7 +5,9 @@
  * (C) Copyright 1999 Johannes Erdfelt
  * (C) Copyright 1999 Gregory P. Smith
  * (C) Copyright 2001 Brad Hards (bhards@bigpond.net.au)
+ * (C) Copyright 2004 Motorola
  *
+ * 2004-Jun - (Motorola) Added BP wakeup support
  */
 
 #include <linux/config.h>
@@ -720,7 +722,7 @@ static void usb_hub_port_connect_change(struct usb_hub *hubstate, int port,
 
 		hub->children[port] = dev;
 		
-		/* add by Levis for wakeup BP */
+		/* add by Motorola for wakeup BP */
 		int begin = 0;
 		set_GPIO_mode(GPIO_IN | 41);
 		if(GPIO_is_high(41))
@@ -738,7 +740,7 @@ static void usb_hub_port_connect_change(struct usb_hub *hubstate, int port,
 				GPSR(GPIO_MCU_INT_SW) = GPIO_bit(GPIO_MCU_INT_SW);		
 			}	
 		}	
-		/* end Levis */
+		/* end Motorola */
 
 		/* Reset the device */
 		if (usb_hub_port_reset(hub, port, dev, delay)) {

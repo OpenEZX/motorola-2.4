@@ -2,6 +2,9 @@
 # Network Function Driver
 #
 # Copyright (C) 2002-2003 Belcarra
+# Copyright (C) 2004-2005 Motorola
+
+# 2004-Mar-26 - (Motorola) Removed -Werror from EXTRA_CFLAGS
 
 
 O_TARGET	:= network_fd_drv.o

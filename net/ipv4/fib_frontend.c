@@ -7,12 +7,16 @@
  *
  * Version:	$Id: fib_frontend.c,v 1.26 2001/10/31 21:55:54 davem Exp $
  *
+ * Portions Copyright (C) Motorola 2003
+ *
  * Authors:	Alexey Kuznetsov, <kuznet@ms2.inr.ac.ru>
  *
  *		This program is free software; you can redistribute it and/or
  *		modify it under the terms of the GNU General Public License
  *		as published by the Free Software Foundation; either version
  *		2 of the License, or (at your option) any later version.
+ *
+ * 2003-Dec-17 - (Motorola) Change to enable datacall feature
  */
 
 #include <linux/config.h>
@@ -296,7 +300,7 @@ int ip_rt_ioctl(unsigned int cmd, void *arg)
 	switch (cmd) {
 	case SIOCADDRT:		/* Add a route */
 	case SIOCDELRT:		/* Delete a route */
-                /* porting from A760 datacall feature lin weiqiang  2003-12-17 */
+                /* added by Motorola for datacall feature */
 #if 0
 		if (!capable(CAP_NET_ADMIN))
 			return -EPERM;

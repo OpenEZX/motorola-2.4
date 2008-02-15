@@ -10,16 +10,16 @@
  * [This document is available from Microsoft at:
  *    http://www.microsoft.com/hwdev/busbios/amp_12.htm]
  *
- *  11/11/2002, zxf
- *	- correct memory free error
- *	- porting to ezx platform
+ *  Based on original code from linux/arch/arm/mach-sa1100/apm.c,
+ *  Modified for the EZX Development Plaform by Motorola:
+ *  Copyright (c) 2002-2005 Motorola
  *
- *  05/12/2003, zxf
- *	- make apm device can only be accessed by one user
- *	- correct timer operation sequence
- *
- *  02/12/2004, zxf
- *	- port wakeup check routine to E680/A780 (Bulverde)
+ *  2002-Nov-11 - (Motorola) Created based on mach-sa1100/apm.c
+ *                           correct memory free error
+ *  2003-May-12 - (Motorola) make apm device can only be accessed by one user
+ *	                         correct timer operation sequence
+ *  2004-Feb-12 - (Motorola) port wakeup check routine to E680/A780 (Bulverde)
+ * 
  */
 
 #include <linux/config.h>

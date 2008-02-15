@@ -1,17 +1,29 @@
 #if EMU_PIHF_FEATURE
+
 /*
- *     linux/drivers/misc/ezx-emu.c --- EMU driver on ezx
+ * linux/drivers/misc/ezx-emu.c
  *
- *  Support for the Motorola Ezx A780 Development Platform.
- *  
- *  Author:     Cheng Xuefeng
- *  Created:    April 30, 2004
- *  Copyright:  Motorola Inc.
- *  
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation. 
- *
+ * EMU driver on ezx.
+ * Support for the Motorola Ezx A780 Development Platform.
+ * 
+ * Copyright (C) 2004 Motorola
+ * 
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ * Apr 30,2004 - (Motorola) Created
+ * 
  */
 
 #include <linux/init.h>
@@ -102,7 +114,7 @@ void emu_switch_to(T_EMU_SWITCH_TO to)
             SSP_PCAP_bit_clean(SSP_PCAP_ADJ_BIT_BUSCTRL_VUSB_EN);
             SSP_PCAP_bit_set(SSP_PCAP_ADJ_BIT_BUSCTRL_RS232ENB);
 
-            /* Set the Bulverde GPIO */
+            /* Set the GPIO */
             set_GPIO_mode(GPIO34_TXENB | GPIO_OUT);
             set_GPIO(GPIO34_TXENB);
             set_GPIO_mode(GPIO35_XRXD  | GPIO_IN);
@@ -594,19 +606,31 @@ module_exit(emu_exit);
 #else /* EMU_PIHF_FEATURE */
 
 /*
- *     linux/drivers/misc/ezx-emu.c --- EMU driver on ezx
+ * linux/drivers/misc/ezx-emu.c
  *
- *  Support for the Motorola Ezx A780 Development Platform.
- *  
- *  Author:     Cheng Xuefeng
- *  Created:    April 30, 2004
- *  Copyright:  Motorola Inc.
- *  
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation. 
- *
+ * EMU driver on ezx.
+ * Support for the Motorola Ezx A780 Development Platform.
+ * 
+ * Copyright (C) 2004 Motorola
+ * 
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ * Apr 30,2004 - (Motorola) Created
+ * 
  */
+
 
 #include <linux/init.h>
 #include <linux/config.h>
@@ -695,7 +719,7 @@ void emu_switch_to(T_EMU_SWITCH_TO to)
             SSP_PCAP_bit_clean(SSP_PCAP_ADJ_BIT_BUSCTRL_VUSB_EN);
             SSP_PCAP_bit_set(SSP_PCAP_ADJ_BIT_BUSCTRL_RS232ENB);
 
-            /* Set the Bulverde GPIO */
+            /* Set the GPIO */
             set_GPIO_mode(GPIO34_TXENB | GPIO_OUT);
             set_GPIO(GPIO34_TXENB);
             set_GPIO_mode(GPIO35_XRXD  | GPIO_IN);

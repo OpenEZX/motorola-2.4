@@ -1,5 +1,5 @@
 /*
- *  linux/arch/arm/mach-pxa/irq.c
+ *  linux/arch/arm/mach-ezx/irq.c
  *  
  *  Generic PXA IRQ handling, GPIO IRQ demultiplexing, etc.
  *
@@ -10,6 +10,14 @@
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
  *  published by the Free Software Foundation.
+ * 
+ *  Based on original code from linux/arch/arm/mach-pxa/irq.c,
+ *  Modified for the EZX Development Plaform by Motorola:
+ *  Copyright (c) 2004-2005 Motorola
+ *
+ *  2004-Apr-20 - (Motorola) Created based on mach-pxa/irq.c
+ *                           Modified to support more GPIO pins
+ * 
  */
 
 #include <linux/init.h>

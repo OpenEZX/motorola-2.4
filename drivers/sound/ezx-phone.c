@@ -1,33 +1,39 @@
 /*
  * linux/drivers/sound/ezx-phone
  *
+ *  Phone interface for EZX. for application can't direct call interface in 
+ *  kernel space from user space.so phone controll realize a char device.
  *
- *  Description:  phone interface for EZX. for application can't direct call interface in kernel space from
- *                user space.so phone controll realize a char device.
+ * Copyright (C) 2002-2005 Motorola
  *
- *
- * copyright:  Motorola
- * 
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
  *
- *
- *  History:
- *  zhouqiong          Aug 02,2002             created
- *  zhouqiong          Mar 03,2003             (1) don't close headset interrupt;
- *                                             (2) move bluetooth to phone device ioctl
- *  LiYong             Sep 23,2003             Port from EZX
- *  Jin Lihong(w20076) Jan 02,2004,LIBdd66088  (1) Port from UDC e680 kernel of jem vob.
- *                                             (2) Move audio driver DEBUG macro definition to ezx-audio.h
- *                                                 header file,and redefine DEBUG to EZX_OSS_DEBUG
- *                                             (3) reorganize file header
- *  Jin Lihong(w20076) Jan 13,2004,LIBdd68327  Make the e680 louder speaker work.
- *  Jin Lihong(w20076) Mar.15,2004,LIBdd86574  mixer bug fix
- *  Jin Lihong(w20076) Mar.25,2004,LIBdd90336  play music noise tmp solution
- *  Jin Lihong(w20076) Mar.25,2004,LIBdd90846  a780 new gain setting interface
- *  Jin Lihong(w20076) Apr.20,2004,LIBee01165  va of a phone call for e680
- *  Jin Lihong(w20076) Apr.24,2004,LIBee03164  a780 bitclock restore to normal because pcap2 upgraded
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *                                                                                               
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ *  Aug 02,2002 - (Motorola) created
+ *  Mar 03,2003 - (Motorola) (1) don't close headset interrupt;
+ *                           (2) move bluetooth to phone device ioctl
+ *  Sep 23,2003 - (Motorola) Port from EZX
+ *  Jan 02,2004 - (Motorola) (1) Port from UDC e680 kernel of jem vob.
+ *                           (2) Move audio driver DEBUG macro definition to ezx-audio.h
+ *                               header file,and redefine DEBUG to EZX_OSS_DEBUG
+ *                           (3) reorganize file header
+ *  Jan 13,2004 - (Motorola) Make the e680 louder speaker work.
+ *  Mar.15,2004 - (Motorola) mixer bug fix
+ *  Mar.25,2004 - (Motorola) play music noise tmp solution
+ *  Mar.25,2004 - (Motorola) a780 new gain setting interface
+ *  Apr.20,2004 - (Motorola) va of a phone call for e680
+ *  Apr.24,2004 - (Motorola) a780 bitclock restore to normal because pcap2 upgraded
  *
  */
  

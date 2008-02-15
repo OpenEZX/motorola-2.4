@@ -1,6 +1,12 @@
 #ifndef __LINUX_VIDEODEV_H
 #define __LINUX_VIDEODEV_H
 
+/*
+ * Portions Copyright (C) Motorola 2004
+ *
+ * 2004-Jan-16 - (Motorola) Patched from kernel v2.6.x
+ */
+
 #include <linux/types.h>
 #include <linux/version.h>
 

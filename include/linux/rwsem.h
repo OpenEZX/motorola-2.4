@@ -4,6 +4,10 @@
  * Derived from asm-i386/semaphore.h
  *
  * Trylock by Brian Watson (Brian.J.Watson@compaq.com).
+ *
+ * Portions Copyright (C) Motorola 2004
+ *
+ * 2004-Jan-16 - (Motorola) Added lock for reading
  */
 
 #ifndef _LINUX_RWSEM_H
@@ -38,7 +42,7 @@ extern void FASTCALL(rwsemtrace(struct rw_semaphore *sem, const char *str));
 #endif
 
 /*
- * Added by Susan -- try to lock for reading
+ * Added by Motorola -- try to lock for reading
  */
 static inline void try_down_read(struct rw_semaphore *sem, unsigned int *result)
 {

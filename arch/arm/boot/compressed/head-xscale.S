@@ -3,6 +3,8 @@
  * 
  * XScale specific tweaks.  This is merged into head.S by the linker.
  *
+ * Portions Copyright (C) 2003 Motorola
+ * Dec 24,2003 - (Motorola) Added code to recognize EzX platform
  */
 
 #include <linux/config.h>

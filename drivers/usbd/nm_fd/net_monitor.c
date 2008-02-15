@@ -1,20 +1,36 @@
 /*
- *  /drivers/usbd/nm_fd/net_monitor.c - Motorola Netork Monitor USB function driver
- *
- *  Motorola Network Monitor USB Function Driver is Created by:
- *     Liu Weijie (a19553@motorola.com)
- *     sun bonnie (a5035c@motorola.com)
- *     02/25/2004
- *  */
+ *  /drivers/usbd/nm_fd/net_monitor.c 
+ * 
+ *  Motorola Netork Monitor USB function driver
+ * 
+ *  Copyright (C) 2004 Motorola
+ * 
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ * Feb 25,2004 - (Motorola) Created Motorola Network Monitor USB Function Driver
+ * 
+ */
 #include <linux/config.h>
 #include <linux/module.h>
 
 #include <usbd-export.h>
 #include <usbd-build.h>
 
-MODULE_AUTHOR ("a19553@motorola.com");
+MODULE_AUTHOR ("Motorola");
 
-MODULE_LICENSE("PROPRIETARY");
+MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION ("Motorola Network Monitor Function");
 
 #include <linux/init.h>
@@ -762,7 +778,7 @@ static void nm_event_irq(struct usb_function_instance *function,usb_device_event
              PRINTK("NetMonitor:Device hub reset and remove the cable connect!\n");
              nm_cable_connected = 0;
 
-	     // report event when net monitor driver is ready - report it in pcap interrupt! - w20146, Apr 25
+	     // report event when net monitor driver is ready - report it in pcap interrupt!
 	     //emu_usb_out_handler();
              break;
         
@@ -891,7 +907,7 @@ static int nm_urb_sent(struct urb *urb, int rc)
 static int nm_function_enable ( struct usb_function_instance *function){
     
     PRINTK("NetMonitor:nm_function_enable !\n");
-    nm_function = function;//add by bonnie
+    nm_function = function;
     acm_function_enable(function); 
     return 0;
 }  

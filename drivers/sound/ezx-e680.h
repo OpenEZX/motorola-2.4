@@ -1,26 +1,32 @@
 /*
- *  linux/drivers/sound/ezx-e680.h
+ * linux/drivers/sound/ezx-e680.h
  *
+ * header file for ezx-e680.c
  *
- *  Description:  header file for ezx-e680.c
- *
- *
- *  Copyright:	BJDC motorola.
+ * Copyright (C) 2004-2005 Motorola
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
  *
- *
- *  History:
- *  Jin Lihong(w20076) Jan 12,2004,LIBdd68327  Created,Make the e680 louder speaker work.
- *  Jin Lihong(w20076) Feb.23,2004,LIBdd79747  add e680 audio path switch and gain setting funcs
- *  Jin Lihong(w20076) Mar.15,2004,LIBdd86574  mixer bug fix
- *  Jin Lihong(w20076) Apr.13,2004,LIBdd96876  close dsp protection,and add 3d control interface for app
- *  Jin Lihong(w20076) Apr.24,2004,LIBee03164  reduce music noise, add new pathes for haptics
- *  Jin Lihong(w20076) Jun.15,2004,LIBee21625  boomer's power management
- *  Jin Lihong(w20076) Jun.22,2004,LIBee24284  mixer power save
- *  Wu Hongxing(w20691)Jul.07,2004 LIBee29664  ap 13m clock usage.
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *                                                                                               
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ *  Jan 12,2004 - (Motorola) Created,Make the e680 louder speaker work.
+ *  Feb.23,2004 - (Motorola) add e680 audio path switch and gain setting funcs
+ *  Mar.15,2004 - (Motorola) mixer bug fix
+ *  Apr.13,2004 - (Motorola) close dsp protection,and add 3d control interface for app
+ *  Apr.24,2004 - (Motorola) reduce music noise, add new pathes for haptics
+ *  Jun.15,2004 - (Motorola) boomer's power management
+ *  Jun.22,2004 - (Motorola) mixer power save
+ *  Jul.07,2004 - (Motorola) ap 13m clock usage.
  *
  */
 

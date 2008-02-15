@@ -1,16 +1,30 @@
 /*
- *  Add unlink_urbs codes and do some updates of send out urb sequence
- *  by Levis(Levis@motorola.com) in 10/5/2004
+ * linux/drivers/usb/ipcusb.c
  *
- *  Update Suspend/Resume codes by Levis(Levis@motorola.com) in 14/4/2004
+ * Implementation of a ipc driver based Intel's Bulverde USB Host 
+ * Controller.
  *
- *  Add Power Manager codes by Levis(Levis@motorola.com) in 20/2/2004
+ * Copyright (C) 2003-2005 Motorola
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *                                                                                               
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  * 
- *  usbipc.c created by Levis(Levis@motorola.com) 11/3/2003 
- *
- *  Copyright (c) 2003 Motoroal BJDC 
- *  This Program just implements a ipc driver based Intel's Bulverde USB Host 
- *  Controller.
+ *  2003-Nov-03 - (Motorola) created
+ *  2004-Feb-20 - (Motorola) Add Power Manager codes
+ *  2004-Apr-14 - (Motorola) Update Suspend/Resume codes
+ *  2004-May-10 - (Motorola) Add unlink_urbs codes and do some updates of send out urb sequence
+ *  
  */
 
 #include <linux/kernel.h>
@@ -37,7 +51,7 @@
 
 /*Macro defined for this driver*/
 #define DRIVER_VERSION "0.3"
-#define DRIVER_AUTHOR "Levis Xu <Levis@Motorola.com>"
+#define DRIVER_AUTHOR "Motorola"
 #define DRIVER_DESC "USB IPC Driver"
 #define MOTO_IPC_VID		0x22b8
 #define MOTO_IPC_PID		0x3006

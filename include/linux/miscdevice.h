@@ -1,6 +1,12 @@
 #ifndef _LINUX_MISCDEVICE_H
 #define _LINUX_MISCDEVICE_H
 
+/*
+ * Portions Copyright (C) Motorola 2004
+ *
+ * 2004-Mar-2 - (Motorola) Added LED minor number
+ */
+
 #include <linux/devfs_fs_kernel.h>
 
 #define BUSMOUSE_MINOR 0

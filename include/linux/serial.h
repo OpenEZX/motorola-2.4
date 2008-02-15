@@ -2,9 +2,12 @@
  * include/linux/serial.h
  *
  * Copyright (C) 1992 by Theodore Ts'o.
+ *               2003 Motorola
  * 
  * Redistribution of this file is permitted under the terms of the GNU 
  * Public License (GPL)
+ * 
+ * 2003-Dec-24 - (Motorola) Added export to allow ICL module to use
  */
 
 #ifndef _LINUX_SERIAL_H
@@ -187,14 +190,14 @@ extern int early_serial_setup(struct serial_struct *req);
 #define ICL_UART 1
 
 #if ICL_UART
-/* Liu Changhui */
-/* Export to allow MUX to use this */
+/* Motorola */
+/* Export to allow ICL module to use this */
 extern struct tty_driver *serial_for_mux_driver;
 extern struct tty_struct *serial_for_mux_tty;
 extern void (*serial_mux_dispatcher)(struct tty_struct *tty);
 extern void (*serial_mux_sender)(void);
 extern struct list_head *tq_serial_for_mux;
-/* Liu Changhui */
+/* Motorola */
 #endif
 /* tty port reserved for the HCDP serial console port */
 #define HCDP_SERIAL_CONSOLE_PORT	4

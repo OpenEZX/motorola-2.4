@@ -8,6 +8,10 @@
  * Major cleanup, different bufctl logic, per-cpu arrays
  *	(c) 2000 Manfred Spraul
  *
+ * Copyright (C) 2004 Motorola
+ * 
+ * 2004-Aug-25 - (Motorola) Added changes to report potential free pages
+ *
  * An implementation of the Slab Allocator as described in outline in;
  *	UNIX Internals: The New Frontiers by Uresh Vahalia
  *	Pub: Prentice Hall	ISBN 0-13-101908-2
@@ -1749,7 +1753,7 @@ static void enable_all_cpucaches (void)
 }
 #endif
 
-//Susan just for reporting potential free pages
+//Added by Motorola just for reporting potential free pages
 int slab_cache_freeable_info(void)
 {
 	slab_t *slabp;

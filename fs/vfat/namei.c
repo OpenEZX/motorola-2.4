@@ -11,8 +11,12 @@
  *
  *  Short name translation 1999, 2001 by Wolfram Pienkoss <wp@bszh.de>
  *
+ *  Copyright (C) Motorola 2004 
+ * 
  *  Support Multibyte character and cleanup by
  *  				OGAWA Hirofumi <hirofumi@mail.parknet.co.jp>
+ * 
+ *  2004-Jun-15 - (Motorola) Added changes to sync dir
  */
 
 #include <linux/module.h>
@@ -895,7 +899,7 @@ static int vfat_add_entry(struct inode *dir,struct qstr* qname,
 	loff_t dummy;
 
 	/* if create a hidden dir on linux OS, set ATTR_HIDDEN for windows */
-	/* add by w20598 */
+	/* add by Motorola */
 	int is_hid = 0;  
 
 	if (qname->name[0] == '.')
@@ -952,7 +956,7 @@ static int vfat_add_entry(struct inode *dir,struct qstr* qname,
 	(*de)->adate = (*de)->cdate = (*de)->date;
 	
 	if (is_hid)
-	    (*de)->attr |= ATTR_HIDDEN; /* add by w20598 */
+	    (*de)->attr |= ATTR_HIDDEN; /* add by Motorola */
 
 	fat_mark_buffer_dirty(sb, *bh);
 
@@ -1106,7 +1110,7 @@ int vfat_rmdir(struct inode *dir,struct dentry* dentry)
 	vfat_remove_entry(dir,&sinfo,bh,de);
 	dir->i_nlink--;
 
-	/* add by w20598 to sync dir */
+	/* add by Motorola to sync dir */
 	fsync_dev(dentry->d_inode->i_dev);
 			
 	return 0;
@@ -1162,7 +1166,7 @@ int vfat_mkdir(struct inode *dir,struct dentry* dentry,int mode)
 	dentry->d_time = dentry->d_parent->d_inode->i_version;
 	d_instantiate(dentry,inode);
 
-	/* add by w20598 to sync dir */
+	/* add by Motorola to sync dir */
 	fsync_dev(inode->i_dev);
 out:
 	fat_brelse(sb, bh);

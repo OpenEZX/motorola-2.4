@@ -102,6 +102,11 @@
       a repeat code (16, 17, or 18) to go across the boundary between
       the two sets of lengths.
  */
+ 
+ /*
+  * Portions Copyright (C) Motorola 2003
+  * 2003-Dec-24 - (Motorola) Added winzip file support
+  */
 
 #ifdef RCSID
 static char rcsid[] = "#Id: inflate.c,v 0.14 1993/06/10 13:27:04 jloup Exp #";

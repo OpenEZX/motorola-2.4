@@ -9,6 +9,13 @@
  * These constants are also useful for user-level apps (e.g., VC
  * resizing).
  */
+ 
+/*
+ * Portions Copyright (C) Motorola 2003
+ *
+ * 2003-Dec-17 - (Motorola) Ported from A760 GPRS feature
+ */
+ 
 #define MIN_NR_CONSOLES 1       /* must be at least 1 */
 #define MAX_NR_CONSOLES	63	/* serial lines start at 64 */
 #define MAX_NR_USER_CONSOLES 63	/* must be root to allocate above this */
@@ -34,7 +41,7 @@
  * hardcoded at present.)
  */
 #define NR_PTYS		256	/* ptys/major */
-/* porting from A760 GPRS feature  lin weiqiang   2003-12-17 */
+/* Added by Motorola for porting from A760 GPRS feature */
 /*#define NR_LDISCS	16 */
 #define NR_LDISCS	17
 

@@ -2,6 +2,7 @@
  * usbd/wmmx_bi/wmmx.c -- Bulverde USB Device Controller driver.
  *
  *      Copyright (c) 2004 Belcarra
+ *      Copyright (c) 2004-2005 Motorola
  *
  * Adapted from earlier work:
  *      Copyright (c) 2002, 2003 Belcarra
@@ -17,6 +18,10 @@
  * 09/04/2003
  * Stanley Cai (stanley.cai@intel.com) ported the driver to Bulverde Mainstone.
  *
+ * 2004-Apr-27 - (Motorola) EZX pm support
+ * 2004-Jul-06 - (Motorola) Updates for power management considerations
+ * 2004-Sep-08 - (Motorola) Code porting for E680
+ * 
  * This program is free software; you can redistribute it and/or modify it under the terms of
  * the GNU General Public License as published by the Free Software Foundation; either version 2
  * of the License, or (at your option) any later version.
@@ -264,7 +269,7 @@ void wmmx_in_ep0(struct usb_endpoint_instance *endpoint)
                 bi_tx_cancelled_irq (endpoint);
 		return;
 	}
-	/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++Jordan :ZLP handler*/
+	/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++Motorola :ZLP handler*/
 //	if (!tx_urb) {
 //              UDCCSR0 |= UDCCSR0_IPR;                                         // Set IPR for end of packet
 	if(bi_tx_sendzlp(endpoint)){
@@ -287,7 +292,7 @@ void wmmx_in_ep0(struct usb_endpoint_instance *endpoint)
                 TRACE_MSG("SENDING");
                 for (size &= ~0x3; size; size -= 4, UDCDN(0) = *dp++);
                 for (cp = (u8 *)dp; remain--; *reg = *cp++);
-		/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++Jordan handle end zlp case*/
+		/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++Motorola handle end zlp case*/
 		if((endpoint->last == endpoint->wMaxPacketSize) &&     
 		    ((endpoint->last + endpoint->sent) == endpoint->tx_urb->actual_length)) 
 		{
@@ -296,7 +301,7 @@ void wmmx_in_ep0(struct usb_endpoint_instance *endpoint)
 		}
 		/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++end */
                 RETURN_IF (endpoint->last == endpoint->wMaxPacketSize);
-		/*+++++++++++++++++++++++++++++++++++++++++++++ Jordan*/
+		/*+++++++++++++++++++++++++++++++++++++++++++++ Motorola*/
         	UDCCSR0 |= UDCCSR0_IPR;                                         // Set IPR for end of packet
         }
 		/*+++++++++++++++++++++++++++++++++++++++++++++ end*/
@@ -361,7 +366,7 @@ static void wmmx_ep0_int(u32 ep, struct usb_endpoint_instance *endpoint)
         if ((DATA_STATE_PENDING_XMIT != endpoint->state) && (WAIT_FOR_SETUP != endpoint->state) && (udccsr0 & UDCCSR0_SA)) 
                 endpoint->state = WAIT_FOR_SETUP;
         switch (endpoint->state) {
-	/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++Jordan end zlp case*/
+	/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++Motorola end zlp case*/
 	case DATA_STATE_NEED_ZLP:  
 		UDCCSR0 |= UDCCSR0_IPR;
 		endpoint->state = WAIT_FOR_OUT_STATUS;
@@ -455,7 +460,7 @@ static void wmmx_int_hndlr (int irq, void *dev_id, struct pt_regs *regs)
                 TRACE_MSG("RESET");
 		udc_suspended = 0;
 #ifdef CONFIG_ARCH_EZX
-		usbd_enum_flag = 0;             // Jul 6, 2004 -- w20146
+		usbd_enum_flag = 0;             // Jul 6, 2004 -- Motorola
 		usbd_bus->suspended_state = STATE_INIT;
 		usbd_bus->device_state = STATE_INIT;
 #endif
@@ -729,7 +734,7 @@ void udc_disconnect (void)
         udc_connected_status = 0;
 }
 
-#elif CONFIG_ARCH_EZX		// w20146 - port BMC code base to E680
+#elif CONFIG_ARCH_EZX		// Motorola - port BMC code base to E680
 
 extern void pulldown_usb(void);
 extern void pullup_usb(void);
@@ -861,7 +866,7 @@ void udc_enable (void)
 //#define PM_USBDCLK
 #undef PM_USBDCLK
 
-#ifdef CONFIG_ARCH_EZX     //added by Jordan for the consideration of pm
+#ifdef CONFIG_ARCH_EZX     //added by Motorola for the consideration of pm
 extern int emucable_status;
 void udc_clock_enable(void)
 {
@@ -887,7 +892,7 @@ void udc_disable (void)
 #endif
 }
 
-#ifdef CONFIG_ARCH_EZX     //added by Jordan for the consideration of pm
+#ifdef CONFIG_ARCH_EZX     //added by Motorola for the consideration of pm
 void udc_clock_disable(void)
 {
 	CKEN &= ~CKEN11_USB;
@@ -924,7 +929,7 @@ int udc_request_cable_irq()
 {
 #ifdef CONFIG_ARCH_MAINSTONE
 	return request_irq(MAINSTONE_USBC_IRQ, wmmx_cable_int_hndlr, SA_INTERRUPT, UDC_NAME " USBD Bus Cable", NULL);
-#elif CONFIG_ARCH_EZX			// w20146
+#elif CONFIG_ARCH_EZX			// Motorola
 	return 0;
 #endif
 }
@@ -958,7 +963,7 @@ void udc_release_cable_irq ()
 {
 #ifdef CONFIG_ARCH_MAINSTONE
 	free_irq (MAINSTONE_USBC_IRQ, NULL);
-#elif CONFIG_ARCH_EZX			// w20146
+#elif CONFIG_ARCH_EZX			// Motorola
 	// none
 #endif
 }
@@ -1167,7 +1172,7 @@ int udc_set_endpoints(int endpointsRequested, struct usb_endpoint_map *endpoint_
 /*
  * Purpose: dump all udc registers and bulverde registers for PM support and debug.
  * Date:    2004/04/27
- * Author: Jordan Wang
+ * Author: Motorola
  */
 void bulverde_udc_regs(void)
 {

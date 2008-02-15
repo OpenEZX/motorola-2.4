@@ -57,7 +57,7 @@ fi
 
 bool 'Per partition statistics in /proc/partitions' CONFIG_BLK_STATS
 
-# Added by Susan
+# Added by Motorola
 if [ "$CONFIG_ARCH_EZX" = "y" ]; then
 	source drivers/block/roflash/Config.in
 fi

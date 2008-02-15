@@ -1,6 +1,13 @@
 #ifndef _LINUX_FB_H
 #define _LINUX_FB_H
 
+/*
+ * Portions Copyright (C) Motorola 2003-2004
+ *
+ * 2003-Dec-24 - (Motorola) Added backlight control
+ * 2004-Jul-7 - (Motorola) Added double buffering log
+ */
+
 #include <linux/tty.h>
 #include <asm/types.h>
 
@@ -32,14 +39,14 @@
 #define FBIOPUT_MODEINFO        0x4617
 #define FBIOGET_DISPINFO        0x4618
 
-/* added for backlight control */
+/* added by Motorola for backlight control */
 #define FBIOSETBKLIGHT          0x4619
 #define FBIOGETBKLIGHT          0x461A
 #define FBIOSETBRIGHTNESS       0x461B
 #define FBIOGETBRIGHTNESS       0x461C
-#define FBIOENABLE2BFS          0x4620  //Added for supporting Peter's request //
-#define FBIODISABLE2BFS         0x4621  //Added for supporting Peter's request //
-#define FBIOCHECK2BFS           0x4622  //Added for supporting Peter's request //
+#define FBIOENABLE2BFS          0x4620
+#define FBIODISABLE2BFS         0x4621
+#define FBIOCHECK2BFS           0x4622
 
 #define FB_TYPE_PACKED_PIXELS		0	/* Packed Pixels	*/
 #define FB_TYPE_PLANES			1	/* Non interleaved planes */
@@ -180,7 +187,7 @@ struct fb_bitfield {
 #define FB_VMODE_SMOOTH_XPAN	512	/* smooth xpan possible (internally used) */
 #define FB_VMODE_CONUPDATE	512	/* don't update x/yoffset	*/
 
-/* For double buffering printk log */
+/* Added by Motorola for double buffering printk log */
 #define DBPRINTK  //
 
 struct fb_var_screeninfo {
@@ -241,11 +248,11 @@ struct fb_con2fbmap {
 #define VESA_HSYNC_SUSPEND      2
 #define VESA_POWERDOWN          3
 
-/* added for backlight */
+/* added by Motorola for backlight */
 #define BKLIGHT_OFF             0
 #define BKLIGHT_ON               1
 
-/* added for ts */
+/* added by Motorola for ts */
 #define SETTONORMAL             0
 //#define SETTOHWR                1
 #define SETTOCUSTOM             1

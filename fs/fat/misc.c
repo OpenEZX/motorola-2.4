@@ -4,6 +4,10 @@
  *  Written 1992,1993 by Werner Almesberger
  *  22/11/2000 - Fixed fat_date_unix2dos for dates earlier than 01/01/1980
  *		 and date_dos2unix for date==0 by Igor Zhbanov(bsg@uniyar.ac.ru)
+ *
+ *  Portions Copyright (C) Motorola 2004
+ *
+ *  2004-Jun-30 - (Motorola) Added support for fat panic
  */
 
 #include <linux/fs.h>
@@ -21,7 +25,7 @@
 #endif
 #define Printk(x)	printk x
 
-/* add by w20598 for fat panic */
+/* add by Motorola for fat panic */
 extern unsigned short  panicdev;
 extern struct completion fatpanic_completion;
 /* add end */

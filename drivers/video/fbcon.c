@@ -1,9 +1,8 @@
 /*
  *  linux/drivers/video/fbcon.c -- Low level frame buffer based console driver
  *
- *      (c) Copyright Motorola 2003, All rights reserved.
- *
  *	Copyright (C) 1995 Geert Uytterhoeven
+ *	              2004 Motorola
  *
  *
  *  This file is based on the original Amiga console driver (amicon.c):
@@ -56,6 +55,8 @@
  *  This file is subject to the terms and conditions of the GNU General Public
  *  License.  See the file COPYING in the main directory of this archive for
  *  more details.
+ *
+ *  2004-April-6 - (Motorola) Modified to show Motorola logo
  */
 
 #undef FBCONDEBUG
@@ -2301,7 +2302,7 @@ static int __init fbcon_show_logo( void )
 	if ((p->visual == FB_VISUAL_TRUECOLOR)) {
 	    /* Modes without color mapping, needs special data transformation... */
 
-            /* modified by zq, for show motorola logo */
+            /* modified by Motorola to show Motorola logo */
 	    unsigned int val;		/* max. depth 32! */
 #ifndef CONFIG_FBCON_CFB18
 	    int bdepth = depth/8;

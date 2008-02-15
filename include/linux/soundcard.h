@@ -23,9 +23,10 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- *  History:
- *  Jin Lihong(w20076) Apr.13,2004,LIBdd96876  close dsp protection,and add 3d control interface for app
- *  Jin Lihong(w20076) Jun.22,2004,LIBee24284  mixer power save
+ * Copyright (C) 2004 Motorola
+ *
+ * 2004-Apr-13 - (Motorola) Close dsp protection and add 3d control interface for app
+ * 2004-Jun-22 - (Motorola) Changes for mixer power saving
  *
  */
 

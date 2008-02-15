@@ -5,6 +5,8 @@
  *  Copyright (C) 1992  by Linus Torvalds
  *  based on ideas by Darren Senn
  *
+ *  Copyright (C) 2004 Motorola
+ *
  *  This used to be the part of array.c. See the rest of history and credits
  *  there. I took this into a separate file and switched the thing to generic
  *  proc_file_inode_operations, leaving in array.c only per-process stuff.
@@ -13,6 +15,8 @@
  * Changes:
  * Fulton Green      :  Encapsulated position metric calculations.
  *			<kernel@FultonGreen.com>
+ * 
+ * Motorola          : (2004-Aug-25) Added changes to report potential free changes 
  */
 
 #include <linux/types.h>
@@ -582,7 +586,7 @@ static int memory_read_proc(char *page, char **start, off_t off,
 	return proc_calc_metrics(page, start, off, count, eof, len);
 }
 
-//Susan for reporting potential free pages
+//Added by Motorola for reporting potential free pages
 extern int slab_cache_freeable_info(void);
 static int slabfree_read_proc(char *page, char **start, off_t off, int count, int *eof, void *data)
 {
@@ -711,7 +715,7 @@ void __init proc_misc_init(void)
 #ifdef CONFIG_MEMORY_ACCOUNTING
 		{"memmap",	memmap_read_proc},
 #endif
-	//Susan for reporting potential free pages
+	//Added by Motorola for reporting potential free pages
 		{"slabfree", slabfree_read_proc},
 
 		{NULL,}

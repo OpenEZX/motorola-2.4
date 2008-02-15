@@ -12,6 +12,8 @@
  *		Florian La Roche, <flla@stud.uni-sb.de>
  *		Alan Cox, <A.Cox@swansea.ac.uk>
  *
+ * Portions Copyright (C) Motorola 2004
+ *
  * Changes (see also sock.c)
  *
  *		piggy,
@@ -56,6 +58,7 @@
  *					Some other random speedups.
  *		Cyrus Durgin	:	Cleaned up file for kmod hacks.
  *		Andi Kleen	:	Fix inet_stream_connect TCP race.
+ *      Motorola    : Open port 500 for VPN
  *
  *		This program is free software; you can redistribute it and/or
  *		modify it under the terms of the GNU General Public License
@@ -505,8 +508,7 @@ static int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 	snum = ntohs(addr->sin_port);
 
 /*
- *  wangwei:  we give all people rights to bind to  port 500.
- *  wangwei:  In A780/760 serial, vpn will bind to port 500.
+ *  Motorola: vpn will bind to port 500.
  */
 	if (snum && snum != 500 && snum < PROT_SOCK && !capable(CAP_NET_BIND_SERVICE))
 		return -EACCES;

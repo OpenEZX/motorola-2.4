@@ -1,6 +1,10 @@
 /* 
    Common Flash Interface probe code.
    (C) 2000 Red Hat. GPL'd.
+   (C) 2004 Motorola 
+   
+   Apr 21,2004 - (Motorola) Add Intel MTD patch code
+   
    $Id: cfi_probe.c,v 1.4 2003/09/23 13:05:59 kam Exp $
 */
 
@@ -259,12 +263,12 @@ static void print_cfi_ident(struct cfi_ident *cfip)
 	else
 		printk("No Vpp line\n");
 	
-	printk("Typical byte/word write timeout: %d 탎\n", 1<<cfip->WordWriteTimeoutTyp);
-	printk("Maximum byte/word write timeout: %d 탎\n", (1<<cfip->WordWriteTimeoutMax) * (1<<cfip->WordWriteTimeoutTyp));
+	printk("Typical byte/word write timeout: %d s\n", 1<<cfip->WordWriteTimeoutTyp);
+	printk("Maximum byte/word write timeout: %d s\n", (1<<cfip->WordWriteTimeoutMax) * (1<<cfip->WordWriteTimeoutTyp));
 	
 	if (cfip->BufWriteTimeoutTyp || cfip->BufWriteTimeoutMax) {
-		printk("Typical full buffer write timeout: %d 탎\n", 1<<cfip->BufWriteTimeoutTyp);
-		printk("Maximum full buffer write timeout: %d 탎\n", (1<<cfip->BufWriteTimeoutMax) * (1<<cfip->BufWriteTimeoutTyp));
+		printk("Typical full buffer write timeout: %d s\n", 1<<cfip->BufWriteTimeoutTyp);
+		printk("Maximum full buffer write timeout: %d s\n", (1<<cfip->BufWriteTimeoutMax) * (1<<cfip->BufWriteTimeoutTyp));
 	}
 	else
 		printk("Full buffer write not supported\n");

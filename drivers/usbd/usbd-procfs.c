@@ -2,6 +2,7 @@
  * usbd/usbd-procfs.c - USB Device Core Layer
  *
  *      Copyright (c) 2004 Belcarra
+ *      Copyright (c) 2004-2005 Motorola
  *
  * Adapted from earlier work:
  *      Copyright (c) 2002, 2003 Belcarra
@@ -27,6 +28,8 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
+ * 2004-Mar-26 - (Motorola) Added debug info to usbd_procfs_init
+ * 
  */
 
 

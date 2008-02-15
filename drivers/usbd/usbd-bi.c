@@ -2,6 +2,7 @@
  * usbd/usbd-bi.c - USB Bus Interface Driver
  *
  *      Copyright (c) 2004 Belcarra
+ *      Copyright (c) 2004-2005 Motorola
  *
  * Adapted from earlier work:
  *      Copyright (c) 2002, 2003 Belcarra
@@ -27,6 +28,10 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
+ * 2004-Mar    - (Motorola) Support EZX platform
+ * 2004-Apr-27 - (Motorola) Support USBC PM
+ * 2004-Aug-16 - (Motorola) Avoid sched timeout in PM off
+ * 
  */
 
 #include <linux/config.h>
@@ -402,7 +407,7 @@ int bi_pm_off(struct usb_bus_instance *bus, char *arg)
 {
         //printk(KERN_INFO"%s: \n", __FUNCTION__);
 #ifdef CONFIG_ARCH_EZX
-	// clear data to avoid schedule_timeout in pm off process - Aug 16, 2004 by w20146
+	// clear data to avoid schedule_timeout in pm off process - Aug 16, 2004 by Motorola
 	usbd_bus->device_bh.data = NULL;
 #endif
         RETURN_EINVAL_IF(in_interrupt());
@@ -414,7 +419,7 @@ int bi_pm_on(struct usb_bus_instance *bus, char *arg)
         //printk(KERN_INFO"%s:\n", __FUNCTION__);
         RETURN_EINVAL_IF(in_interrupt());
     //    return (udc_attached()) ? bus_enable(bus, arg) : 0;
-        return bus_enable(bus, arg);  //added by Jordan to support USBC PM 2004/04/27
+        return bus_enable(bus, arg);  //added by Motorola to support USBC PM 2004/04/27
 }
 
 int bi_fix_serial_number_str(struct usb_bus_instance *bus)
@@ -589,7 +594,7 @@ int bus_enable(struct usb_bus_instance *bus, char *arg)
                 //endpoint->tx_attributes = 0;
                 endpoint->wMaxPacketSize = udc_ep0_packetsize ();
 //                endpoint->rcv_transferSize = 255;       // XXX should this be higher
-                endpoint->rcv_transferSize = 4096;       // Modified by Jordan to support long  transfer
+                endpoint->rcv_transferSize = 4096;       // Modified by Motorola to support long  transfer
                 endpoint->wMaxPacketSize = udc_ep0_packetsize ();
                 udc_setup_ep (0, endpoint);
 

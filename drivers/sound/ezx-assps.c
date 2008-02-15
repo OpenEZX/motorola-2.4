@@ -1,53 +1,59 @@
 /*
- *  linux/drivers/sound/ezx-assps.c
+ * linux/drivers/sound/ezx-assps.c
  *
+ * assp interface for the ezx platform
  *
- *  Description:  assp interface for the ezx platform
+ * Copyright (C) 2002-2005 Motorola
  *
- *
- *  Copyright:	BJDC motorola.
- * 
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
  *
- *
- *  History:
- *  zhouqiong          Jun 20,2002             created
- *  zhouqiong          Sep 19,2002             according code review meeting minutes.
- *  zhouqiong          Oct 30,2002             according new requirement for VA.ASSP interface split to
- *                                             /dev/dsp (support stereo playback) and /dev/dsp16 (support
- *                                             mono playback and record) this file is for stereo playback.
- *  zhouqiong          Nov 05,2002             according code review meeting minutes.
- *  zhouqiong          Jan 13,2003             (1) add audio panic return value
- *                                             (2) modify sample frequency to standard
- *  zhouqiong          Mar 03,2003             (1) open headset interrupt
- *                                             (2) change gain when headset is in
- *                                             (3) add ioctl to get headset status
- *  zhouqiong          Apr 17,2003             (1) according codec_dac_rate init pcap
- *  zhouqiong          Apr 18,2003             (1) change output gain according output path
- *  zhouqiong          Apr 24,2003             (1) no switch when headset insert and remove
- *  zhouqiong          May 21,2003             (1) modify loudspk gain max 0db, for audio-shaping
- *  LiYong             Sep 23,2003             (1)Port from EZX; (2)Modify the ASSP port inital
- *  Jin Lihong(w20076) Jan 02,2004,Libdd66088  (1) Port from UDC e680 kernel of jem vob.
- *                                             (2) Move audio driver DEBUG macro definition to ezx-audio.h
- *                                                 header file,and redefine DEBUG to EZX_OSS_DEBUG
- *                                             (3) reorganize file header
- *  Jin Lihong(w20076) Jan 13,2004,LIBdd68327  Make the e680 louder speaker work.
- *  Jia Tong(w19836)   Feb 04,2004,LIBdd67717  haptics feature added
- *  Jin Lihong(w20076) Feb.23,2004,LIBdd79747  add e680 audio path switch and gain setting funcs
- *  Jia Tong(w19836)   Feb 23,2004,LIBdd79841  haptics GPIO initialization change
- *  Li  Yong(w19946)   Feb 26,2004 LIBdd80614  Add DAI test
- *                                             Add control to switch PCAP CODEC mode from master to slave mode
- *  Jin Lihong(w20076) Mar.15,2004,LIBdd86574  mixer bug fix
- *  Jia Tong(w19836)   Mar 17,2004,LIBdd87621  GPIO change for haptics filter & boomer mute while setting haptics.
- *  Jin Lihong(w20076) Mar.25,2004,LIBdd90846  a780 new gain setting interface
- *  Jin Lihong(w20076) Apr.13,2004,LIBdd96876  close dsp protection,and add 3d control interface for app
- *   Li  Yong(w19946)  Apr.23.2004.LIBee02702  Add EMU Carkit 
- *   Li  Yong(w19946)  May.23.2004.LIBee12065  Add the EMU audio test
- *  lin weiqiang       Jun.08,2004,LIBee14656  record noise bug fix.
- *  Jin Lihong(w20076) Jun.22,2004,LIBee24284  mixer power save
- *  Jin Lihong(w20076) Aug.11,2004,LIBff01482  audio pcap LOW_POWER bit initialize
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *                                                                                               
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ *  Jun 20,2002 - (Motorola) created
+ *  Sep 19,2002 - (Motorola) according code review meeting minutes.
+ *  Oct 30,2002 - (Motorola) according new requirement for VA.ASSP interface split to
+ *                           /dev/dsp (support stereo playback) and /dev/dsp16 (support
+ *                           mono playback and record) this file is for stereo playback.
+ *  Nov 05,2002 - (Motorola) according code review meeting minutes.
+ *  Jan 13,2003 - (Motorola) (1) add audio panic return value
+ *                           (2) modify sample frequency to standard
+ *  Mar 03,2003 - (Motorola) (1) open headset interrupt
+ *                           (2) change gain when headset is in
+ *                           (3) add ioctl to get headset status
+ *  Apr 17,2003 - (Motorola) (1) according codec_dac_rate init pcap
+ *  Apr 18,2003 - (Motorola) (1) change output gain according output path
+ *  Apr 24,2003 - (Motorola) (1) no switch when headset insert and remove
+ *  May 21,2003 - (Motorola) (1) modify loudspk gain max 0db, for audio-shaping
+ *  Sep 23,2003 - (Motorola) (1)Port from EZX; (2)Modify the ASSP port inital
+ *  Jan 02,2004 - (Motorola) (1) Port from UDC e680 kernel of jem vob.
+ *                           (2) Move audio driver DEBUG macro definition to ezx-audio.h
+ *                               header file,and redefine DEBUG to EZX_OSS_DEBUG
+ *                           (3) reorganize file header
+ *  Jan 13,2004 - (Motorola) Make the e680 louder speaker work.
+ *  Feb 04,2004 - (Motorola) haptics feature added
+ *  Feb.23,2004 - (Motorola) add e680 audio path switch and gain setting funcs
+ *  Feb 23,2004 - (Motorola) haptics GPIO initialization change
+ *  Feb 26,2004 - (Motorola) Add DAI test
+ *                           Add control to switch PCAP CODEC mode from master to slave mode
+ *  Mar.15,2004 - (Motorola) mixer bug fix
+ *  Mar 17,2004 - (Motorola) GPIO change for haptics filter & boomer mute while setting haptics.
+ *  Mar.25,2004 - (Motorola) a780 new gain setting interface
+ *  Apr.13,2004 - (Motorola) close dsp protection,and add 3d control interface for app
+ *  Apr.23.2004 - (Motorola) Add EMU Carkit 
+ *  May.23.2004 - (Motorola) Add the EMU audio test
+ *  Jun.08,2004 - (Motorola) record noise bug fix.
+ *  Jun.22,2004 - (Motorola) mixer power save
+ *  Aug.11,2004 - (Motorola) audio pcap LOW_POWER bit initialize
  *
  */
  

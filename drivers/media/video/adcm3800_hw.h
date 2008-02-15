@@ -1,23 +1,31 @@
-/*================================================================================
-                                                                               
-                      Header Name: adcm3800_hw.h
-
-General Description: Camera module adcm3800 interface header file
+/*
+ *  linux/drivers/media/video/adcm2650_hw.h
+ *
+ *  ADCM 2650 Camera Module driver.
+ *
+ *  Copyright (C) 2003 - 2004 Motorola
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ *  Dec 15,2003 - (Motorola) Created new file for new part based on ADCM2650_hw.h file
+ *  Feb 05,2004 - (Motorola) Set frame rate in video mode
+ *  Feb 26,2004 - (Motorola) New chip id support
+ *  Mar 03,2004 - (Motorola) Photo effects setting
+ */
  
-==================================================================================
-                     Motorola Confidential Proprietary
-                 Advanced Technology and Software Operations
-               (c) Copyright Motorola 1999, All Rights Reserved
- 
-Revision History:
-                            Modification     Tracking
-Author                 Date          Number     Description of Changes
-----------------   ------------    ----------   -------------------------
-wangfei(w20239)     12/15/2003      LIBdd35749   Created   
-wangfei(w20239)     02/05/2004      LIBdd74309   Set frame rate in video mode
-wangfei(w20239)     02/26/2004      LIBdd81055   New chip id support
-wangfei(w20239)     03/08/2004      LIBdd84578   Photo effects setting
-==================================================================================
+/*==================================================================================
                                  INCLUDE FILES
 ==================================================================================*/
 
@@ -377,7 +385,7 @@ wangfei(w20239)     03/08/2004      LIBdd84578   Photo effects setting
 //      name                  addr      description                               default  page
                                     
 #define  EREG_CMD_1           0x1002    //Main command 1                           0x0000  335
-#define  EREG_CMD_2           0x1004    //Main command 2 (write 1¡¯s only)         0x0002  336
+#define  EREG_CMD_2           0x1004    //Main command 2 (write 1s only)         0x0002  336
 #define  EREG_OUTPUT_CTRL     0x1008    //Output control, working                  0x9019  338
 #define  EREG_PARALLEL_CTRL   0x100a    //Parallel output control working copy     0x0000  340
 #define  EREG_SOF_CODE_W      0x100c    //Start of frame code working copy         0x00ff  341

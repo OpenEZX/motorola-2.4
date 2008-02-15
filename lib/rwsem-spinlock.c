@@ -5,7 +5,11 @@
  * - Derived partially from idea by Andrea Arcangeli <andrea@suse.de>
  * - Derived also from comments by Linus
  *
+ * Copyright (C) 2004 Motorola
+ *
  * Trylock by Brian Watson (Brian.J.Watson@compaq.com).
+ *
+ * 2004-Jan-16 - (Motorola) Added a function to attempt obtaining readlock
  */
 #include <linux/rwsem.h>
 #include <linux/sched.h>
@@ -120,13 +124,13 @@ void __try_down_read(struct rw_semaphore *sem, unsigned int *result)
 	if (sem->activity>=0 && list_empty(&sem->wait_list)) {
 		/* granted */
 		sem->activity++;
-		*result = 1;  //Susan -- get the read lock //
+		*result = 1;  //Motorola -- get the read lock //
 		spin_unlock(&sem->wait_lock);
 //		goto out;
 	}
 	else
 	{
-		*result = 0;  //Susan -- fail to get the read lock //
+		*result = 0;  //Motorola -- fail to get the read lock //
 		spin_unlock(&sem->wait_lock);
 	}
  out:

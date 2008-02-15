@@ -1,10 +1,27 @@
 /*
- * drivers/mtd/maps/ezx_parts.c
+ * linux/drivers/block/roflash/ezx_parts.c
  *
- * Parse multiple flash partitions in Ezx project into mtd_table or into act_roflash_table
+ * Parse multiple flash partitions in Ezx project into mtd_table or into 
+ * act_roflash_table
  *
- * Created by Susan Gu  Oct, 22  2002
+ * Copyright (C) 2002-2005 Motorola
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *                                                                                               
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  * 
+ * 2002-Oct-22 - (Motorola) File created
+ *
  */
 
 #include <linux/module.h>
@@ -38,7 +55,7 @@ static roflash_area  fix_roflash_table[]=
 	},{
 		name:		"NO-USE",  /* language package is moved to MDOC */
 		size:		0x00000000,
-		offset:		0x01A00000,  //Susan -- correspond to the beginning of the second flash chip //
+		offset:		0x01A00000,  // correspond to the beginning of the second flash chip //
 		roflash_read:  cfi_intelext_read_roflash,
 		l_x_b:		ROFLASH_BLOCK,
 		phys_addr:  0xffffffff, // not use for block cramfs mount
@@ -94,14 +111,14 @@ static roflash_area  fix_roflash_table[]=
 	},{
 		name:		"NO-USE",  /* language package is 2MB */
 		size:		0x00000000,
-		offset:		0x01A00000,  //Susan -- correspond to the beginning of the second flash chip //
+		offset:		0x01A00000,  // correspond to the beginning of the second flash chip //
 		roflash_read:  cfi_intelext_read_roflash,
 		l_x_b:		ROFLASH_BLOCK,
 		phys_addr:  0xffffffff, // not use for block cramfs mount
 	},{
 		name:		"setup",     /* setup stuff is 1MB */
 		size:		0x00020000,
-		offset:         0x01FA0000,  //Susan -- correspond to the beginning of the second flash chip //
+		offset:         0x01FA0000,  // correspond to the beginning of the second flash chip //
 		roflash_read:  cfi_intelext_read_roflash,
 		l_x_b:		ROFLASH_BLOCK,
 		phys_addr:  0xffffffff, // not use for block cramfs mount

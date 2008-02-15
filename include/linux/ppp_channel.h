@@ -10,6 +10,7 @@
  * number at the start, but not the address and control bytes.
  *
  * Copyright 1999 Paul Mackerras.
+ *           2004 Motorola
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU General Public License
@@ -17,6 +18,8 @@
  *  2 of the License, or (at your option) any later version.
  *
  * ==FILEVERSION 20000322==
+ * 
+ * 2004-Jul-28 - (Motorola) Added interface for idle time calculation
  */
 
 #include <linux/list.h>

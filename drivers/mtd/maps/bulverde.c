@@ -5,6 +5,7 @@
  
  * Author: Echo Engineering (Stolen from Nicolas Pitre's lubbock.c):
  * Copyright:	(C) 2001 MontaVista Software Inc.
+ * Copyright (C) 2004 Motorola. GPL'd
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -13,6 +14,9 @@
  *  Intel MTD patch
  *  modified 04/07/2004 Jared Hulbert <jared dot e dot hulbert at intel dot com>
  *   - added cached read changes
+ * 
+ * Apr 21,2004 - (Motorola) Changes made for EZX hardware
+ *                          Unlock/lockdown relative blocks in L18 chip
  */
 
 #include <linux/module.h>
@@ -59,7 +63,6 @@ static unsigned int bulverde_debug = BULVERDE_DEBUGGING;
 #define WINDOW_CACHE_SIZE 0x1A00000
 #endif
 
-/* Added by Susan Gu */
 extern struct mtd_info *ezx_mymtd;
 //unsigned long BULVERDE_L18_BASE_ADDR = 0x00000000;
 unsigned long bulverde_map_cacheable = 0x0;
@@ -141,7 +144,6 @@ static void bulverde_copy_to(struct map_info *map, unsigned long to, const void 
 }
 
 #ifdef CONFIG_ARCH_EZX
-/* Modified by Susan */
 //static struct map_info bulverde_map = {
 struct map_info bulverde_map = {
 	name: "Bulverde flash",
@@ -157,7 +159,7 @@ struct map_info bulverde_map = {
 };
 
 #ifdef CONFIG_ARCH_EZX_A780
-/* Susan changed it */
+
 static struct mtd_partition bulverde_partitions[] = {
 	{
 		name:		"Bootloader",
@@ -185,7 +187,7 @@ static struct mtd_partition bulverde_partitions[] = {
 #endif
 
 #ifdef CONFIG_ARCH_EZX_E680
-/* Susan changed it */
+
 static struct mtd_partition bulverde_partitions[] = {
 	{
 		name:		"Bootloader",
@@ -261,7 +263,7 @@ static int __init init_bulverde(void)
 	int parsed_nr_parts = 0;
 	char *part_type = "static";
 	int i;
-	unsigned long region_offset = 0;  //Susan
+	unsigned long region_offset = 0;  
 	int ret;
 
 	bulverde_map.buswidth = (BOOT_DEF & 1) ? 2 : 4;
@@ -283,7 +285,7 @@ static int __init init_bulverde(void)
 	mymtd->module = THIS_MODULE;
 	ezx_mymtd = mymtd;    // Be used by unlockdown functions //
 	
-	/* Susan -- unlock/lockdown relative blocks in L18 chip */
+	/* Unlock/lockdown relative blocks in L18 chip */
 	#ifdef CONFIG_L18_DEBUG
 	printk(KERN_NOTICE "init_bulverde(%d): unlock/lockdown EBs in L18 chip\n", current->pid);
 	#endif
@@ -302,7 +304,7 @@ static int __init init_bulverde(void)
 
 	if (WINDOW_CACHE_SIZE)  //There is cacheable memory mapping
 	{	
-		/* Susan -- ioremap the first flash chip as cacheable( && bufferable? ) */
+		/* ioremap the first flash chip as cacheable( && bufferable? ) */
 		bulverde_map_cacheable = (unsigned long)__ioremap(WINDOW_CACHE_ADDR, WINDOW_CACHE_SIZE, L_PTE_CACHEABLE);
 		if (!bulverde_map_cacheable) 
 		{
@@ -318,7 +320,7 @@ static int __init init_bulverde(void)
 #ifdef CONFIG_MTD_CACHED_READS
 	bulverde_map.invalidate_cache = bulverde_invalidate_cache;	
 #endif	
-	/*Susan -- comment it out, lock down method is not supported by mtd_info  */
+	/*comment it out, lock down method is not supported by mtd_info  */
 	/* Unlock the flash device.
 	if (bulverde_debug)
 	  printk("init_bulverde(): unlocking flash device\n");
@@ -347,7 +349,7 @@ static int __init init_bulverde(void)
 		if (bulverde_debug)
 		  printk("init_bulverde(): number of eraseregions was %d\n", i);
 	}
-Susan -- End of unlock */
+End of unlock */
 
 #ifdef CONFIG_MTD_REDBOOT_PARTS
 	if (parsed_nr_parts == 0) {

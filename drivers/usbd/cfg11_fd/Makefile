@@ -3,6 +3,7 @@
 #
 # Copyright (C) 2001 Lineo, Inc.
 # Copyright (C) 2001 Hewlett-Packard Co.
+# Copyright (C) 2004-2005 Motorola
 
 # Multipart objects.
 

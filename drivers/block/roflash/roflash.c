@@ -1,6 +1,32 @@
 /*
- * Linux Flash read-only block device driver For Cramfs file system, support simultaneous linear + block device mounting.  -- Susan Gu  Mar, 15 2002
- * In order to resolve logo area in cachable flash mapping, add roflash_c_fops methods, that is stolen from mtdchar.c (dwmw2)
+ * linux/drivers/block/roflash/ezx_parts.c
+ *
+ * Linux Flash read-only block device driver For Cramfs file system, 
+ * support simultaneous linear + block device mounting.
+ *
+ * Copyright (C) 2002-2005 Motorola
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *                                                                                               
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ * 2002-Sep-15 - (Motorola) File created
+ * 
+ * Note:
+ * Some portions of this code (roflash_c_fops methods) were copied 
+ * from linux/drivers/mtd/mtdchar.c in order to resolve logo area 
+ * in cachable flash mapping.
+ *
  */
 
 #include <linux/kernel.h>
@@ -252,7 +278,7 @@ static int roflash_release(struct inode * inode, struct file * filp)
 }
 
 
-/*Susan 2.4.6 */
+/* 2.4.6 */
 static struct block_device_operations roflash_fops = {
     open:	roflash_open,
     release:	roflash_release,
@@ -539,7 +565,7 @@ static int roflash_read_procmem(char *buf, char **start, off_t offset, int len,
 #endif	/* CONFIG_PROC_FS */
 
 #ifdef MODULE
-static void __exit roflash_cleanup(void)  //Susan//
+static void __exit roflash_cleanup(void)
 {
     int i;
     int err_info = 0;

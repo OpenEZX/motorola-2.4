@@ -1,5 +1,7 @@
 /*
- * Low-level PXA250/210 sleep/wakeUp support
+ * linux/arch/arm/mach-ezx/sleep.S
+ *
+ * EZX specific low-level PXA250/210 sleep/wakeUp support
  *
  * Initial SA1110 code:
  * Copyright (c) 2001 Cliff Brake <cbrake@accelent.com>
@@ -7,8 +9,16 @@
  * Adapted for PXA by Nicolas Pitre:
  * Copyright (c) 2002 Monta Vista Software, Inc.
  *
+ * Based on original code from linux/arch/arm/mach-pxa/sleep.S,
+ * Modified for the EZX Development Plaform by Motorola:
+ * Copyright (c) 2003-2005 Motorola
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License.
+ *
+ * 2003-Dec-23 - (Motorola) Created based on mach-pxa/sleep.S
+ *                          New pxa_cpu_standby ENTRY
+ *
  */
 
 #include <linux/config.h>

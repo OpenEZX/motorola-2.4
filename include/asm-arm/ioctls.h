@@ -1,6 +1,12 @@
 #ifndef __ASM_ARM_IOCTLS_H
 #define __ASM_ARM_IOCTLS_H
 
+/*
+ * Portions Copyright (C) Motorola 2004
+ *
+ * 2004-Jan-17 - (Motorola) Added ioctls
+ */
+
 #include <asm/ioctl.h>
 
 /* 0x54 is just a magic number to make these relatively unique ('T') */

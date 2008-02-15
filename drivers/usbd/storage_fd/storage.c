@@ -12,6 +12,8 @@
  * Copyright (C) 2002 Toshiba Corporation
  *
  * Changes copyright (C) 2003 MontaVista Software, Inc.
+ * 
+ * Copyright (C) 2003-2005 Motorola
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,9 +29,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * Date         Author        Reference    Comment
- * ==========   ===========   ===========  ==========================
- * 10/24/2003   Rob Coleman   LIBdd44877   Added the interface number
+ * 2003-Oct-24 - (Motorola) Added the interface number
  *
  */
 
@@ -87,7 +87,7 @@ static int errno;
 #include "../usbd-bus.h"
 #include "../trace.h"
 
-MODULE_AUTHOR ("a18615@motorola.com");
+MODULE_AUTHOR ("Motorola");
 MODULE_DESCRIPTION ("USB Device Mass Storage Function");
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,17)
 MODULE_LICENSE ("GPL");
@@ -1026,7 +1026,7 @@ storage_recv_urb (struct urb *urb, int rc)
             private->devstate = STATE_INVALID;
             /*
              *STALL bulk in pipe by USB Mass Storage Class 
-             *¨C Bulk Only Transport 6.6.1. Set high speed 0.
+             *C Bulk Only Transport 6.6.1. Set high speed 0.
              */
             //usbd_endpoint_halted(function,
                     //usbd_endpoint_bEndpointAddress(function, BULK_IN, 0));
@@ -1116,7 +1116,7 @@ recv_urb:
         spin_lock (&storage_lock);
         private->devstate = STATE_INVALID;
         //TRACE_MSG32("error alloc next urb %x", new_urb);
-        //STALL bulk in pipe by USB Mass Storage Class ¨C Bulk Only Transport 6.6.2
+        //STALL bulk in pipe by USB Mass Storage Class C Bulk Only Transport 6.6.2
         //set high speed 0
         usbd_endpoint_halted(function,
                 usbd_endpoint_bEndpointAddress(function, BULK_IN, 0));
@@ -1395,7 +1395,7 @@ send_CSW:   //Send CSW
             if(storage_send_CSW(private) < 0)
             {
                 private->devstate = STATE_INVALID;
-                //STALL bulk in pipe by USB Mass Storage Class ¨C Bulk Only Transport 6.6.1
+                //STALL bulk in pipe by USB Mass Storage Class C Bulk Only Transport 6.6.1
                 //set high speed 0
                 function = private->function;
                 usbd_endpoint_halted(function,

@@ -4,6 +4,7 @@
  *  Kernel scheduler and related syscalls
  *
  *  Copyright (C) 1991-2002  Linus Torvalds
+ *                2004 Motorola
  *
  *  1996-12-23  Modified by Dave Grothe to fix bugs in semaphores and
  *              make semaphores SMP safe
@@ -14,6 +15,8 @@
  *  		an array-switch method of distributing timeslices
  *  		and per-CPU runqueues.  Additional code by Davide
  *  		Libenzi, Robert Love, and Rusty Russell.
+ *
+ *  2004-08-19  Added changes to enable phone logging by Motorola
  */
 
 #include <linux/mm.h>

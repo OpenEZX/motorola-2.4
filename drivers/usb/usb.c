@@ -10,6 +10,7 @@
  * (C) Copyright David Brownell 2000 (kernel hotplug, usb_device_id)
  * (C) Copyright Yggdrasil Computing, Inc. 2000
  *     (usb_device_id matching changes by Adam J. Richter)
+ * (C) Copyright 2004 Motorola
  *
  * NOTE! This is not actually a driver at all, rather this is
  * just a collection of helper routines that implement the
@@ -18,6 +19,10 @@
  * Think of this as a "USB library" rather than anything else.
  * It should be considered a slave, with no callbacks. Callbacks
  * are evil.
+ * 
+ * 2004-Sep - (Motorola) Disable hotplug due to a PM issue
+ *                       Return if in interrupt in usb_free_dev
+ *
  */
 
 #include <linux/config.h>
@@ -759,7 +764,7 @@ out_err:
 	return -1;
 }
 
-#undef CONFIG_HOTPLUG //added by Levis for PM issue
+#undef CONFIG_HOTPLUG //added by Motorola for PM issue
 
 #ifdef	CONFIG_HOTPLUG
 

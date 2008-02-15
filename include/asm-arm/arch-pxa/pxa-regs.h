@@ -1,23 +1,20 @@
 /*
  *  linux/include/asm-arm/arch-pxa/pxa-regs.h
  *  
+ * Copyright (C) 2003-2004 Motorola
+ *
  *  Author:	Nicolas Pitre
  *  Created:	Jun 15, 2001
  *  Copyright:	MontaVista Software Inc.
- *
- * (c) Copyright Motorola 2003, All rights reserved.
  *  
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
- * Date       Author        Reference    Comment
- * ========   ========      ===========  =================================
- * 09/23/2003 LiYong        None         Add the Bulverde SSP micro
- * 10/24/2003 Rob Coleman   LIBdd44877   Added three USB-related registers
- * 01/02/2003 Jin Lihong    LIBdd66088   Port ssp part from UDC e680 kernel of jem vob; redefine some ssp gpio
- *                                       pin macros to more portable mode.
- * 03/15/2004 Jin Lihong    LIBdd86574   fix the bug: assp and nssp port can not work at the same time
+ * 2003-Sept-23 - (Motorola) Added the Bulverde SSP micro
+ * 2003-Oct-24 - (Motorola) Added three USB-related registers
+ * 2003-Jan-02 - (Motorola) Redefined some ssp gpio pin macros to more portable mode.
+ * 2004-Mar-15 - (Motorola) Bug fix: assp and nssp port can not work at the same time
  *
  */
  

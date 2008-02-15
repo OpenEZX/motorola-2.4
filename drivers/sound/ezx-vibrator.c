@@ -1,22 +1,32 @@
 /*
- * linux/drivers/sound/vibrator.c
+ * linux/drivers/sound/ezx-vibrator.c
  *
+ * Vibrator interface for EZX. for application can't direct call interface in 
+ * kernel space from user space.so vibrator still realize a char device.
  *
- *  Description: vibrator interface for EZX. for application can't direct call interface in kernel space from
- *               user space.so vibrator still realize a char device.
+ * Copyright (C) 2002-2005 Motorola
  *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
  *
- * (c) Copyright Motorola 2003, All rights reserved.
- *
- *
- *  History:
- *  zhouqiong          Jun 20,2002             created
- *  Kin Wong           Nov 05,2003             Renamed ezx-vibrator.h to vibrator.h 
- *  Jin Lihong(w20076) Jan 02,2004             (1) Port from UDC e680 kernel of jem vob.
- *                                             (2) Move audio driver DEBUG macro definition to ezx-audio.h
- *                                                 header file,and redefine DEBUG to EZX_OSS_DEBUG
- *                                             (3) reorganize file header
- *  Jin Lihong(w20076) Apr.13,2004,LIBdd96876  reorganise file header
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *                                                                                               
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ *  Jun 20,2002 - (Motorola) created
+ *  Nov 05,2003 - (Motorola) Renamed ezx-vibrator.h to vibrator.h 
+ *  Jan 02,2004 - (Motorola) (1) Port from UDC e680 kernel of jem vob.
+ *                           (2) Move audio driver DEBUG macro definition to ezx-audio.h
+ *                               header file,and redefine DEBUG to EZX_OSS_DEBUG
+ *                           (3) reorganize file header
+ *  Apr.13,2004 - (Motorola) reorganise file header
  *
  */
 

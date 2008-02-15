@@ -3,6 +3,7 @@
  *
  * (C) Copyright 1999 Roman Weissgaerber <weissg@vienna.at>
  * (C) Copyright 2000-2001 David Brownell <dbrownell@users.sourceforge.net>
+ * (C) Copyright 2004-2005 Motorola
  * 
  * [ Initialisation is based on Linus'  ]
  * [ uhci code and gregs ohci fragments ]
@@ -12,6 +13,9 @@
  * 
  * History:
  *
+ * 2004/09/09 (Motorola) Added bulverde bug workaround
+ *                       Added conditional compile td_fill_ahead
+ *                       Added workarounds for hardware issues
  * 2002/03/08 interrupt unlink fix (Matt Hughes), better cleanup on
  *	load failure (Matthew Frederickson)
  * 2002/01/20 async unlink fixes:  return -EINPROGRESS (per spec) and
@@ -133,7 +137,7 @@ static int resubmit_bulk_needed = 0;
 static int resubmit_control_needed = 0;
 #endif
 
-//by Levis
+//by Motorola
 urb_priv_t * urb_priv_for_dump;
 ed_t * ed_for_dump;
 struct usb_device * dev_for_dump;
@@ -166,7 +170,7 @@ struct usb_device * dev_for_dump;
 
 static u32 roothub_a (struct ohci *hc)
 	{ 	
-/*** add "temp |= 0x3" by Levis for work around Bulverde bug...1/5/04***/
+/*** add "temp |= 0x3" by Motorola for work around Bulverde bug...1/5/04***/
 #ifdef CONFIG_ARCH_EZX
 		u32 temp = read_roothub (hc, a, 0xfc0fe000); 
 		temp |= 0x3;
@@ -1840,12 +1844,12 @@ static void dl_done_list (ohci_t * ohci, td_t * td_list)
   		/* error code of transfer */
   		cc = TD_CC_GET (tdINFO);
 #if 0		
-		/* add by Levis for debug...*/ 
+		/* add by Motorola for debug...*/ 
 		if( cc != TD_CC_NOERROR)
 		{
 			printk("%s: cc:%d, td_list->hwINFO:%x, td_list->hwCBP:%p, td_list->hwNextTD:%p, td_list->hwBE:%p\n", cc, td_list->hwINFO, td_list->hwCBP, td_list->hwNextTD, td_list->hwBE);
 		}
-		/* end Levis */
+		/* end Motorola */
 #endif
  
 #if defined(BV_NEP_FIX)
@@ -1860,7 +1864,7 @@ static void dl_done_list (ohci_t * ohci, td_t * td_list)
 				&& (cc == TD_DATAUNDERRUN))
 			cc = TD_CC_NOERROR;
 #ifdef BV_NEP_FIX
-		/* Stanley and Bruce's workaround */
+		/* Suggested workaround */
 		timestamp = GetExtendedTimeStamp(ohci);
 		if ((cc == TD_DEVNOTRESP) || (cc == TD_CC_DATATOGGLEM)) {
 			if ( (ed->state & (ED_OPER|ED_UNLINK))) {

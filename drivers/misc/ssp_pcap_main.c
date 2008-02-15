@@ -1,27 +1,32 @@
-/* (c) Copyright Motorola 2002, All rights reserved.
-	Motorola Confidential Proprietary
-	Contains confidential proprietary information of Motorola, Inc.
-	Reverse engineering is prohibited.
-	The copyright notice does not imply publication.
-	
-	Project Name  : EZX
-	Project No.   : 
-	Title         : 
-	File Name     : 
-	Description   :  
-
-	************** REVISION HISTORY **********************************************
-	Date          Author			Reference
-	========      ==========		==========================
-	2002-07-02    weiqiang lin		create
-        2004-02-09    weiqiang lin      update PM for Bulverde OS libdd74345.
-        2004-04-13    weiqiang lin      update accessory usb attach and detach
-        2004-04-27    weiqiang lin      send the USB accessory detach/attach information to PM
-        2004-05-11    weiqiang lin      after sleep TC_MM_EN will be high else will be low
-        2004-06-24    Cheng Xuefeng     remove the SSP_PCAP_configure_USB_UART_transeiver()
-        2004-08-19    weiqiang lin      after sleep set SW1 output 1.3V and low power mode and when headset button press/release, send an event to PM 
-        2004-08-31    weiqiang lin      remove the headset button press/release event to PM.
-*/
+/*
+ * linux/drivers/misc/ssp_pcap_main.c
+ * 
+ * Copyright (C) 2002-2004 Motorola
+ * 
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ * July 7,2002 - (Motorola) Created
+ * Feb 9,2004 - (Motorola) Update PM for Bulverde OS
+ * Apr 13,2004 - (Motorola) Update accessory usb attach and detach
+ * Apr 27,2004 - (Motorola) Send the USB accessory detach/attach information to PM
+ * May 11,2004 - (Motorola) After sleep TC_MM_EN will be high else will be low
+ * Jun 24,2004 - (Motorola) Remove the SSP_PCAP_configure_USB_UART_transeiver()
+ * Aug 19,2004 - (Motorola) After sleep set SW1 output 1.3V and low power mode and when headset 
+ *                          button press/release, send an event to PM 
+ * Aug 31,2004 - (Motorola) Remove the headset button press/release event to PM.
+ */
 
 #ifdef __cplusplus
 extern "C" {
@@ -181,7 +186,8 @@ static void ssp_usb_accessory_debounce_handler(u32 data)
 }
 
 /*---------------------------------------------------------------------------
-  DESCRIPTION: log system stored in buffer. it can output via FFUART. also you can change a little to other output mode.
+  DESCRIPTION: log system stored in buffer. it can output via FFUART. also you can change a 
+               little to other output mode.
 
    INPUTS: none.
       
@@ -1424,7 +1430,8 @@ SSP_PCAP_STATUS SSP_PCAP_TSI_start_XY_read(void)
    OUTPUTS:
       
        
-   IMPORTANT NOTES: y reads TSX1's ADC value in ADD2 register, x reads TSY1's ADC value in ADD1 register.  
+   IMPORTANT NOTES: y reads TSX1's ADC value in ADD2 register, x reads TSY1's ADC value in ADD1 
+                    register.  
           
 ---------------------------------------------------------------------------*/
 SSP_PCAP_STATUS SSP_PCAP_TSI_get_XY_value(P_U16 p_x,P_U16 p_y)

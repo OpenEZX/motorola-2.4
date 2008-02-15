@@ -1,3 +1,9 @@
+/*
+ * Portions Copyright (C) Motorola 2003
+ *
+ * 2003-Dec-24 - (Motorola) Added support for simultaneous linear cramfs and block cramfs
+ */
+
 #define __KERNEL_SYSCALLS__
 #include <linux/config.h>
 #include <linux/slab.h>
@@ -758,7 +764,7 @@ static void __init devfs_make_root(char *name)
 static void __init mount_root(void)
 {
 #ifdef  CONFIG_ARCH_EZX
-/* Susan -- support simultaneous linear cramfs and block cramfs */
+/* Motorola -- support simultaneous linear cramfs and block cramfs */
 	if (MAJOR(ROOT_DEV) == ROFLASH_MAJOR) 
 	{
 		if (mount_cramfs_root()) 

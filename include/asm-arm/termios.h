@@ -1,6 +1,13 @@
 #ifndef __ASM_ARM_TERMIOS_H
 #define __ASM_ARM_TERMIOS_H
 
+/*
+ * Portions Copyright (C) Motorola 2003
+ *
+ * 2003-Dec-17 - (Motorola) Ported from A760 GPRS feature
+ */
+
+
 #include <asm/termbits.h>
 #include <asm/ioctls.h>
 
@@ -66,7 +73,7 @@ struct termio {
 #define N_HDLC		13	/* synchronous HDLC */
 #define N_SYNC_PPP	14
 #define N_HCI		15  /* Bluetooth HCI UART */
- /* porting from A760 GPRS  feature   linweiqiang   2003-12-17 */
+ /* Added by Motorola - ported from A760 GPRS feature */
 #define N_GPRS      16  /* virtual GPRS data line discipline  */
 #ifdef __KERNEL__
 

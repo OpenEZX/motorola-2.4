@@ -1,5 +1,7 @@
 /*
- * PXA250/210 Power Management Routines
+ * linux/arch/arm/mach-ezx/pm.c
+ * 
+ * EZX Specific PXA250/210 Power Management Routines
  *
  * Original code for the SA11x0:
  * Copyright (c) 2001 Cliff Brake <cbrake@accelent.com>
@@ -7,19 +9,15 @@
  * Modified for the PXA250 by Nicolas Pitre:
  * Copyright (c) 2002 Monta Vista Software, Inc.
  *
- * Modified for the Ezx by Zhuang Xiaofan:
- * Copyright (c) 2002 Motorola, Inc.
- *
+ * Based on original code from linux/arch/arm/mach-pxa/pm.c,
+ * Modified for the EZX Development Plaform by Motorola:
+ * Copyright (c) 2002-2005 Motorola
+ * 
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License.
  *
- *
- * History:
- *  Date         Author         Reference       Comment
- * =========    ==========     =============    ===============
- * 08.30.2004   Jordan/Xiaofan LIBee37568     Intel pm workaround2
- *
- *
+ * 2002        - (Motorola) Created based on mach-pxa/pm.c
+ * 2004-Aug-30 - (Motorola) Intel pm workaround2
  * 
  */
 
@@ -180,7 +178,7 @@ int pm_do_suspend(unsigned int mode)
 	/* preserve current time */
 	RCNR = xtime.tv_sec;
 
-	/* add by Levis for restore usbh gpio */ 
+	/* add by Motorola for restore usbh gpio */ 
 	GPSR(90) = GPIO_bit(90);	
 	GPSR(91) = GPIO_bit(91);
 	GPCR(113) = GPIO_bit(113);
@@ -188,7 +186,7 @@ int pm_do_suspend(unsigned int mode)
 	set_GPIO_mode( 90 | GPIO_OUT );
 	set_GPIO_mode( 91 | GPIO_OUT );
 	set_GPIO_mode(113 | GPIO_OUT );
-	/* end Levis */
+	/* end Motorola */
 
 	/* 
 	 * Temporary solution.  This won't be necessary once
@@ -239,9 +237,7 @@ int pm_do_suspend(unsigned int mode)
 
 	SAVE(CKEN);
 	
-	/*	Change accoding to Nick's experience.	*/
 	CKEN = CKEN22_MEMC;
-	/*	Change accoding to Nick's experience end.	*/
 
 	/* Note: wake up source are set up in each machine specific files */
 
@@ -315,14 +311,14 @@ int pm_do_suspend(unsigned int mode)
         *(unsigned long *)(phys_to_virt(RESUME_ADDR)) = 0;
         *(unsigned long *)(phys_to_virt(FLAG_ADDR)) = OFF_FLAG;
 
-	/* add by Levis for restore usbh gpio */ 
+	/* add by Motorola for restore usbh gpio */ 
 	GPSR(30) = GPIO_bit(30);	
 	GPCR(31) = GPIO_bit(31);	
 	GPCR(56) = GPIO_bit(56);	
 	GPSR(90) = GPIO_bit(90);	
 	GPSR(91) = GPIO_bit(91);	
 	GPCR(113) = GPIO_bit(113);
-	/* end Levis */
+	/* end Motorola */
 
 	/* restore registers */
 	RESTORE(PGSR0); RESTORE(PGSR1); RESTORE(PGSR2); RESTORE(PGSR3);

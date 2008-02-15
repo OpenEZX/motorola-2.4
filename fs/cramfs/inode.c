@@ -2,6 +2,7 @@
  * Compressed rom filesystem for Linux.
  *
  * Copyright (C) 1999 Linus Torvalds.
+ *               2003 Motorola
  *
  * This file is released under the GPL.
  */
@@ -42,6 +43,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *
+ * 2003-Dec-4 -(Motorola) Added changes for linear and block cramfs
  */
 
 #include <linux/module.h>
@@ -71,7 +74,7 @@
 #define CRAMFS_SB_FLAGS u.cramfs_sb.flags
 #define CRAMFS_SB_LINEAR_PHYS_ADDR u.cramfs_sb.linear_phys_addr
 #define CRAMFS_SB_LINEAR_VIRT_ADDR u.cramfs_sb.linear_virt_addr
-//Added by Susan
+//Added by Motorola 
 #define CRAMFS_SB_LXB  u.cramfs_sb.l_x_b
 
 static struct super_operations cramfs_ops;
@@ -170,7 +173,7 @@ static struct inode *get_cramfs_inode(struct super_block *sb, struct cramfs_inod
 		insert_inode_hash(inode);
 		if (S_ISREG(inode->i_mode)) 
 		{
-		//Susan
+		//Motorola
 			switch (sb->CRAMFS_SB_LXB)
 			{
 				case  ROFLASH_LINEAR:
@@ -324,7 +327,7 @@ static void *cramfs_read(struct super_block *sb, unsigned int offset, unsigned i
 #endif /* !CONFIG_CRAMFS_LINEAR */
 #endif
 
-/* Susan -- Both Linear and Block cramfs */
+/* Motorola -- Both Linear and Block cramfs */
 
 /* Not linear addressing - aka regular block mode. */
 /*
@@ -448,7 +451,7 @@ static void *cramfs_read(struct super_block *sb, unsigned int offset, unsigned i
 }
 
 
-/* Susan -- either LINEAR or BLOCK version */
+/* Motorola -- either LINEAR or BLOCK version */
 #if (0)
 static struct super_block * cramfs_read_super(struct super_block *sb, void *data, int silent)
 {
@@ -584,7 +587,7 @@ out:
 #endif
 
 
-/* Susan -- both LINEAR and BLOCK version */
+/* Motorola -- both LINEAR and BLOCK version */
 static struct super_block * cramfs_read_super(struct super_block *sb, void *data, int silent)
 {
 	int i;
@@ -592,7 +595,7 @@ static struct super_block * cramfs_read_super(struct super_block *sb, void *data
 	struct cramfs_super super;
 	unsigned long root_offset;
 	struct super_block * retval = NULL;
-	//Susan
+	//Motorola
 	roflash_area dev_def;
 	unsigned short this_lxb = 0x00;
 
@@ -602,7 +605,7 @@ static struct super_block * cramfs_read_super(struct super_block *sb, void *data
 	if (MAJOR(sb->s_dev) == ROFLASH_MAJOR)
 	{		
 		dev_def = *((roflash_area *)(roflash_get_dev(MINOR(sb->s_dev))));
-		sb->CRAMFS_SB_LXB = dev_def.l_x_b;  //Susan
+		sb->CRAMFS_SB_LXB = dev_def.l_x_b;  //Motorola
 	}
 	else  //cramfs is being mounted on DOC //
 		sb->CRAMFS_SB_LXB = ROFLASH_BLOCK;
@@ -613,7 +616,7 @@ static struct super_block * cramfs_read_super(struct super_block *sb, void *data
 		printk(KERN_NOTICE "cramfs_read_super: wrong device minor number\n");
 		return retval;
 	}
-	if (sb->CRAMFS_SB_LXB == ROFLASH_BLOCK)  //Susan
+	if (sb->CRAMFS_SB_LXB == ROFLASH_BLOCK)  //Motorola
 	{
 		printk(KERN_NOTICE "cramfs_read_super: mounts on(%x),BLOCK\n",sb->s_dev);
 		set_blocksize(sb->s_dev, PAGE_CACHE_SIZE);
@@ -624,7 +627,7 @@ static struct super_block * cramfs_read_super(struct super_block *sb, void *data
 		sb->CRAMFS_SB_LINEAR_PHYS_ADDR = 0xffffffff;
 		sb->CRAMFS_SB_LINEAR_VIRT_ADDR = 0xffffffff;
 	}
-	if ( (sb->CRAMFS_SB_LXB == ROFLASH_LINEAR) || (sb->CRAMFS_SB_LXB == ROFLASH_LINEAR_XIP) )  //Susan -- this cramfs region is linear or linear&&xip //
+	if ( (sb->CRAMFS_SB_LXB == ROFLASH_LINEAR) || (sb->CRAMFS_SB_LXB == ROFLASH_LINEAR_XIP) )  //Motorola -- this cramfs region is linear or linear&&xip //
 	{
 		/*
 		 * The physical location of the cramfs image is specified as
@@ -662,7 +665,7 @@ static struct super_block * cramfs_read_super(struct super_block *sb, void *data
 			ioremap(sb->CRAMFS_SB_LINEAR_PHYS_ADDR, PAGE_SIZE);
 		#endif
 		
-		sb->CRAMFS_SB_LINEAR_VIRT_ADDR = (unsigned long)(dev_def.priv_map) + dev_def.offset; //Susan
+		sb->CRAMFS_SB_LINEAR_VIRT_ADDR = (unsigned long)(dev_def.priv_map) + dev_def.offset; //Motorola
 		if (!sb->CRAMFS_SB_LINEAR_VIRT_ADDR) {
 			printk(KERN_ERR "cramfs: ioremap of the linear cramfs image failed\n");
 			goto out;

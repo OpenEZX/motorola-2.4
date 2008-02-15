@@ -2,9 +2,12 @@
  * Private header file for the (dumb) serial driver
  *
  * Copyright (C) 1997 by Theodore Ts'o.
+ *               2004 Motorola
  * 
  * Redistribution of this file is permitted under the terms of the GNU 
  * Public License (GPL)
+ *
+ * 2004-Mar-26 - (Motorola) Added UART PM support
  */
 
 #ifndef _LINUX_SERIALP_H

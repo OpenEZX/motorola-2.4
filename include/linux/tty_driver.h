@@ -2,6 +2,12 @@
 #define _LINUX_TTY_DRIVER_H
 
 /*
+ * Portions Copyright (C) Motorola 2004
+ *
+ * 2004-Jan-16 - (Motorola) Added a variable for use with bt flow control
+ */
+ 
+/*
  * This structure defines the interface between the low-level tty
  * driver and the tty routines.  The following routines can be
  * defined; unless noted otherwise, they are optional, and can be

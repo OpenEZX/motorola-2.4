@@ -2,7 +2,7 @@
  * linux/drivers/video/pxafb.h
  * Intel Bulverde/PXA250/210 LCD Controller Frame Buffer Device
  *
- * (c) Copyright Motorola 2003, All rights reserved.
+ * Copyright (C) Motorola 2002-2004
  *
  * Copyright 2003 MontaVista Software Inc.
  * Author: MontaVista Software, Inc.
@@ -32,6 +32,11 @@
  *  You should have received a copy of the  GNU General Public License along
  *  with this program; if not, write  to the Free Software Foundation, Inc.,
  *  675 Mass Ave, Cambridge, MA 02139, USA.
+ * 
+ * 2002-Jun-30 - (Motorola) Ported to the LCD hardware on Motorola phone
+ * 2003-May-19 - (Motorola) Added timer to turn on backlight until LCD controller is ready
+ * 2003-Oct-17 - (Motorola) Added 18bpp/19bpp packed support
+ * 2004-Jun-28 - (Motorola) Added double buffering for LCD controller
  */
 
 #ifndef _PXA_FB_H_
@@ -172,10 +177,11 @@ struct pxafb_info {
 	struct pxafb_dma_descriptor *	dmadesc_palette_cpu;
 	dma_addr_t				dmadesc_palette_dma;
 
-	struct semaphore dbsem;  //Added by Susan
-	struct fb_proto first_fb;   //Added by Susan for double buffering of baseframe
-	struct fb_proto second_fb;	//Added by Susan for double buffering of baseframe
-	struct list_head db_task_list;  //Added by Susan
+    /* Added by Motorola for double buffering of baseframe */
+	struct semaphore dbsem;  
+	struct fb_proto first_fb;   
+	struct fb_proto second_fb;	
+	struct list_head db_task_list;  
 
 	dma_addr_t		fdadr0;
 	dma_addr_t		fdadr1;

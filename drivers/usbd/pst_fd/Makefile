@@ -4,7 +4,9 @@
 # Copyright (C) 2001 Lineo, Inc.
 # Copyright (C) 2001 Hewlett-Packard Co.
 # Copyright (C) 2003 RTSoft.
-# Copyright (C) 2003 Motorola.
+# Copyright (C) 2003-2005 Motorola.
+
+# 2004-Mar-26 - (Motorola) Removed -Werror from EXTRA_CFLAGS
 
 O_TARGET	:= pst_fd_drv.o
 

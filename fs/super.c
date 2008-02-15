@@ -2,6 +2,7 @@
  *  linux/fs/super.c
  *
  *  Copyright (C) 1991, 1992  Linus Torvalds
+ *                2004 Motorola
  *
  *  super.c contains code to handle: - mount structures
  *                                   - super-block tables
@@ -18,6 +19,7 @@
  *    Torbjörn Lindh (torbjorn.lindh@gopta.se), April 14, 1996.
  *  Added devfs support: Richard Gooch <rgooch@atnf.csiro.au>, 13-JAN-1998
  *  Heavily rewritten for 'one fs - one tree' dcache architecture. AV, Mar 2000
+ *  Added flash support for Motorola phone, 16-Jan-2004
  */
 
 #include <linux/config.h>
@@ -483,7 +485,7 @@ restart:
 		} 
 		else
 		{
-			/* Added by Susan to trigger GC in kupdate kernel thread */
+			/* Added by Motorola to trigger GC in kupdate kernel thread */
 			if ( (!strcmp(current->comm,"kupdated")) && (!strcmp(sb->s_type->name,"vfm")) ) //we are in kupdate kernel thread //
 			{
 				unsigned int result = 0;
@@ -493,10 +495,10 @@ restart:
 				try_down_read(&sb->s_umount, &result);
 				if ( result )  //We get the read lock //
 				{
-					//Susan -- not necessory -- lock_super(sb);
-					if (sb->s_op->write_super)   //Susan -- this super_block belongs to VFM //
+					//Motorola -- not necessory -- lock_super(sb);
+					if (sb->s_op->write_super)   //Motorola -- this super_block belongs to VFM //
 						sb->s_op->write_super(sb);
-					//Susan -- not necessory -- unlock_super(sb);
+					//Motorola -- not necessory -- unlock_super(sb);
 					drop_super(sb);
 				}
 				else  //We didn't get the read lock //
@@ -792,7 +794,7 @@ static struct super_block *get_sb_nodev(struct file_system_type *fs_type,
 }
 
 #ifdef CONFIG_ARCH_EZX
-/* Added by Susan */
+/* Added by Motorola */
 struct super_block *get_linear_super(struct file_system_type *type, kdev_t dev)
 {
 	struct super_block *s = alloc_super();
@@ -867,7 +869,7 @@ do_kern_mount(const char *fstype, int flags, char *name, void *data)
 		goto out;
 
 #ifdef CONFIG_ARCH_EZX
-	/* Added by Susan */
+	/* Added by Motorola */
 	if ( !strcmp(fstype,"cramfs") )
 	{
 		roflash_area dev_def;

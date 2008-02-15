@@ -3,13 +3,12 @@
  * BRIEF MODULE DESCRIPTION
  *	Intel Bulverde on-chip OHCI controller (non-pci) configuration.
  * 
- * Copyright 2004 Motorola BJDC.
- * Add PM codes by Levis 2/26/04 (Levis@Motorola.com)
- *
  * Copyright 2003 MontaVista Software Inc.
  * Author: MontaVista Software, Inc.
  *	   source@mvista.com
  *
+ * (C) Copyright 2004-2005 Motorola
+ * 
  *  This program is free software; you can redistribute	 it and/or modify it
  *  under  the terms of	 the GNU General  Public License as published by the
  *  Free Software Foundation;  either version 2 of the	License, or (at your
@@ -29,6 +28,10 @@
  *  You should have received a copy of the  GNU General Public License along
  *  with this program; if not, write  to the Free Software Foundation, Inc.,
  *  675 Mass Ave, Cambridge, MA 02139, USA.
+ * 
+ * 2003-Dec-15 - (Motorola) A780 external transceiver support
+ * 2004-Feb-26 - (Motorola) Add PM codes
+ *
  */
 
 /*
@@ -59,11 +62,11 @@
 #undef DEBUG
 #undef DUMP_BUL_OHCI
 
-/**add by Levis for Bulverde USB Host Controllor**/
+/**add by Motorola for Bulverde USB Host Controllor**/
 #undef TRANSCEIVER_MODE
 #define UP2OCR		__REG(0x40600020)
 #define UP3OCR		__REG(0x40600024)
-/**end Levis**/
+/**end Motorola **/
 
 #define PMM_NPS_MODE           1
 #define PMM_GLOBAL_MODE        2
@@ -176,7 +179,7 @@ static void board_usb_configure(void)
 {
 #ifdef CONFIG_ARCH_EZX
 #ifdef TRANSCEIVER_MODE
-/**for A780 support(external transceiver) by Levis. 12/15/03**/
+/**for A780 support(external transceiver) by Motorola. 12/15/03**/
 	/* setup Port3's GPIO pin. */
 	set_GPIO_mode(GPIO_ALT_FN_3_OUT | 30); /* GPIO30 - USB_P3_2/ICL_TXENB */
 	set_GPIO_mode(GPIO_ALT_FN_3_OUT | 31); /* GPIO31 - USB_P3_6/ICL_VPOUT */
@@ -187,7 +190,7 @@ static void board_usb_configure(void)
 	UP3OCR = 0x00000000;
 	UHCHR = UHCHR & ~(UHCHR_SSEP2 | UHCHR_SSEP3 | UHCHR_SSE);
 #else
-/**for A780 support(connected with NEP) by Levis. 12/15/03**/
+/**for A780 support(connected with NEP) by Motorola. 12/15/03**/
 	set_GPIO_mode(GPIO_ALT_FN_3_OUT | 30); /* GPIO30 - USB_P3_2/ICL_TXENB */
 	set_GPIO_mode(GPIO_ALT_FN_3_OUT | 31); /* GPIO31 - USB_P3_6/ICL_VPOUT */
 	set_GPIO_mode(GPIO_ALT_FN_2_IN | 90); /* GPIO90 - USB_P3_5/ICL_VPIN */

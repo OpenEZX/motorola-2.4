@@ -1,26 +1,30 @@
-/*================================================================================
-                                                                               
-                     Module Name:  pxa-camera.h 
+/*
+ *  include/linux/pxa_camera.h
+ *
+ *  pxa camera - PXA camera driver header file
+ *
+ *  Copyright (C) 2003, Intel Corporation
+ *                2004, Motorola
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *                                                                                               
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ *  2004-Feb-5 - (Motorola) Set frame rate in video mode
+ *  2004-Mar-8 - (Motorola) Photo effects setting
+ *  2004-Nov-1 - (Motorola) Change to SDK style
+ */
 
-General Description: E680/A780 camera driver header
-
-==================================================================================
-                      Motorola Confidential Proprietary
-                  Advanced Technology and Software Operations
-                (c) Copyright Motorola 1999, All Rights Reserved
-  
-Revision History:
-                            Modification     Tracking
-Author                 Date          Number     Description of Changes
-----------------   ------------    ----------   -------------------------
-Wang Fei/w20239     12/19/2003      LIBdd35749   Created
-Wang Fei/w20239     02/05/2004      LIBdd74309   Set frame rate in video mode
-Wang Fei/w20239     03/08/2004      LIBdd84578   Photo effects setting
-Wang Fei/w20239     11/01/2004      LIBxxxxxxx   Change to SDK style
-
-==================================================================================
-                                 INCLUDE FILES
-================================================================================*/
 #ifndef __PXA_CAMERA_H__ 
 #define __PXA_CAMERA_H__ 
 

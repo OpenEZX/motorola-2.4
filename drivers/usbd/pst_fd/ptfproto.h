@@ -1,6 +1,7 @@
 /*
  * ptf_fd/ptfproto.h
  *
+ * Copyright (c) 2003-2005 Motorola
  * Copyright (c) 2000, 2001, 2002 Lineo
  * Copyright (c) 2001 Hewlett Packard
  *
@@ -24,7 +25,7 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  *--------Motorola EZX- history
- *26-02-2003    created by a17400 try to finish char device driver
+ *26-02-2003    created by Motorola try to finish char device driver
  *
  *
  *
@@ -50,7 +51,7 @@ extern void ptf_dbg_print (char *);
 extern void enable_ptf_func_driver();
 extern void disable_ptf_func_driver();
 extern int check_ptf_func_driver();
-/* a17400: comment to flags:
+/* Motorola: comment to flags:
 ptf_cable_connected-- indicate run time if usb cable is plugged to device from host.
 ptf_func_created-- indicate char driver and usb function driver for PTF is initialized, only once in run time...
  */

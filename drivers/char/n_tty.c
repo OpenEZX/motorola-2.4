@@ -19,6 +19,8 @@
  * License.
  *
  * Reduced memory usage for older ARM systems  - Russell King.
+ * 
+ * Copyright (C) 2004-2005 Motorola
  *
  * 2000/01/20   Fixed SMP locking on put_tty_queue using bits of 
  *		the patch by Andrew J. Kroll <ag784@freenet.buffalo.edu>
@@ -28,6 +30,9 @@
  *		waiting writing processes-Sapan Bhatia <sapan@corewars.org>.
  *		Also fixed a bug in BLOCKING mode where write_chan returns
  *		EAGAIN
+ * 
+ * 2005/06/10   (Motorola) Added btuart flow control
+ * 
  */
 
 #include <linux/types.h>

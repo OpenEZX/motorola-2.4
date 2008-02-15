@@ -2,6 +2,7 @@
  * usbd/acm_fd/acm.c
  *
  *      Copyright (c) 2003, 2004 Belcarra
+ *      Copyright (c) 2004-2005 Motorola
  *
  * By:
  *      Stuart Lynne <sl@belcarra.com>,
@@ -553,7 +554,7 @@ static int acm_tty_open(struct tty_struct *tty, struct file *filp)
            made until after USE_COUNT has been adjusted to match. */
         used = atomic_post_inc(&acm->used);
 #ifdef MCEL
-        //filp->f_flags |= O_EXCL;  // QQQ Can we persuade MCEL to add this to their app? => w20146 comments!!!
+        //filp->f_flags |= O_EXCL;  // QQQ Can we persuade MCEL to add this to their app? => Motorola comments!!!
         if (nonblocking && !(acm->connected)) {
 		// QQQ Is MCEL actually using this "feature"?  (See below for printk)
                 rc = -EINVAL;
@@ -1136,7 +1137,7 @@ void acm_event_irq (struct usb_function_instance *function, usb_device_event_t e
 
 	case DEVICE_RESET:
 	case DEVICE_DE_CONFIGURED:
-	//case DEVICE_BUS_INACTIVE:		// Fix me: w20146 -- 
+	//case DEVICE_BUS_INACTIVE:		// Fix me: Motorola -- 
 		TRACE_MSG("RESET");
                 BREAK_IF(!acm->connected);
 		TRACE_MSG("RESET continue");
@@ -1418,7 +1419,7 @@ int acm_recv_setup_irq (struct usb_device_request *request)
 // Temporary solution for power-on hotplug issue
 // Hotplug script must be run after the root file system is mounted (or after system has login?)
 // -- Need to wait till tapisrv ready???
-// Try this timer first - w20146, Apr 20
+// Try this timer first - Motorola, Apr 20
 // System log information for reference(from A780 AP11):
 //      Current JIFFIES = 534
 //      Fakelogin (C) 2002 Red Hat, Inc.

@@ -3,6 +3,10 @@
  *
  * Begun 24 March 1995, Stephen Tweedie
  *
+ * Portions Copyright (C) Motorola 2004
+ * 
+ * 2004-Feb-10 : (Motorola) Added Motorola specific platform support
+ *
  ****************************************************************
  ****************************************************************
  **

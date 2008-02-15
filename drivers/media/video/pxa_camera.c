@@ -1,49 +1,47 @@
-/*================================================================================
-                                                                               
-                     Module Name:  pxa-camera.c
+/*
+ *  linux/drivers/media/video/pxa_camera.c
+ *
+ *  Bulverde Processor Camera Interface driver.
+ *
+ *  Copyright (C) 2003-2004 Motorola
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ * Dec 19,2003 - (Motorola) Created
+ * Jan 1,2004  - (Motorola) Modified
+ * Feb 5,2004 - (Motorola) Set frame rate in video mode
+ * Feb 26,2004 - (Motorola) New chip id support
+ *                           Update algorithm for DMA transfer
+ *                           Update strategy for memory management
+ *                           Fix still picture capture failed sometime
+ *                           New Agilent sensor chip ID support
+ *                           Make output height in an even multiple of 8
+ *                           Dynamic power management feature
+ * March 8,2004 - (Motorola) Photo effects setting
+ *                            Fix segmentation fault in rmmod
+ *                            Adjust default image buffer size
+ * Apr 26,2004 - (Motorola) Power Management added
+ *                          Photo effects setting bug fix
+ * May 28,2004 - (Motorola) Add two new interface:
+ *                                                 1 get ready frames
+ *                                                 2 set frame buffer count
+ * June 10,2004 - (Motorola) Add mt9v111 support
+ * 
+ */
 
-General Description: Camera module e680 camera  source file
-
-==================================================================================
-                      Motorola Confidential Proprietary
-                  Advanced Technology and Software Operations
-                (c) Copyright Motorola 1999, All Rights Reserved
-  
-Revision History:
-                            Modification     Tracking
-Author                 Date          Number     Description of Changes
-----------------   ------------    ----------   -------------------------
-Wangfei(w20239)     12/19/2003      LIBdd35749   Created
-
-WangWenxin(w20158)  1/1/2004        LIBdd35749   Modified
-
-wangfei(w20239)     02/05/2004      LIBdd74309   Set frame rate in video mode
-
-wangfei(w20239)     02/26/2004      LIBdd81055   New chip id support
-                                                 Update algorithm for DMA transfer
-                                                 Update strategy for memory management
-                                                 Fix still picture capture failed sometime
-                                                 New Agilent sensor chip ID support
-                                                 Make output height in an even multiple of 8
-                                                 Dynamic power management feature 
-                                                 
-wangfei(w20239)     03/08/2004      LIBdd84578   Photo effects setting
-                                                 Fix segmentation fault in rmmod
-                                                 Adjust default image buffer size  
-
-wangfei(w20239)     04/26/2004      LIBdd97716   Power Management added
-                                                 Photo effects setting bug fix
-                                                                                   
-wangfei(w20239)     05/28/2004      LIBee13628   add two new interface.
-                                                 1 get ready frames
-                                                 2 set frame buffer count
-                    
-                    06/10/2004                   add mt9v111 support                                                                                
-
-Portability: Indicate ifthis module is portable to other compilers or 
-platforms. If not, indicate specific reasons why is it not portable.
-
-==================================================================================
+/*==================================================================================
                                  INCLUDE FILES
 ================================================================================*/  
 #include <linux/config.h>
@@ -1476,7 +1474,7 @@ static int pxa_camera_open(struct video_device *dev, int flags)
     dbg_print("start...");
     camera_context_t *cam_ctx;
     /*
-      According to Peter's suggestion, move the code of request camera IRQ and DMQ channel to here
+      Move the code of request camera IRQ and DMQ channel to here
     */     
     /* 1. mapping CI registers, so that we can access the CI */
    	
@@ -2270,7 +2268,7 @@ void ci_set_image_format(CI_IMAGE_FORMAT input_format, CI_IMAGE_FORMAT output_fo
         case CI_RGB666:
             rgb_conv = 1;
             break;
-            // RGB666 PACKED - JamesL
+            // RGB666 PACKED
         case CI_RGB666_PACKED:
             rgb_conv = 1;
             rgb_f = 1;

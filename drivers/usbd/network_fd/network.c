@@ -2,6 +2,7 @@
  * usbd/network_fd/network.c - Network Function Driver
  *
  *      Copyright (c) 2002, 2003, 2004 Belcarra
+ *      Copyright (c) 2004-2005 Motorola
  *
  * By: 
  *      Chris Lynne <cl@belcarra.com>
@@ -40,6 +41,8 @@
  * it is best to ensure that there are no other network interfaces compiled
  * in.
  *
+ * 2004-Aug-25 - (Motorola) usblan mods for EZX
+ * 
  */
 
 

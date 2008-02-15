@@ -9,6 +9,10 @@
  *	- Child reaping
  *	- Support for tasks which re-add themselves
  *	- flush_scheduled_tasks.
+ *
+ * Portions Copyright (C) Motorola 2004
+ *
+ * 2004-Aug-19 - (Motorola) Change to enable sleeping/wakeing up the phone
  */
 
 #define __KERNEL_SYSCALLS__
@@ -77,7 +81,7 @@ static int context_thread(void *startup)
 	
 #ifndef CONFIG_ARCH_EZX
 	// Formal Linux release doesn't have the code and MontaVista add it.
-	// To EZX, it will impact the performancec of HOTPLUG
+	// To EZX, it will impact the performance of HOTPLUG
 	setscheduler(0, SCHED_RR, &param);
 #endif
 	

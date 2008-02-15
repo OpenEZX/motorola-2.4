@@ -19,7 +19,7 @@
  *
  *  rs_set_termios fixed to look also for changes of the input
  *      flags INPCK, BRKINT, PARMRK, IGNPAR and IGNBRK.
- *                                            Bernd Anhäupl 05/17/96.
+ *                                            Bernd Anhupl 05/17/96.
  *
  *  1/97:  Extended dumb serial ports are a config option now.  
  *         Saves 4k.   Michael A. Griffith <grif@acm.org>
@@ -67,6 +67,10 @@
  *        Robert Schwebel <robert@schwebel.de>,
  *        Juergen Beisert <jbeisert@eurodsn.de>,
  *        Theodore Ts'o <tytso@mit.edu>
+ * 09/03  Added serial mux (ICL) support
+ *        Added btuart throttle
+ *        Added bt wakeup handling
+ *        Copyright (C) 2003-2005 Motorola
  */
 
 static char *serial_version = "5.05c";
@@ -277,11 +281,11 @@ static int rs_pm_callback(struct pm_dev *dev, pm_request_t rqst, void *data);
 
 #if ICL_UART
 /********************************************  
- *  By Liu Changhui
+ *  By Motorola
 *********************************************/
 static int serial_mux_guard = 0;
 /********************************************  
- *  By Liu Changhui
+ *  By Motorola
 *********************************************/
 #endif
 
@@ -292,7 +296,7 @@ static struct timer_list serial_timer;
 
 #if ICL_UART
 /********************************************  
- *  By Liu Xin
+ *  By Motorola
 *********************************************/
 
 #define TTY_NO_FOR_MUX  0
@@ -310,7 +314,7 @@ EXPORT_SYMBOL(serial_mux_sender);
 EXPORT_SYMBOL(tq_serial_for_mux);
 
 /********************************************  
- *  By Liu Xin
+ *  By Motorola
 *********************************************/
 #endif
 
@@ -1118,7 +1122,7 @@ static _INLINE_ void receive_chars(struct async_struct *info,
 		if (tty->flip.count >= TTY_FLIPBUF_SIZE) {
 #if ICL_UART
 /********************************************  
- *  By Liu Xin
+ *  By Motorola
 *********************************************/
 //			tty->flip.tqueue.routine((void *) tty);
 			if(serial_mux_dispatcher && tty == serial_for_mux_tty)
@@ -1127,7 +1131,7 @@ static _INLINE_ void receive_chars(struct async_struct *info,
 				tty->flip.tqueue.routine((void *) tty);
 
 /********************************************  
- *  By Liu Xin
+ *  By Motorola
 *********************************************/
 #else
 		        tty->flip.tqueue.routine((void *) tty);
@@ -1238,7 +1242,7 @@ static _INLINE_ void receive_chars(struct async_struct *info,
 #if (LINUX_VERSION_CODE > 131394) /* 2.1.66 */
 #if ICL_UART
 /********************************************
- *  By Liu Xin
+ *  By Motorola
 *********************************************/
 //	tty_flip_buffer_push(tty);
 	if(serial_mux_dispatcher && tty == serial_for_mux_tty)
@@ -1246,7 +1250,7 @@ static _INLINE_ void receive_chars(struct async_struct *info,
 	else
 		tty_flip_buffer_push(tty);
 /********************************************
- *  By Liu Xin
+ *  By Motorola
 *********************************************/
 #else
         tty_flip_buffer_push(tty);
@@ -1287,13 +1291,13 @@ static _INLINE_ void transmit_chars(struct async_struct *info, int *intr_done)
 
 #if ICL_UART
 /********************************************  
- *  By Liu Changhui
+ *  By Motorola
 *********************************************/
 	if(serial_mux_sender && info->tty == serial_for_mux_tty)
 		serial_mux_sender();
 		
 /********************************************  
- *  By Liu Changhui
+ *  By Motorola
 *********************************************/	
 #endif
 	
@@ -2797,7 +2801,7 @@ static void rs_send_xchar(struct tty_struct *tty, char ch)
 
 #if defined(CONFIG_ARCH_EZX_A780) || defined(CONFIG_ARCH_EZX_E680)
 /*
- *added by jordan  : 03/09/12 
+ *added by Motorola  : 03/09/12 
  * 
  * rs_flip_throttle()
  * detail function can be retrived in tty_driver.h
@@ -2822,7 +2826,7 @@ static void rs_flip_throttle(struct tty_struct *tty)
 }	
 
 /*
- *added by jordan  : 03/09/12 
+ *added by Motorola  : 03/09/12 
  * 
  * rs_flip_unthrottle() 
  * detail function can be retrived in tty_driver.h
@@ -2879,13 +2883,13 @@ static void rs_throttle(struct tty_struct * tty)
 #if defined(CONFIG_ARCH_EZX_A780) || defined(CONFIG_ARCH_EZX_E680)
 	if( info->state->iomem_base == (u8 *)&BTUART ) {
 	/*---------------------------------------------
-	 * added by jordan  :03/09/12
+	 * added by Motorola  :03/09/12
 	 * due to btuart flip flow control function so 
 	 * it is not necessary to use n_tty throttle for BTUART
 	 * -------------------------------------------*/
 		return;
 	/*---------------------------------------------
-	 * end by jordan 
+	 * end by Motorola 
 	 *-------------------------------------------- */
 	}
 	else if (tty->termios->c_cflag & CRTSCTS)
@@ -2923,13 +2927,13 @@ static void rs_unthrottle(struct tty_struct * tty)
 #if defined(CONFIG_ARCH_EZX_A780) || defined(CONFIG_ARCH_EZX_E680)
 	if( info->state->iomem_base == (u8 *)&BTUART ) {
         /*---------------------------------------------
-         * added by jordan  :03/09/12
+         * added by Motorola  :03/09/12
          * due to btuart flip flow control function so
          * it is not necessary to use n_tty throttle for BTUART
          * -------------------------------------------*/
       		return;
         /*---------------------------------------------
-         * end by jordan
+         * end by Motorola
          *-------------------------------------------- */
       } 
       else if (tty->termios->c_cflag & CRTSCTS)
@@ -3756,7 +3760,7 @@ static void rs_close(struct tty_struct *tty, struct file * filp)
 		return;
 #if ICL_UART
   /***********************************
-  *            By Liu Xin
+  *            By Motorola
   ************************************/
   /* only the ttyS0 used by multiplexer */
   /* be careful */
@@ -3771,7 +3775,7 @@ static void rs_close(struct tty_struct *tty, struct file * filp)
     serial_for_mux_tty = NULL;
   }
   /***********************************
-  *            By Liu Xin
+  *            By Motorola
   ************************************/
 #endif
 	state = info->state;
@@ -4179,7 +4183,7 @@ static int rs_open(struct tty_struct *tty, struct file * filp)
 
 #if ICL_UART
 	/***********************************
-	*            By Liu Xin
+	*            By Motorola
 	************************************/
 	/* only the ttyS0 used by multiplexer */
 	if(line == TTY_NO_FOR_MUX ) {
@@ -4194,7 +4198,7 @@ static int rs_open(struct tty_struct *tty, struct file * filp)
 		}
 	}
 	/***********************************
-	*            By Liu Xin
+	*            By Motorola
 	************************************/
 #endif
 	if (serial_paranoia_check(info, tty->device, "rs_open"))
@@ -6714,7 +6718,7 @@ static int __init rs_init(void)
 
 #if ICL_UART
 /********************************************
- *  By Liu Xin
+ *  By Motorola
 *********************************************/
 	serial_for_mux_driver = &serial_driver;
   /* fill in in the rs_open() routine */
@@ -6726,7 +6730,7 @@ static int __init rs_init(void)
   tq_serial_for_mux = &tq_serial;  
   serial_mux_guard = 0;
 /********************************************
- *  By Liu Xin
+ *  By Motorola
 *********************************************/
 #endif
 

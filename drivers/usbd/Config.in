@@ -2,7 +2,9 @@
 # USB device configuration from the device viewpoint (e.g. Linux running inside a USB device, not as host)
 #
 # Copyright (c) 2002-2003 Belcarra
+# Copyright (c) 2004-2005 Motorola
 #
+# 2004-Apr-13 - (Motorola) Added storage_fd, cfg11_fd, dsplog_fd, nm_fd
 #
 
 mainmenu_option next_comment

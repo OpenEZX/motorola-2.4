@@ -1,19 +1,34 @@
-/*--------------------------------------------------------------------------------------------
-//   Module Name: led_pxa_e680.c
-//   
-//   General Description: This is the driver for E680 LED.
-//---------------------------------------------------------------------------------------------
-//                            Motorola Confidential Proprietary
-//                    (c) Copyright Motorola 2003-2004, All Rights Reserved
-//
-//
-// Revision History:
-//                             Modification     Tracking
-// Author (core ID)                Date          Number     Description of Changes
-// -------------------------   ------------    ----------   ----------------------------
-// Liu weijie (A19553)         11/01/2003       LIBdd43835   Init create 
-// Wang Jamshid(a5036c)        04/29/2004       LIBee01180   fix bug,register pm call back
-*/
+/*
+ * linux/drivers/char/led_pxa_e680.c
+ *
+ * This is the driver for E680 LED.
+ *
+ * Copyright (C) 2003-2005 Motorola
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *                                                                                               
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ * 11/01/2003 - (Motorola) Init create 
+ * 04/29/2004 - (Motorola) fix bug,register pm call back
+ * 
+ */
+ 
+/*
+ *  The outline of this code was taken from linux/drivers/char/led_cpci735.c
+ *  authored by Corey Minyard <minyard@mvista.com>.
+ * 
+ */
 #include <linux/config.h>
 #include <linux/module.h>
 #include <linux/version.h>

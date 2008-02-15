@@ -1,12 +1,16 @@
 /*
  *  linux/include/asm-arm/arch-pxa/memory.h
  * 
+ * Copyright (C) 2004 Motorola 
+ *
  * Author:	Nicolas Pitre
  * Copyright:	(C) 2001 MontaVista Software Inc.
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
+ *
+ * 2004-Jul-21 - (Motorola) Changed definitions values for Motorola specific platform
  */
 
 #ifndef __ASM_ARCH_MEMORY_H

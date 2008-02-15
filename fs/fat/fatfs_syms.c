@@ -3,6 +3,10 @@
  *
  * Exported kernel symbols for the low-level FAT-based fs support.
  *
+ * Portions Copyright (C) Motorola 2004
+ *
+ * 2004-Jun-30 - (Motorola) Added notification to user-space if fat fs fails 
+ * 
  */
 
 #include <linux/module.h>
@@ -12,7 +16,7 @@
 #include <linux/msdos_fs.h>
 #include <linux/fat_cvf.h>
 
-/* add by w20598 used to notify user-space if fat fs panic */
+/* add by Motorola used to notify user-space if fat fs fails */
 DECLARE_COMPLETION(fatpanic_completion);
 unsigned short panicdev = 0;
 EXPORT_SYMBOL(fatpanic_completion);

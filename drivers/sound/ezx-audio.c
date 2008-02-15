@@ -1,29 +1,35 @@
 /*
- *  linux/drivers/sound/ezx-audio.c
+ * linux/drivers/sound/ezx-audio.c
  *
+ * audio interface for ezx
  *
- *  Description:  audio interface for ezx
+ * Copyright (C) 2002-2005 Motorola
  *
- *
- *  Copyright:	BJDC motorola.
- * 
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
  *
- *
- *  History:
- *  zhouqiong          Jun 20,2002             created
- *  LiYong             Sep 23,2003             (1)Port from EZX
- *  Jin Lihong(w20076) Jan 02,2004,Libdd66088  (1) Port from UDC e680 kernel of jem vob.
- *                                             (2) Move audio driver DEBUG macro definition to ezx-audio.h
- *                                                 header file,and redefine DEBUG to EZX_OSS_AUDIO_DEBUG
- *                                             (3) reorganize file header
- *  Jin Lihong(w20076) Jan 13,2004,LIBdd68327  Make the e680 louder speaker work.
- *  Jin Lihong(w20076) Mar.15,2004,LIBdd86574  mixer bug fix
- *  Jin Lihong(w20076) Apr.13,2004,LIBdd96876  close dsp protection,and add 3d control interface for app
- *  Jin Lihong(w20076) Jun.15,2004,LIBee21625  boomer's power management
- *  Jin Lihong(w20076) Aug.11,2004,LIBff01482  DMA channel release bug fix
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *                                                                                               
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ *  Jun 20,2002 - (Motorola) created
+ *  Sep 23,2003 - (Motorola) (1)Port from EZX
+ *  Jan 02,2004 - (Motorola) (1) Port from UDC e680 kernel of jem vob.
+ *                           (2) Move audio driver DEBUG macro definition to ezx-audio.h
+ *                               header file,and redefine DEBUG to EZX_OSS_AUDIO_DEBUG
+ *                           (3) reorganize file header
+ *  Jan 13,2004 - (Motorola) Make the e680 louder speaker work.
+ *  Mar.15,2004 - (Motorola) mixer bug fix
+ *  Apr.13,2004 - (Motorola) close dsp protection,and add 3d control interface for app
+ *  Jun.15,2004 - (Motorola) boomer's power management
+ *  Aug.11,2004 - (Motorola) DMA channel release bug fix
  *
  */
 

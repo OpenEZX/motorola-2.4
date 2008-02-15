@@ -1,10 +1,14 @@
 #
 # Makefile for the kernel USBD (device not host) drivers.
 #
+# Copyright (c) 2004-2005 Motorola
 # Copyright (c) 2002 Belcarra
 # Copyright (C) 2001 Lineo, Inc.
 # Copyright (C) 2001 Hewlett-Packard Co.
 
+#
+# 2004-Apr-20 - (Motorola) Support for storage_fd, cfg11_fd, dsplog_fd, nm_fd
+#
 # Subdirs.
 # This is a bit complex, because some subdirs are for
 # proprietary code, and are simply not present in a

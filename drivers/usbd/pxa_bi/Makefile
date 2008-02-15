@@ -2,6 +2,9 @@
 # Makefile for the kernel USBD (device not host) drivers.
 #
 # Copyright (c) 2002-2003 Belcarra
+# Copyright (C) 2004-2005 Motorola.
+
+# 2004-Mar-26 - (Motorola) Removed -Werror from EXTRA_CFLAGS
 
 # Subdirs.
 # This is a bit complex, because some subdirs are for

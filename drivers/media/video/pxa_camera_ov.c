@@ -5,11 +5,12 @@
  *
  *  Copyright (C) 2003, Intel Corporation
  *  Copyright (C) 2003, Montavista Software Inc.
+ *  Copyright (C) 2004  Motorola
  *
  *  Author: Intel Corporation Inc.
  *          MontaVista Software, Inc.
  *           source@mvista.com
- * 
+ *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation; either version 2 of the License, or
@@ -24,6 +25,7 @@
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
+ *  June 23,2004 - (Motorola) Created new file based on the pxa_camera.c file
  */
 
 #include <linux/config.h>

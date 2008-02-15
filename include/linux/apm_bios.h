@@ -5,6 +5,8 @@
  * Include file for the interface to an APM BIOS
  * Copyright 1994-2001 Stephen Rothwell (sfr@canb.auug.org.au)
  *
+ * Copyright (C) 2005 Motorola
+ *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
  * Free Software Foundation; either version 2, or (at your option) any
@@ -14,6 +16,9 @@
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
+ * 
+ * 2005-Jan-5 - (Motorola) Added ioctls, definitions, and apm changes for Motorola specific platform
+ * 
  */
 
 /* #include <linux/pm-devices.h> */
@@ -255,8 +260,7 @@ enum
 #define APM_IOC_SET_WAKEUP	_IO('A', 3)
 
 /*
- * by zxf, 11/11/2002
- * some new io control commands
+ * Added by Motorola - some new io control commands
  */
 #define APM_IOC_IDLE			_IOW('A', 4, int)
 #define APM_IOC_SLEEP			_IOW('A', 5, int)
@@ -275,10 +279,6 @@ enum
 #define APM_NOTIFY_BP_QUIET		1
 #define APM_NOTIFY_BP_UNHOLD		0
 
-/*
- * by zxf, 11/11/2002
- * for debug
- */
 //#define APM_DEBUG
 
 #ifdef APM_DEBUG

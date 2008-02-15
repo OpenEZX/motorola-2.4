@@ -1,23 +1,29 @@
+/*
+ *  linux/drivers/media/video/e680_camera.c
+ *
+ *  E680 Camera Module driver.
+ *
+ *  Copyright (C) 2004 Motorola
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ *  Apr 15,2004 - (Motorola) Created new file for E680 camera part based on ADCM2650.c file
+ * 
+ */
 
- 
-/*================================================================================
-                                                                               
-                      Header Name: e680_camera.c
-
-General Description: Camera module  interface source file
- 
-==================================================================================
-                     Motorola Confidential Proprietary
-                 Advanced Technology and Software Operations
-               (c) Copyright Motorola 1999, All Rights Reserved
- 
-Revision History:
-                            Modification     Tracking
-Author                 Date          Number     Description of Changes
-----------------   ------------    ----------   -------------------------
-wangfei(w20239)      04/15/2004                  Created   
-
-==================================================================================
+/*==================================================================================
                                  INCLUDE FILES
 ==================================================================================*/
 #include <linux/types.h>

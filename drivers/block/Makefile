@@ -37,7 +37,7 @@ mod-subdirs			+= xilinx_sysace
 subdir-$(CONFIG_XILINX_SYSACE)	+= xilinx_sysace
 obj-$(CONFIG_XILINX_SYSACE)	+= xilinx_sysace/xilinx_sysace.o
 
-# Added by Susan
+# Added by Motorola
 subdir-$(CONFIG_ARCH_EZX_ROFLASH) += roflash
 # End of modification
 

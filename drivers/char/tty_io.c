@@ -2,6 +2,7 @@
  *  linux/drivers/char/tty_io.c
  *
  *  Copyright (C) 1991, 1992  Linus Torvalds
+ *                2004, 2005  Motorola
  */
 
 /*
@@ -63,6 +64,8 @@
  *
  * Move do_SAK() into process context.  Less stack use in devfs functions.
  * alloc_tty_struct() always uses kmalloc() -- Andrew Morton <andrewm@uow.edu.eu> 17Mar01
+ * 
+ * 2004-Jan-16 - (Motorola) Added btuart flow control support
  */
 
 #include <linux/config.h>

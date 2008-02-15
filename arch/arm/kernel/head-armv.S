@@ -2,12 +2,15 @@
  *  linux/arch/arm/kernel/head-armv.S
  *
  *  Copyright (C) 1994-1999 Russell King
+ *  Copyright (C) 2003 Motorola
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
  *  32-bit kernel startup code for all architectures
+ *
+ * Dec 24,2003 - (Motorola) Added a define for the EZX architecture
  */
 #include <linux/config.h>
 #include <linux/linkage.h>

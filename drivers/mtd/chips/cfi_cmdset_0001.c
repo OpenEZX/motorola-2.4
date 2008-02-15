@@ -3,6 +3,7 @@
  *   Intel Extended Vendor Command Set (ID 0x0001)
  *
  * (C) 2000 Red Hat. GPL'd
+ * Copyright (C) 2003 Motorola. GPL'd
  *
  * $Id: cfi_cmdset_0001.c,v 1.107 2002/11/17 13:05:01 spse Exp $
  *
@@ -15,6 +16,10 @@
  *	- optimized write buffer method
  * 02/05/2002	Christopher Hoover <ch@hpl.hp.com>/<ch@murgatroid.com>
  *	- reworked lock/unlock/erase support for var size flash
+ * 
+ * Dec 24,2003 - (Motorola) Added notification of flash status before we are asked entering into sleep mode
+ *                          Added code for L18 UNLOCK/LOCKDOWN mechanism
+ *                          Added code for initialization of pm_flash device
  */
 
 #include <linux/module.h>
@@ -36,14 +41,14 @@
 #if (0)
 //#define L3_ERASE_BLOCK_SIZE   0x20000
 #define L3_RW_REGION_START 0x01000000  // The start offset for the R/W filesystem //
-#define L3_RW_REGION_END   0x01900000  // Susan -- 9MB --The end offset for the R/W filesystem   //
+#define L3_RW_REGION_END   0x01900000  // The end offset for the R/W filesystem   //
 
-/* Susan for lockdown rootfs(cramfs) region in the first K3 flash chip */
+/* For lockdown rootfs(cramfs) region in the first K3 flash chip */
 //#define K3_ROOTFS_REGION_START 0x00100000  //The start of the rootfs region //
 //#define K3_ROOTFS_REGION_END 0x01000000  //The end of the rootfs region + 1 byte //
 #define TIME_OUT   1000000L
 
-/* This is for notification of flash status before we are asked entering into sleep mode -- Susan */
+/* This is for notification of flash status before we are asked entering into sleep mode */
 #ifdef CONFIG_PM
 static struct pm_flash_s
 {
@@ -52,7 +57,7 @@ static struct pm_flash_s
 }pm_flash;
 #endif
 
-extern struct map_info bulverde_map;  //Susan
+extern struct map_info bulverde_map;
 #endif
 
 /* debugging, turns off buffer write mode #define FORCE_WORD_WRITE */
@@ -1876,7 +1881,7 @@ static void cfi_intelext_destroy(struct mtd_info *mtd)
 }
 
 #if (0)
-/* Added by Susan for L18 UNLOCK/LOCKDOWN mechanism */
+/* Added for L18 UNLOCK/LOCKDOWN mechanism */
 int cfi_intelext_unlockdown_L18(struct mtd_info *mymtd)
 {
 	struct map_info *map;
@@ -2112,7 +2117,7 @@ int __init cfi_intelext_init(void)
 	inter_module_register(im_name_3, THIS_MODULE, &cfi_cmdset_0001);
 	
 #if (0)
-	/* Added by Susan for initialization of pm_flash device */
+	/* Added for initialization of pm_flash device */
 #ifdef CONFIG_PM
 	pm_flash.pm_dev = pm_register(PM_SYS_DEV, 0, cfi_intelext_pm_ezx);
 	atomic_set(&(pm_flash.pm_flash_count), 0);

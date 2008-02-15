@@ -1,23 +1,28 @@
-/*================================================================================
-                                                                               
-                     Module Name:  pxa-camera.c
-
-General Description: Camera module mt9m111  source file
-
-==================================================================================
-                      Motorola Confidential Proprietary
-                  Advanced Technology and Software Operations
-                (c) Copyright Motorola 1999, All Rights Reserved
-  
-Revision History:
-                            Modification     Tracking
-Author                 Date          Number     Description of Changes
-----------------   ------------    ----------   -------------------------
-                                                 
-Portability: Indicate ifthis module is portable to other compilers or 
-platforms. If not, indicate specific reasons why is it not portable.
-
-==================================================================================
+/*
+ *  linux/drivers/media/video/pxa_camera.c
+ *
+ *  Bulverde Processor Camera Interface driver.
+ *
+ *  Copyright (C) 2004  Motorola
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ *  July 14,2004 - (Motorola) Created new file based on the pxa_camera.c file
+ */
+ 
+ /*==================================================================================
                                  INCLUDE FILES
 ================================================================================*/  
 #include <linux/config.h>

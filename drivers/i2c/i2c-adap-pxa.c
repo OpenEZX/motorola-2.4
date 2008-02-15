@@ -7,6 +7,8 @@
  *
  *  Copyright (C) 2003 Montavista Software Inc.
  *
+ *  Copyright (C) 2004-2005 Motorola
+ * 
  *  Author: Intrinsyc Software Inc.
  *          MontaVista Software, Inc.
  *           source@mvista.com
@@ -29,6 +31,7 @@
  *    Apr 2002: Initial version [CS]
  *    Jun 2002: Properly seperated algo/adap [FB]
  *    Sep 2003: Bulverde Power-I2C support added
+ *    Aug 2004: (Motorola) Added power management suspend/resume hooks
  */
 
 #include <linux/kernel.h>

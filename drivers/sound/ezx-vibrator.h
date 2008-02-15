@@ -1,18 +1,29 @@
 /*
- *  linux/drivers/sound/ezx-vibrator.h
+ * linux/drivers/sound/ezx-vibrator.h
  *
- *  Copyright:	BJDC motorola.
- * 
+ * Vibrator interface for EZX. for application can't direct call interface in 
+ * kernel space from user space.so vibrator still realize a char device.
+ *
+ * Copyright (C) 2002-2005 Motorola
+ *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
  *
- *
- *  History:
- *  zhouqiong          Jun 20,2002             created
- *  Jin Lihong(w20076) Jan 02,2004             (1) Port from UDC e680 kernel of jem vob.
- *                                             (2) reorganize file header
- *  Jin Lihong(w20076) Apr.13,2004,LIBdd96876  reorganise file header
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *                                                                                               
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ *  Jun 20,2002 - (Motorola) created
+ *  Jan 02,2004 - (Motorola) (1) Port from UDC e680 kernel of jem vob.
+ *                           (2) reorganize file header
+ *  Apr.13,2004 - (Motorola) reorganise file header
  *
  */
 

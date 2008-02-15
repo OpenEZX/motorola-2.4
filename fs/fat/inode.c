@@ -8,6 +8,10 @@
  *  Fixes:
  *
  *  	Max Cohan: Fixed invalid FSINFO offset when info_sector is 0
+ *
+ *  Portions Copyright (C) Motorola 2004
+ *
+ *  2004-Jun-8 -(Motorola) Fix DRM user unable to modify attributes of fat format file 
  */
 
 #include <linux/module.h>
@@ -1033,8 +1037,7 @@ int fat_notify_change(struct dentry * dentry, struct iattr * attr)
 			return -EPERM;
 	}
 
-	/* FIX DRM user cant modify attributes of fat format file */
-	/* Modify by w20598 */
+	/* Modified by Motorola: FIX DRM user unable to modify attributes of fat format file */
 	/* FIXED ME: find the "DRM" user automatically */
         //printk("current->fsuid = %d\n",current->fsuid);
         if ((current->fsuid == 518) && (attr->ia_valid & ATTR_MODE))

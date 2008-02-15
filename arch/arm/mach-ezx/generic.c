@@ -1,5 +1,5 @@
 /*
- *  linux/arch/arm/mach-pxa/generic.c
+ *  linux/arch/arm/mach-ezx/generic.c
  *
  *  Author:	Nicolas Pitre
  *  Created:	Jun 15, 2001
@@ -16,11 +16,13 @@
  * initialization stuff for PXA machines which can be overriden later if
  * need be.
  *
+ * Based on original code from linux/arch/arm/mach-pxa/generic.c,
+ * Modified for the EZX Development Plaform by Motorola:
+ * Copyright (c) 2004-2005 Motorola
  *
- *  History:
- *  Nicolas Pitre, MontaVista         Jan 15,2001     created
- *  Jin Lihong(w20076), Motorola      Jan 02,2004     (1) Modify __initdata for BULVERDE ssp3 register.
- *                                                    (2) reorganize hisroty.
+ *  2004-Jan-02 - (Motorola) Created based on mach-pxa/generic.c
+ *                           Modify __initdata for BULVERDE ssp3 register.
+ * 
  */
  
 #include <linux/config.h>

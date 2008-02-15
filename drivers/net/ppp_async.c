@@ -2,6 +2,7 @@
  * PPP async serial channel driver for Linux.
  *
  * Copyright 1999 Paul Mackerras.
+ * Copyright (C) 2004 Motorola. GPL'd
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU General Public License
@@ -18,6 +19,8 @@
  * subsequently hacked by Paul Mackerras.
  *
  * ==FILEVERSION 20020125==
+ * 
+ * Jul 28,2004 - (Motorola) Add an idle case to IO Control
  */
 
 #include <linux/module.h>

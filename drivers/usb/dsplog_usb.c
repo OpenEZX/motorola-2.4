@@ -1,8 +1,24 @@
 /*
- *  dsplog.c created in 08/6/2004
+ * linux/drivers/usb/dsplog_usb.c
  *
- *  Copyright (c) 2004 Motoroal
- *  This Program just implements a USB DSP Log driver
+ * This Program just implements a USB DSP Log driver
+ *
+ * Copyright (C) 2004-2005 Motorola
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *                                                                                               
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
  */
 
 #include <linux/kernel.h>
@@ -28,7 +44,7 @@
 
 /*Macro defined for this driver*/
 #define DRIVER_VERSION      ""
-#define DRIVER_AUTHOR       ""
+#define DRIVER_AUTHOR       "Motorola"
 #define DRIVER_DESC         "USB DSP LOG Driver"
 
 MODULE_AUTHOR( DRIVER_AUTHOR );
@@ -229,7 +245,7 @@ dsplog_open(struct inode * inode, struct file * file)
        	dl_dbg("wakeup BP");
     }
 	
-    // a2590c 6-24
+    // 6-24
     if( (UHCRHPS3 & 0x4) == 0x4 )  {
 	UHCRHPS3 = 0x8;
 	mdelay(40);
@@ -436,7 +452,7 @@ static void usb_dl_callback(struct urb *urb)
         	dl_dbg("wakeup BP");
 	}
 	
-	// a2590c 6-24
+	// 6-24
 	if( (UHCRHPS3 & 0x4) == 0x4 )  {
 		UHCRHPS3 = 0x8;
 		mdelay(40);

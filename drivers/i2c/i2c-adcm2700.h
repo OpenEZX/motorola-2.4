@@ -1,23 +1,30 @@
+/*
+ *  i2c-adcm2700.h
+ *
+ *  ADCM 2700 Camera Module control via I2C bus driver header.
+ *
+ *  Copyright (C) 2003 - 2005 Motorola
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ *  Dec 16,2003 - (Motorola) Created new file for ADCM 2700 part based on i2c_adcm2650.c file
+ *  Feb 26,2004 - (Motorola) New chip id support
+ *
+ */
 
-/*================================================================================
-                                                                               
-                      Header Name: i2c-adcm2700.h
-
-General Description: Camera module adcm2700 I2C interface head file
- 
-==================================================================================
-                     Motorola Confidential Proprietary
-                 Advanced Technology and Software Operations
-               (c) Copyright Motorola 1999, All Rights Reserved
- 
-Revision History:
-                            Modification     Tracking
-Author                 Date          Number     Description of Changes
-----------------   ------------    ----------   -------------------------
-wangfei(w20239)      12/15/2003     LIBdd35749    Created   
-wangfei(w20239)      02/26/2004     LIBdd81055    New chip id support
-
-==================================================================================
+/*==================================================================================
                                  INCLUDE FILES
 ==================================================================================*/
 

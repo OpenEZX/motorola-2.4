@@ -17,6 +17,8 @@
  *		Alan Cox, <gw4pts@gw4pts.ampr.org>
  *		Alexey Kuznetsov, <kuznet@ms2.inr.ac.ru>
  *
+ *  Portions Copyright (C) Motorola 2003
+ *
  *	Changes:
  *	        Alexey Kuznetsov:	pa_* fields are replaced with ifaddr lists.
  *		Cyrus Durgin:		updated for kmod
@@ -24,6 +26,8 @@
  *					address (4.4BSD alias style support),
  *					fall back to comparing just the label
  *					if no match found.
+ *
+ * 2003-Dec-17 - (Motorola) Change to enable datacall feature
  */
 
 #include <linux/config.h>
@@ -503,7 +507,7 @@ int devinet_ioctl(unsigned int cmd, void *arg)
 		break;
 
 	case SIOCSIFFLAGS:
-        /* porting from A760 datacall feature linweiqiang    2003-12-17 */
+        /* added by Motorola for datacall feature */
 #if 0
 		if (!capable(CAP_NET_ADMIN))
 			return -EACCES;
@@ -513,7 +517,7 @@ int devinet_ioctl(unsigned int cmd, void *arg)
 	case SIOCSIFBRDADDR:	/* Set the broadcast address */
 	case SIOCSIFDSTADDR:	/* Set the destination address */
 	case SIOCSIFNETMASK: 	/* Set the netmask for the interface */
-        /* porting from A760 datacall feature linweiqiang     2003-12-17 */
+        /* added by Motorola for datacall feature */
 #if 0
 		if (!capable(CAP_NET_ADMIN))
 			return -EACCES;

@@ -1,6 +1,8 @@
 /*
  * linux/include/asm-arm/arch-pxa/system.h
  *
+ * Copyright (C) 2004 Motorola
+ * 
  * Author:	Nicolas Pitre
  * Created:	Jun 15, 2001
  * Copyright:	MontaVista Software Inc.
@@ -8,6 +10,8 @@
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
+ *
+ * 2004-Jul-2 - (Motorola) Added usb and GPIO changes for reset
  */
 
 #include "hardware.h"

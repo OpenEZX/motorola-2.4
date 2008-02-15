@@ -2,6 +2,7 @@
  * usbd/trace.c
  *
  *      Copyright (c) 2004 Belcarra
+ *      Copyright (c) 2004-2005 Motorola
  *
  * Adapted from earlier work:
  *      Copyright (c) 2002, 2003 Belcarra
@@ -25,6 +26,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
+ * 2004-Mar-26 - (Motorola) New feature to re-init bitrace
  */
 
 #include <linux/config.h>
@@ -423,7 +425,7 @@ static ssize_t trace_proc_write (struct file *file, const char *buf, size_t coun
 	return count;
 #else
 #ifdef CONFIG_ARCH_EZX
-	// w20146 - expand a new feature to re-init bitrace
+	// Motorola - expand a new feature to re-init bitrace
 	char command[MAX_BITRACE_LEN + 1];
 	size_t n = count, l;
 	char c;
@@ -477,7 +479,7 @@ static struct file_operations trace_proc_operations_functions = {
 #ifdef CONFIG_ARCH_EZX
 int trace_reinit_ezx(void)
 {
-	// w20146 - 
+	// Motorola - 
 	printk(KERN_INFO"%s:\n", __FUNCTION__);
 	trace_first = trace_next = 0;
 	memset(traces, 0, sizeof(trace_t) * TRACE_MAX);

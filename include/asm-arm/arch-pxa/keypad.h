@@ -2,6 +2,7 @@
  * linux/include/asm-arm/arch-pxa/keypad.h
  * Intel Mainstone keypad driver definitions
  *
+ * Copyright (C) 2004 Motorola
  * Copyright (C) 2003, Intel Corporation (yu.tang@intel.com)
  * Copyright 2003 MontaVista Software Inc.
  * Author: MontaVista Software, Inc.
@@ -26,6 +27,8 @@
  *  You should have received a copy of the  GNU General Public License along
  *  with this program; if not, write  to the Free Software Foundation, Inc.,
  *  675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ * 2004-Apr-30 - (Motorola) Added definitions for ioctls
  */
 
 #ifndef _ASM_ARCH_KEYPAD_H

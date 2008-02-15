@@ -7,6 +7,9 @@
  *  Copyright (C) 2002 Intrinsyc Software Inc.
  *
  *  Copyright (C) 2003 Montavista Software Inc.
+ *
+ *  Copyright (C) 2004-2005 Motorola
+ * 
  *  Author: MontaVista Software, Inc.
  *           source@mvista.com
  *
@@ -18,6 +21,7 @@
  *    Apr 2002: Initial version [CS]
  *    Jun 2002: Properly seperated algo/adap [FB]
  *    Sep 2003: Bulverde Power-I2C support added
+ *    Feb 2004: (Motorola) Disabled pxa bus scanning
  * 
  */
 #include <linux/kernel.h>

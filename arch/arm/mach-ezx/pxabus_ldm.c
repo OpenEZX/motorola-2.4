@@ -1,13 +1,20 @@
 /*
- * linux/arch/arm/mach-pxa/pxabus_ldm.c
+ * linux/arch/arm/mach-ezx/pxabus_ldm.c
  *
  * Author:     Echo Engineering
  * Created:    Oct 05, 2003
  * Copyright:  MontaVista Software Inc.
  *
+ * Based on original code from linux/arch/arm/mach-pxa/pxabus_ldm.c,
+ * Modified for the EZX Development Plaform by Motorola:
+ * Copyright (c) 2004-2005 Motorola
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
+ * 
+ * 2004-Mar-10 - (Motorola) Created based on mach-pxa/pxabus_ldm.S
+ *                          Removed mstone-mmc test in bus_match
  */
 
 #include <asm/system.h>

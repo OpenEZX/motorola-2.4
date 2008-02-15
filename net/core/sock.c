@@ -81,6 +81,7 @@
  *		Andi Kleen	:	Fix write_space callback
  *		Chris Evans	:	Security fixes - signedness again
  *		Arnaldo C. Melo :       cleanups, use skb_queue_purge
+ *      Motorola    :   Comment out permission check for clients using raw sockets
  *
  * To Fix:
  *
@@ -336,9 +337,8 @@ int sock_setsockopt(struct socket *sock, int level, int optname,
 
 			/* Sorry... */ 
             /*
-             * we need to call bind to interface for all client
-             * thus remove this permission check
-             * by Xia Weizhong
+             * Motorola - Remove permission check to 
+             * call bind to interface for all clients
              */
 #if 0
 			if (!capable(CAP_NET_RAW)) {

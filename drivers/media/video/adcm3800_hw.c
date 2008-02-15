@@ -1,32 +1,37 @@
-/*================================================================================
-                                                                               
-                      Header Name: adcm3800_hw.c
+/*
+ * linux/drivers/media/video/adcm3800_hw.h
+ *
+ * Camera module adcm3800 head file
+ * 
+ * Copyright (C) 2003-2004 Motorola
+ * 
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ * Dec 15,2003 - (Motorola) Created
+ * Feb 05,2004 - (Motorola) Set frame rate in video mode
+ * Feb 26,2004 - (Motorola) New chip id support
+ *                          Update algorithm for DMA transfer
+ *                          Update strategy for memory management
+ *                          Fix still picture capture failed sometime
+ *                          New Agilent sensor chip ID support
+ *                          Make output height in an even multiple of 8
+ * Mar 08,2004 - (Motorola) Photo effects setting
+ * 
+ */
 
-General Description: Camera module adcm3800 interface source file
- 
-==================================================================================
-                     Motorola Confidential Proprietary
-                 Advanced Technology and Software Operations
-               (c) Copyright Motorola 1999, All Rights Reserved
- 
-Revision History:
-                            Modification     Tracking
-Author                 Date          Number     Description of Changes
-----------------   ------------    ----------   -------------------------
-wangfei(w20239)     12/15/2003      LIBdd35749    Created   
-
-wangfei(w20239)     02/05/2004      LIBdd74309    Set frame rate in video mode
-
-wangfei(w20239)     02/26/2004      LIBdd81055    New chip id support
-                                                  Update algorithm for DMA transfer
-                                                  Update strategy for memory management
-                                                  Fix still picture capture failed sometime
-                                                  New Agilent sensor chip ID support
-                                                  Make output height in an even multiple of 8
-                                                 
-wangfei(w20239)     03/08/2004      LIBdd84578    Photo effects setting
-
-==================================================================================
+/*==================================================================================
                                  INCLUDE FILES
 ==================================================================================*/
 #include <linux/types.h>

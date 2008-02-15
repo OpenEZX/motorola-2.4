@@ -28,6 +28,9 @@
  *   options from cflags and looks in the specified directories as well as the
  *   defaults.   Only -I is supported, no attempt is made to handle -idirafter,
  *   -isystem, -I- etc.
+ *
+ * Portions Copyright (C) Motorola 2004
+ * 2004-Feb-12 - (Motorola) Derivative work based on newer version of mkdep.c
  */
 
 #include <ctype.h>

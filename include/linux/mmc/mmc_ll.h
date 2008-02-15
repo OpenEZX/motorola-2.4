@@ -2,6 +2,7 @@
  * Header for MultiMediaCard (MMC)
  *
  * Copyright 2002 Hewlett-Packard Company
+ *           2004 Motorola
  *
  * Use consistent with the GNU GPL is permitted,
  * provided that this copyright notice is
@@ -20,6 +21,8 @@
  *
  * Author:  Andrew Christian
  *          15 May 2002
+ *
+ * 2004-Mar-16 - (Motorola) Added lock/unlock functions
  */
 
 #ifndef MMC_MMC_LL_H

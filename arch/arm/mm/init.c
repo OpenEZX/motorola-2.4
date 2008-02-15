@@ -2,10 +2,14 @@
  *  linux/arch/arm/mm/init.c
  *
  *  Copyright (C) 1995-2002 Russell King
+ *  Copyright (C) 2004-2005 Motorola
+ *
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
+ * 
+ * 2005-Jun-02 - (Motorola) Inc NR_NODES to 16 and reserved the first page mem for PM
  */
 #include <linux/config.h>
 #include <linux/signal.h>

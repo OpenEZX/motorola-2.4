@@ -16,6 +16,11 @@
  *  This allows for a much quicker boot time.
  */
 
+/*
+ * Portions Copyright (C) Motorola 2003
+ * 2003-Dec-24 - (Motorola) Added change to decompress logo
+ */
+
 #include <asm/uaccess.h>
 #include <asm/arch/uncompress.h>
 //#include <asm/proc/uncompress.h>

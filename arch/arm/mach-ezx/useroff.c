@@ -1,16 +1,24 @@
 /*
- *  linux/arch/arm/mach-ezx/useroff.c
+ * linux/arch/arm/mach-ezx/useroff.c
  *
- *  Useroff support for Motorola Ezx Development Platform
+ * Useroff support for Motorola Ezx Development Platform
  *
- *  Author:	Zhuang Xiaofan
- *  Created:	Nov 25, 2003
- *  Copyright:	Motorola Inc.
+ * Original code for the SA11x0:
+ * Copyright (c) 2001 Cliff Brake <cbrake@accelent.com>
  *
- *  Original code form pm.c:
+ * Modified for the PXA250 by Nicolas Pitre:
+ * Copyright (c) 2002 Monta Vista Software, Inc.
+ *
+ * Based on original code from linux/arch/arm/mach-pxa/pm.c,
+ * Modified for the EZX Development Plaform by Motorola:
+ * Copyright (c) 2002-2005 Motorola
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU General Public License.
+ * 
+ * 2002        - (Motorola) Created based on mach-pxa/pm.c
+ * 2004-Aug-30 - (Motorola) Intel pm workaround2
+ * 
  */
 
 #include <linux/config.h>
@@ -67,7 +75,7 @@ enum {	SLEEP_SAVE_START = 0,
 	SLEEP_SAVE_ICMR,
 	SLEEP_SAVE_CKEN,
 
-        /* by zxf, 12/09/02, for user off */
+        /* by Motorola, 12/09/02, for user off */
         SLEEP_SAVE_PMCR, SLEEP_SAVE_PCFR, SLEEP_SAVE_PWER,
         SLEEP_SAVE_PRER, SLEEP_SAVE_PFER, SLEEP_SAVE_PSPR,
         SLEEP_SAVE_PGSR0, SLEEP_SAVE_PGSR1, SLEEP_SAVE_PGSR2,
@@ -125,13 +133,11 @@ int pm_do_useroff()
 
 	SAVE(CKEN);
 	
-	/*	Change accoding to Nick's experience.	*/
 	CKEN = CKEN22_MEMC | CKEN9_OSTIMER;
 	PCFR = 0x66;	
    	PSLR |= 0X4;
-	/*	Change accoding to Nick's experience end.	*/
 
-        /* by zxf, 12/09/02, save for user off */
+        /* by Motorola, 12/09/02, save for user off */
         SAVE(PMCR); SAVE(PCFR); SAVE(PWER);
         SAVE(PRER); SAVE(PFER); SAVE(PSPR);
         SAVE(PGSR0); SAVE(PGSR1); SAVE(PGSR2);
@@ -189,7 +195,7 @@ int pm_do_useroff()
 
 	RESTORE(CKEN);
 
-        /* by zxf, 12/09/02, restore for user off */
+        /* by Motorola, 12/09/02, restore for user off */
         RESTORE(PMCR); RESTORE(PCFR); RESTORE(PWER);
         RESTORE(PRER); RESTORE(PFER); RESTORE(PSPR);
         RESTORE(PGSR0); RESTORE(PGSR1); RESTORE(PGSR2);

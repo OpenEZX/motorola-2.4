@@ -1,31 +1,37 @@
 /*
- *  linux/drivers/sound/ezx-nssp.c
+ * linux/drivers/sound/ezx-nssp.c
  *
+ * nssp interface for the ezx platform
  *
- *  Description:  nssp interface for the ezx platform
+ * Copyright (C) 2002-2005 Motorola
  *
- *
- *  Copyright:	BJDC motorola.
- * 
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
  *
- *
- *  History:
- *  zhouqiong, Motorola               Jun 20,2002     created
- *  zhouqiong, Motorola               Sep 19,2002     according code review meeting minutes.
- *  zhouqiong, Motorola               Oct 30,2002     according new requirement for VA.
- *  zhouqiong, Motorola               Nov 05,2002     according code review meeting minutes.
- *  zhouqiong, Motorola               Mar 04,2003     (1) don't close headset interrupt;
- *                                                    (2) when headset in, output gain decrease 6db 
- *  LiYong, Motorola                  Sep 23,2003     (1)Port from EZX; (2)Modify the NSSP port inital
- *  Jin Lihong(w20076), Motorola      Jan 02,2004     (1) Port from UDC e680 kernel of jem vob.
- *                                                    (2) Move audio driver DEBUG macro definition to ezx-audio.h
- *                                                    header file,and redefine DEBUG to EZX_OSS_DEBUG
- *                                                    (3) reorganize file header
- *  Jin Lihong(w20076),Motorola  Feb.23,2004,LIBdd79747  add e680 audio path switch and gain setting funcs
- *  Jin Lihong(w20076),Motorola  Mar.15,2004,LIBdd86574  mixer bug fix
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *                                                                                               
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * 
+ *  Jun 20,2002 - (Motorola) created
+ *  Sep 19,2002 - (Motorola) according code review meeting minutes.
+ *  Oct 30,2002 - (Motorola) according new requirement for VA.
+ *  Nov 05,2002 - (Motorola) according code review meeting minutes.
+ *  Mar 04,2003 - (Motorola) (1) don't close headset interrupt;
+ *                           (2) when headset in, output gain decrease 6db 
+ *  Sep 23,2003 - (Motorola) (1)Port from EZX; (2)Modify the NSSP port inital
+ *  Jan 02,2004 - (Motorola) (1) Port from UDC e680 kernel of jem vob.
+ *                           (2) Move audio driver DEBUG macro definition to ezx-audio.h
+ *                               header file,and redefine DEBUG to EZX_OSS_DEBUG
+ *                           (3) reorganize file header
+ *  Feb.23,2004 - (Motorola) add e680 audio path switch and gain setting funcs
+ *  Mar.15,2004 - (Motorola) mixer bug fix
  *
  */
  

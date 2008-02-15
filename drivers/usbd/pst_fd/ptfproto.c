@@ -1,6 +1,7 @@
 /*
  * ptf_fd/ptfproto.c
  *
+ * Copyright (c) 2003-2005 Motorola
  * Copyright (c) 2000, 2001, 2002 Lineo
  * Copyright (c) 2001 Hewlett Packard
  *
@@ -24,7 +25,7 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  *----------Motorola-ezx --history---
- *26-02-2003    created by a17400 try to finish char device driver
+ *26-02-2003    created by Motorola try to finish char device driver
  *26-02-2003	   first build pass, no read write function
  *26-02-39       second pass, read and recv function added.
  *
@@ -56,7 +57,7 @@
 #include <linux/interrupt.h>
 #include <linux/slab.h>
 #include <linux/fcntl.h>
-#include <linux/fs.h> //add by a17400
+#include <linux/fs.h> //add by Motorola
 //#include <linux/tty_driver.h>
 //#include <linux/tty_flip.h>
 //#include <linux/tty.h>
@@ -74,11 +75,11 @@
 
 #include <usbd-mem.h>		/* for ckmalloc */
 
-/*  a17400 define MINOR and MAJOR */
+/*  Motorola define MINOR and MAJOR */
 /*  MAJOR is for character device;MINOR stands each device */
 
 
-#define        PTF_CHAR_MAJOR         189	//a17400 random...???
+#define        PTF_CHAR_MAJOR         189	//Motorola random...???
 #define        PTF_CHAR_MINOR_1        1
 #define        PTF_CHAR_MINOR_2       2
 #define        PTF_CHAR_MINOR_3       3
@@ -94,21 +95,21 @@
 #ifndef FALSE
 #define FALSE 0
 #endif
-static int ptf_usb_func_ready=0; /* a17400:1, current PTF USB interface is present, 0, no PTF usb interface,set/clear it by usb func driver*/
-int ptf_cable_connected=0;	/* a17400: 1, pluged usb cable, 0, unplug usb cable */
-int ptf_func_created=0;		/* a17400: to indicate bottom available(=1),poll() needs check dev pointer,see ptf_poll()*/
-DECLARE_WAIT_QUEUE_HEAD(ptf_write_queue); /* a17400: add wait queue for ptf/aplog write */
-/* a17400, for buttom, tell char driver that PTF interface ready */
+static int ptf_usb_func_ready=0; /* Motorola:1, current PTF USB interface is present, 0, no PTF usb interface,set/clear it by usb func driver*/
+int ptf_cable_connected=0;	/* Motorola: 1, pluged usb cable, 0, unplug usb cable */
+int ptf_func_created=0;		/* Motorola: to indicate bottom available(=1),poll() needs check dev pointer,see ptf_poll()*/
+DECLARE_WAIT_QUEUE_HEAD(ptf_write_queue); /* Motorola: add wait queue for ptf/aplog write */
+/* Motorola, for buttom, tell char driver that PTF interface ready */
 void enable_ptf_func_driver(){
   ptf_usb_func_ready=1;
 
 }
-/* a17400, for buttom, tell char driver that PTF interface gone */
+/* Motorola, for buttom, tell char driver that PTF interface gone */
 void disable_ptf_func_driver(){
   ptf_usb_func_ready=0;
 
 }
-/* a17400, for upper or outside, PTF interface current status
+/* Motorola, for upper or outside, PTF interface current status
 ret 0, not ready
 ret 1 ready
  */
@@ -123,7 +124,7 @@ void ptf_dbg_print(char * info){
   //  printk("%s",info); /*remove in release*/
 }
 
-/* defination for each device a17400*/
+/* defination for each device Motorola*/
 
 #define PTF_RECV_BUF_SIZE	 255
 struct ptfproto_dev{
@@ -276,7 +277,7 @@ static int  ptfproto_init_dev(struct ptfproto_dev * dev, int num, int (* xmit_da
 
 /* PTF character device driver Support Functions ***************************************************** */
 
-/*a17400: fill out function_driver ops*/
+/*Motorola: fill out function_driver ops*/
 static struct file_operations ptf_fops ={
 
 	llseek:	NULL,
@@ -397,7 +398,7 @@ int ptf_release (struct inode * inode, struct file *filp)
 	printk (KERN_WARNING "%s: Before set open cnt\n",__FUNCTION__);
 	if(ptfproto_device_array[dev_num]){ /* proto_device may  be destoryed in usbd event handler!!!*/
 	  ptfproto_device_array[dev_num]->opencnt=0;	//just reset opencnt, we free device in ptfproto_destory()
-	  /* a17400: since keep all private and proto structs, we need clean recv buffer here */
+	  /* Motorola: since keep all private and proto structs, we need clean recv buffer here */
 	  save_flags_cli(flags); /* disable interrupt to access recv queue */
 	  ptf_buf_queue_release(&(ptfproto_device_array[dev_num]->recv_queue));
 	  restore_flags(flags);
@@ -507,7 +508,7 @@ int ptf_write(struct file *filp, const char *buf, size_t count,loff_t *f_pos)
         unsigned char *buffer1;
         unsigned char *buffer;
         if(!ptf_cable_connected)
-                interruptible_sleep_on(&ptf_write_queue); /*a17400: sleep if cable unavailable */
+                interruptible_sleep_on(&ptf_write_queue); /*Motorola: sleep if cable unavailable */
 
         if ((dev = filp->private_data) == NULL) {
                 printk(KERN_WARNING "null device in private data in filp\n");
@@ -594,7 +595,7 @@ unsigned int ptf_poll (struct file * filp, struct poll_table_struct * wait){
         struct ptfproto_dev * dev;
 
         int mask=0;
-	unsigned long flags;	/* a17400: we need secure competition conditions */
+	unsigned long flags;	/* Motorola: we need secure competition conditions */
 	save_flags_cli(flags);
 
         dev=filp->private_data;
@@ -685,7 +686,7 @@ int ptfproto_destory(int dev_num)
 
         ptfproto_device_array[dev_num]=NULL;
 
-        return 0; //a17400 ??? which is better???
+        return 0; //Motorola ??? which is better???
 
 }
 
