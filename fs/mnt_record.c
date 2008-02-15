@@ -25,6 +25,8 @@
  *		Initial the mount record interface 
  *  2006/02/07
  *		changed for panic log and more flexible
+ *  2006/05/30
+ *              Correct the BANK WIDTH non-align write issue  
  */
 
 #include <linux/config.h>
@@ -181,7 +183,7 @@ int mnt_record_inc_part(struct mnt_record_info *mnt_record_i, int num_part)
 	mount_record = mnt_record_i->mnt_count;
 	
 	while (mount_record > 8*MNT_BANKWIDTH) {
-		ofs += 4;
+		ofs += MNT_BANKWIDTH;
 		mount_record -= 8*MNT_BANKWIDTH;
 	}
 

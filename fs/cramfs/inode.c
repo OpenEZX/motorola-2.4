@@ -45,11 +45,13 @@
  */
 
 /*
- * Support linear and block device on one flash at a same time 
- * Copyright (C) 2005 Motorola Inc.
+ * Copyright (C) 2005, 2006 Motorola Inc.
  * 
- *   Modified:  Susan Gu
- *   Date:      2005.5 
+ * 2005.05  
+ *          Support linear and block device on one flash at a same time 
+ *
+ * 2006-05-30
+ *          Set the default time for cramfs file inode
  */
 
 #include <linux/module.h>
@@ -70,7 +72,6 @@
 
 #include <linux/mtd/map.h>
 #include <linux/ezx_roflash.h>
-
 
 #define CRAMFS_SB_MAGIC u.cramfs_sb.magic
 #define CRAMFS_SB_SIZE u.cramfs_sb.size
@@ -215,6 +216,12 @@ static struct file_operations cramfs_linear_xip_fops = {
 
 #define CRAMFS_INODE_IS_XIP(x) ((x)->i_mode & S_ISVTX)
 
+#ifdef CONFIG_ARCH_EZXBASE
+#define MKYEAR(y) \
+	((((y-1)/4-(y-1)/100+(y-1)/400+367*11/12+1)+(y-1)*365-719499)*24*60*60)
+static unsigned long default_time = MKYEAR(2000);
+#endif
+
 static struct inode *get_cramfs_inode(struct super_block *sb, struct cramfs_inode * cramfs_inode)
 {
 	struct inode * inode = new_inode(sb);
@@ -227,6 +234,11 @@ static struct inode *get_cramfs_inode(struct super_block *sb, struct cramfs_inod
 		inode->i_blksize = PAGE_CACHE_SIZE;
 		inode->i_gid = cramfs_inode->gid;
 		inode->i_ino = CRAMINO(cramfs_inode);
+	#ifdef CONFIG_ARCH_EZXBASE
+		inode->i_mtime = inode->i_atime = inode->i_ctime = default_time;
+	#else
+		inode->i_mtime = inode->i_atime = inode->i_ctime = 0;
+	#endif
 		/* inode->i_nlink is left 1 - arguably wrong for directories,
 		   but it's the best we can do without reading the directory
 	           contents.  1 yields the right result in GNU find, even

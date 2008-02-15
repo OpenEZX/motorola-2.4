@@ -8,6 +8,9 @@
  *
  * 2005   Port to EzX platform.
  * 2006   change for pm locking chip when flash sleep
+ * 
+ * 2006-05-30
+ *        Fix the MTD BANK WIDTH non-align write issue
  */
 
 #ifndef __LINUX_MTD_MAP_H__
@@ -352,7 +355,7 @@ static inline map_word map_word_load_partial(struct map_info *map, map_word orig
 			bitpos = (map_bankwidth(map)-1-i)*8;
 #endif
 			orig.x[0] &= ~(0xff << bitpos);
-			orig.x[0] |= buf[i] << bitpos;
+			orig.x[0] |= buf[i-start] << bitpos;
 		}
 	}
 	return orig;
