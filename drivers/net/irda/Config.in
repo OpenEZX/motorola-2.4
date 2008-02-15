@@ -5,6 +5,10 @@ comment 'SIR device drivers'
 dep_tristate 'IrTTY (uses Linux serial driver)' CONFIG_IRTTY_SIR $CONFIG_IRDA
 dep_tristate 'IrPORT (IrDA serial driver)' CONFIG_IRPORT_SIR $CONFIG_IRDA
 
+if [ "$CONFIG_ARCH_OMAP" = "y" ]; then
+   dep_tristate 'Innovator SIR' CONFIG_OMAP_SIR $CONFIG_IRDA
+fi   
+
 comment 'Dongle support' 
 bool 'Serial dongle support' CONFIG_DONGLE
 if [ "$CONFIG_DONGLE" != "n" ]; then
@@ -38,7 +42,10 @@ dep_tristate 'ALi M5123 FIR (Experimental)' CONFIG_ALI_FIR $CONFIG_IRDA
 dep_tristate 'VLSI 82C147 SIR/MIR/FIR (Experimental)' CONFIG_VLSI_FIR $CONFIG_IRDA
 fi
 if [ "$CONFIG_ARCH_SA1100" = "y" ]; then
-   dep_tristate 'SA1100 Internal IR' CONFIG_SA1100_FIR $CONFIG_IRDA
+   dep_tristate 'SA1100 Internal IR' CONFIG_SA1100_FIR $CONFIG_IRDA $CONFIG_EXPERIMENTAL
 fi
-
+if [ "$CONFIG_ARCH_PXA" = "y" ]; then
+   dep_tristate 'Intel PXA2xx Internal IR' CONFIG_PXA_FIR $CONFIG_IRDA $CONFIG_EXPERIMENTAL        
+   dep_tristate 'Intel PXA2xx/Bulverde Internal FICP' CONFIG_PXA_FICP $CONFIG_IRDA $CONFIG_EXPERIMENTAL
+fi
 endmenu

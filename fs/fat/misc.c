@@ -21,6 +21,11 @@
 #endif
 #define Printk(x)	printk x
 
+/* add by w20598 for fat panic */
+extern unsigned short  panicdev;
+extern struct completion fatpanic_completion;
+/* add end */
+
 /* Well-known binary file extensions - of course there are many more */
 
 static char ascii_extensions[] =
@@ -47,6 +52,8 @@ void fat_fs_panic(struct super_block *s,const char *msg)
 	printk("Filesystem panic (dev %s).\n  %s\n", kdevname(s->s_dev), msg);
 	if (not_ro)
 		printk("  File system has been set read-only\n");
+	panicdev = (kdev_t)s->s_dev;
+	complete(&fatpanic_completion);
 }
 
 

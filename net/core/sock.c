@@ -335,10 +335,17 @@ int sock_setsockopt(struct socket *sock, int level, int optname,
 			char devname[IFNAMSIZ]; 
 
 			/* Sorry... */ 
+            /*
+             * we need to call bind to interface for all client
+             * thus remove this permission check
+             * by Xia Weizhong
+             */
+#if 0
 			if (!capable(CAP_NET_RAW)) {
 				ret = -EPERM;
 				break;
 			}
+#endif
 
 			/* Bind this socket to a particular device like "eth0",
 			 * as specified in the passed interface name. If the

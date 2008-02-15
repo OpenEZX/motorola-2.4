@@ -759,6 +759,7 @@ out_err:
 	return -1;
 }
 
+#undef CONFIG_HOTPLUG //added by Levis for PM issue
 
 #ifdef	CONFIG_HOTPLUG
 
@@ -968,6 +969,11 @@ struct usb_device *usb_alloc_dev(struct usb_device *parent, struct usb_bus *bus)
 void usb_free_dev(struct usb_device *dev)
 {
 	if (atomic_dec_and_test(&dev->refcnt)) {
+		if(in_interrupt())
+		{
+			printk("%s: Call from Interrupt! Return now\n", __FUNCTION__);
+			return;
+		}
 		dev->bus->op->deallocate(dev);
 		usb_destroy_configuration(dev);
 

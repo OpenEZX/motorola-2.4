@@ -17,6 +17,9 @@
 #include <linux/init.h>
 #include <linux/tqueue.h>
 
+#include <linux/dpm.h>
+#include <linux/trace.h>
+
 /*
    - No shared variables, all the data are CPU local.
    - If a softirq needs serialization, let it serialize itself
@@ -44,6 +47,12 @@ irq_cpustat_t irq_stat[NR_CPUS] ____cacheline_aligned;
 
 static struct softirq_action softirq_vec[32] __cacheline_aligned;
 
+#ifdef CONFIG_PREEMPT_TIMES
+extern void latency_cause(int,int);
+#else
+#define latency_cause(a, b)
+#endif
+
 /*
  * we cannot loop indefinitely here to avoid userspace starvation,
  * but we also don't want to introduce a worst case 1/HZ latency
@@ -60,15 +69,18 @@ static inline void wakeup_softirqd(unsigned cpu)
 
 asmlinkage void do_softirq()
 {
-	int cpu = smp_processor_id();
+	int cpu;
 	__u32 pending;
 	unsigned long flags;
 	__u32 mask;
 
 	if (in_interrupt())
 		return;
+	preempt_lock_start(-99);
 
 	local_irq_save(flags);
+
+	cpu = smp_processor_id();
 
 	pending = softirq_pending(cpu);
 
@@ -84,10 +96,15 @@ restart:
 		local_irq_enable();
 
 		h = softirq_vec;
+ 
+		latency_cause(-100, pending);
+
 
 		do {
-			if (pending & 1)
+			if (pending & 1) {
+		                TRACE_SOFT_IRQ(TRACE_EV_SOFT_IRQ_SOFT_IRQ, (h - softirq_vec));
 				h->action(h);
+			}
 			h++;
 			pending >>= 1;
 		} while (pending);
@@ -106,6 +123,15 @@ restart:
 	}
 
 	local_irq_restore(flags);
+	preempt_lock_stop();
+#ifdef CONFIG_ILATENCY
+	/*
+	 * If you have entry.S whacked up to call intr_ret_from_exception
+	 * you can remove this call, unfortunately, MIPs and ARM don't
+	 * have a simple way to do this for now so we catch them all here . . 
+	 */
+	intr_ret_from_exception();
+#endif 
 }
 
 /*
@@ -151,10 +177,11 @@ struct tasklet_head tasklet_hi_vec[NR_CPUS] __cacheline_aligned;
 
 void __tasklet_schedule(struct tasklet_struct *t)
 {
-	int cpu = smp_processor_id();
+	int cpu;
 	unsigned long flags;
 
 	local_irq_save(flags);
+	cpu = smp_processor_id();
 	t->next = tasklet_vec[cpu].list;
 	tasklet_vec[cpu].list = t;
 	cpu_raise_softirq(cpu, TASKLET_SOFTIRQ);
@@ -175,10 +202,11 @@ void __tasklet_hi_schedule(struct tasklet_struct *t)
 
 static void tasklet_action(struct softirq_action *a)
 {
-	int cpu = smp_processor_id();
+	int cpu;
 	struct tasklet_struct *list;
 
 	local_irq_disable();
+	cpu = smp_processor_id();
 	list = tasklet_vec[cpu].list;
 	tasklet_vec[cpu].list = NULL;
 	local_irq_enable();
@@ -192,6 +220,9 @@ static void tasklet_action(struct softirq_action *a)
 			if (!atomic_read(&t->count)) {
 				if (!test_and_clear_bit(TASKLET_STATE_SCHED, &t->state))
 					BUG();
+
+				TRACE_SOFT_IRQ(TRACE_EV_SOFT_IRQ_TASKLET_ACTION, (unsigned long) (t->func));
+
 				t->func(t->data);
 				tasklet_unlock(t);
 				continue;
@@ -209,10 +240,11 @@ static void tasklet_action(struct softirq_action *a)
 
 static void tasklet_hi_action(struct softirq_action *a)
 {
-	int cpu = smp_processor_id();
+	int cpu;
 	struct tasklet_struct *list;
 
 	local_irq_disable();
+	cpu = smp_processor_id();
 	list = tasklet_hi_vec[cpu].list;
 	tasklet_hi_vec[cpu].list = NULL;
 	local_irq_enable();
@@ -226,6 +258,9 @@ static void tasklet_hi_action(struct softirq_action *a)
 			if (!atomic_read(&t->count)) {
 				if (!test_and_clear_bit(TASKLET_STATE_SCHED, &t->state))
 					BUG();
+
+				TRACE_SOFT_IRQ(TRACE_EV_SOFT_IRQ_TASKLET_HI_ACTION, (unsigned long) (t->func));
+
 				t->func(t->data);
 				tasklet_unlock(t);
 				continue;
@@ -295,8 +330,10 @@ static void bh_action(unsigned long nr)
 	if (!hardirq_trylock(cpu))
 		goto resched_unlock;
 
-	if (bh_base[nr])
+	if (bh_base[nr]){
+	        TRACE_SOFT_IRQ(TRACE_EV_SOFT_IRQ_BOTTOM_HALF, (nr));
 		bh_base[nr]();
+	}
 
 	hardirq_endlock(cpu);
 	spin_unlock(&global_bh_lock);
@@ -364,13 +401,16 @@ static int ksoftirqd(void * __bind_cpu)
 	int cpu = cpu_logical_map(bind_cpu);
 
 	daemonize();
-	current->nice = 19;
+	set_user_nice(current, 19);
 	sigfillset(&current->blocked);
 
+	/* Identify as a system task for DPM purposes */
+	current->dpm_state = DPM_NO_STATE;
+
 	/* Migrate to the right CPU */
-	current->cpus_allowed = 1UL << cpu;
-	while (smp_processor_id() != cpu)
-		schedule();
+	set_cpus_allowed(current, 1UL << cpu);
+	if (cpu() != cpu)
+		BUG();
 
 	sprintf(current->comm, "ksoftirqd_CPU%d", bind_cpu);
 
@@ -395,7 +435,7 @@ static int ksoftirqd(void * __bind_cpu)
 	}
 }
 
-static __init int spawn_ksoftirqd(void)
+__init int spawn_ksoftirqd(void)
 {
 	int cpu;
 

@@ -426,6 +426,7 @@ struct input_event {
  */
 
 #define MSC_SERIAL		0x00
+#define MSC_KEYPAD		0x01
 #define MSC_MAX			0x07
 
 /*
@@ -482,6 +483,8 @@ struct input_event {
 #define BUS_AMIGA		0x16
 #define BUS_ADB			0x17
 #define BUS_I2C			0x18
+#define BUS_MAPLE		0x19
+#define BUS_ONCHIP		0x1a
 
 /*
  * Structures used in ioctls to upload effects to a device

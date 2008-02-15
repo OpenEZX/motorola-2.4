@@ -61,7 +61,9 @@ extern int pm2fb_init(void);
 extern int pm2fb_setup(char*);
 extern int pm3fb_init(void);
 extern int pm3fb_setup(char*);
+extern int clps711xfb_init(void);
 extern int cyber2000fb_init(void);
+extern int cyber2000fb_setup(char*);
 extern int retz3fb_init(void);
 extern int retz3fb_setup(char*);
 extern int clgenfb_init(void);
@@ -76,6 +78,8 @@ extern int aty128fb_init(void);
 extern int aty128fb_setup(char*);
 extern int neofb_init(void);
 extern int neofb_setup(char*);
+extern int x220fb_init(void);
+extern int x220fb_setup(char*);
 extern int igafb_init(void);
 extern int igafb_setup(char*);
 extern int imsttfb_init(void);
@@ -107,6 +111,7 @@ extern int valkyriefb_setup(char*);
 extern int chips_init(void);
 extern int g364fb_init(void);
 extern int sa1100fb_init(void);
+extern int pxafb_init(void);
 extern int fm2fb_init(void);
 extern int fm2fb_setup(char*);
 extern int q40fb_init(void);
@@ -132,12 +137,23 @@ extern int radeonfb_init(void);
 extern int radeonfb_setup(char*);
 extern int e1355fb_init(void);
 extern int e1355fb_setup(char*);
+extern int e1356fb_init(void);
+extern int e1356fb_setup(char*);
 extern int au1100fb_init(void);
 extern int au1100fb_setup(char*);
+extern int it8181fb_init(void);
+extern int it8181fb_setup(char*);
 extern int pvr2fb_init(void);
 extern int pvr2fb_setup(char*);
+extern int mq200fb_init(void);
+extern int mq200fb_setup(char*);
 extern int sstfb_init(void);
 extern int sstfb_setup(char*);
+extern int anakinfb_init(void);
+extern int rpxfb_init(void);
+extern int rpxfb_setup(char*);
+extern int ibmlcdfb_init(void);
+extern int ibmlcdfb_setup(char*);
 
 static struct {
 	const char *name;
@@ -163,6 +179,9 @@ static struct {
 #ifdef CONFIG_FB_AMIGA
 	{ "amifb", amifb_init, amifb_setup },
 #endif
+#ifdef CONFIG_FB_CLPS711X
+	{ "clps711xfb", clps711xfb_init, NULL },
+#endif
 #ifdef CONFIG_FB_CYBER
 	{ "cyber", cyberfb_init, cyberfb_setup },
 #endif
@@ -186,6 +205,9 @@ static struct {
 #endif
 #ifdef CONFIG_FB_ATY128
 	{ "aty128fb", aty128fb_init, aty128fb_setup },
+#endif
+#ifdef CONFIG_FB_X220
+        { "x220fb", x220fb_init, x220fb_setup },
 #endif
 #ifdef CONFIG_FB_NEOMAGIC
 	{ "neo", neofb_init, neofb_setup },
@@ -225,6 +247,9 @@ static struct {
 #endif
 #ifdef CONFIG_FB_TRIDENT
 	{ "trident", tridentfb_init, tridentfb_setup },
+#endif
+#ifdef CONFIG_FB_RPX
+	{ "rpxfb", rpxfb_init, rpxfb_setup },
 #endif
 #ifdef CONFIG_FB_VOODOO1
 	{ "sst", sstfb_init, sstfb_setup },
@@ -288,11 +313,17 @@ static struct {
 #ifdef CONFIG_FB_SA1100
 	{ "sa1100", sa1100fb_init, NULL },
 #endif
+#ifdef CONFIG_FB_PXA
+	{ "pxa", pxafb_init, NULL },
+#endif
 #ifdef CONFIG_FB_SUN3
 	{ "sun3", sun3fb_init, sun3fb_setup },
 #endif
 #ifdef CONFIG_FB_HIT
 	{ "hitfb", hitfb_init, NULL },
+#endif
+#ifdef CONFIG_FB_ANAKIN
+	{ "anakinfb", anakinfb_init, NULL },
 #endif
 #ifdef CONFIG_FB_TX3912
 	{ "tx3912", tx3912fb_init, NULL },
@@ -312,10 +343,27 @@ static struct {
 #ifdef CONFIG_FB_MAXINE
 	{ "maxinefb", maxinefb_init, NULL },
 #endif
+#ifdef CONFIG_FB_E1356
+        { "e1356fb", e1356fb_init, e1356fb_setup },
+#endif
+#ifdef CONFIG_FB_IT8181
+        { "it8181fb", it8181fb_init, it8181fb_setup },
+#endif
+#ifdef CONFIG_FB_MQ200
+	{ "mq200fb", mq200fb_init, mq200fb_setup },
+#endif
+#ifdef CONFIG_FB_PVR2
+	{ "pvr2", pvr2fb_init, pvr2fb_setup },
+#endif
+#ifdef CONFIG_FB_VOODOO1
+	{ "sst", sstfb_init, sstfb_setup },
+#endif
 #ifdef CONFIG_FB_AU1100
 	{ "au1100fb", au1100fb_init, au1100fb_setup },
-#endif 
-
+#endif
+#ifdef CONFIG_FB_IBMLCDC
+        { "ibmlcdfb", ibmlcdfb_init, ibmlcdfb_setup },
+#endif
 
 	/*
 	 * Generic drivers that don't use resource management (yet)
@@ -570,6 +618,10 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 	unsigned long start;
 	u32 len;
 #endif
+	int ret, dbuffers;
+	unsigned long firstfb_screen_dma;
+	unsigned long firstfb_screen_len;
+	unsigned long secondfb_screen_dma = 0;
 
 	if (vma->vm_pgoff > (~0UL >> PAGE_SHIFT))
 		return -EINVAL;
@@ -598,7 +650,11 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 
 	/* frame buffer memory */
 	start = fix.smem_start;
+	
 	len = PAGE_ALIGN((start & ~PAGE_MASK)+fix.smem_len);
+		
+	//DBPRINTK("FB_MMAP: double buffers length = 0x%x\n", len);
+		
 	if (off >= len) {
 		/* memory mapped io */
 		off -= len;
@@ -612,6 +668,7 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 	}
 	unlock_kernel();
 	start &= PAGE_MASK;
+			
 	if ((vma->vm_end - vma->vm_start + off) > len)
 		return -EINVAL;
 	off += start;
@@ -643,20 +700,53 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 #elif defined(__i386__) || defined(__x86_64__)
 	if (boot_cpu_data.x86 > 3)
 		pgprot_val(vma->vm_page_prot) |= _PAGE_PCD;
-#elif defined(__arm__) || defined(__mips__)
+#elif defined(__mips__)
 	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 #elif defined(__sh__)
 	pgprot_val(vma->vm_page_prot) &= ~_PAGE_CACHABLE;
-#elif defined(__ia64__)
+#elif defined(__ia64__) || defined(__arm__)
 	vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
 #elif defined(__hppa__)
 	pgprot_val(vma->vm_page_prot) |= _PAGE_NO_CACHE; 
 #else
 #warning What do we have to do here??
 #endif
-	if (io_remap_page_range(vma->vm_start, off,
-			     vma->vm_end - vma->vm_start, vma->vm_page_prot))
-		return -EAGAIN;
+	
+	ret = fb->fb_ioctl(NULL, NULL, FBIOCHECK2BFS, (unsigned long)(&secondfb_screen_dma), 0, info);
+	
+	if (ret == 1)  //double buffers are enabled && firstfb is in SRAM && secondfb is in SDRAM //
+	{
+
+DBPRINTK("fb_mmap: double_buffers(1),fix.smem_len(%d),vm_start(0x%x),vm_end(0x%x)\n", fix.smem_len, vma->vm_start, vma->vm_end);
+
+		if ( (vma->vm_end - vma->vm_start) <= (fix.smem_len / 2) )
+		{
+			if (io_remap_page_range(vma->vm_start, fix.smem_start, (vma->vm_end - vma->vm_start), vma->vm_page_prot))
+			return -EAGAIN;
+		}
+		else // mmap region exceeds the first framebuffer //
+		{
+			unsigned long length = vma->vm_end - vma->vm_start;
+			
+			if (io_remap_page_range(vma->vm_start, fix.smem_start, fix.smem_len/2, vma->vm_page_prot))
+				return -EAGAIN;
+			if (io_remap_page_range((vma->vm_start + fix.smem_len/2), secondfb_screen_dma, (length - fix.smem_len/2), vma->vm_page_prot))
+				return -EAGAIN;
+
+DBPRINTK("fb_mmap: double_buffers(1),complete OK\n", fix.smem_len);
+
+		}
+	}
+	else
+	{
+
+DBPRINTK("fb_mmap: double_buffers(0),invoke io_remap page range\n");
+
+		if (io_remap_page_range(vma->vm_start, off,
+				     vma->vm_end - vma->vm_start, vma->vm_page_prot))
+			return -EAGAIN;
+	}
+	
 #endif /* !__sparc_v9__ */
 	return 0;
 #endif /* !sparc32 */
@@ -772,9 +862,10 @@ register_framebuffer(struct fb_info *fb_info)
 				if (owner)
 					__MOD_INC_USE_COUNT(owner);
 				if (!fb_info->fbops->fb_open)
-					continue;
+					goto trynext;
 				if (!fb_info->fbops->fb_open(fb_info,0))
-					continue;
+					/* nothing */;
+			trynext:
 				if (owner)
 					__MOD_DEC_USE_COUNT(owner);
 			}

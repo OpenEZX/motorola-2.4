@@ -1,0 +1,9 @@
+#
+# Emualting Flash Chip driver configuration
+#
+mainmenu_option next_comment
+comment 'EZX ROFLASH device'
+tristate 'ROFLASH Device?' CONFIG_ARCH_EZX_ROFLASH
+tristate 'Verbose info about unlockdown?' CONFIG_L18_DEBUG
+endmenu
+#tristate 'Debug for ROFLASH device?'  ROFLASH_DEBUG_ERR

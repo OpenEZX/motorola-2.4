@@ -22,6 +22,7 @@
 #include <linux/list.h>
 #include <linux/skbuff.h>
 #include <linux/poll.h>
+#include <linux/ppp_defs.h>
 
 struct ppp_channel;
 
@@ -67,6 +68,8 @@ extern int ppp_channel_index(struct ppp_channel *);
 
 /* Get the unit number associated with a channel, or -1 if none */
 extern int ppp_unit_number(struct ppp_channel *);
+
+extern int ppp_idle_time( struct ppp_channel *, struct ppp_idle * );
 
 /*
  * SMP locking notes:

@@ -32,6 +32,14 @@
 #define FBIOPUT_MODEINFO        0x4617
 #define FBIOGET_DISPINFO        0x4618
 
+/* added for backlight control */
+#define FBIOSETBKLIGHT          0x4619
+#define FBIOGETBKLIGHT          0x461A
+#define FBIOSETBRIGHTNESS       0x461B
+#define FBIOGETBRIGHTNESS       0x461C
+#define FBIOENABLE2BFS          0x4620  //Added for supporting Peter's request //
+#define FBIODISABLE2BFS         0x4621  //Added for supporting Peter's request //
+#define FBIOCHECK2BFS           0x4622  //Added for supporting Peter's request //
 
 #define FB_TYPE_PACKED_PIXELS		0	/* Packed Pixels	*/
 #define FB_TYPE_PLANES			1	/* Non interleaved planes */
@@ -95,6 +103,7 @@
 #define FB_ACCEL_SIS_GLAMOUR    36	/* SiS 300/630/540              */
 #define FB_ACCEL_3DLABS_PERMEDIA3 37	/* 3Dlabs Permedia 3		*/
 #define FB_ACCEL_ATI_RADEON	38	/* ATI Radeon family		*/
+#define FB_ACCEL_EPSON_SED1356  39      /* Epson SED1356                */
 
 
 #define FB_ACCEL_NEOMAGIC_NM2070 90	/* NeoMagic NM2070              */
@@ -171,6 +180,9 @@ struct fb_bitfield {
 #define FB_VMODE_SMOOTH_XPAN	512	/* smooth xpan possible (internally used) */
 #define FB_VMODE_CONUPDATE	512	/* don't update x/yoffset	*/
 
+/* For double buffering printk log */
+#define DBPRINTK  //
+
 struct fb_var_screeninfo {
 	__u32 xres;			/* visible resolution		*/
 	__u32 yres;
@@ -228,6 +240,16 @@ struct fb_con2fbmap {
 #define VESA_VSYNC_SUSPEND      1
 #define VESA_HSYNC_SUSPEND      2
 #define VESA_POWERDOWN          3
+
+/* added for backlight */
+#define BKLIGHT_OFF             0
+#define BKLIGHT_ON               1
+
+/* added for ts */
+#define SETTONORMAL             0
+//#define SETTOHWR                1
+#define SETTOCUSTOM             1
+#define GETPENSTYLE             2
 
 struct fb_monspecs {
 	__u32 hfmin;			/* hfreq lower limit (Hz) */

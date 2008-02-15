@@ -75,6 +75,7 @@ extern struct kernel_param __setup_start, __setup_end;
  * Mark functions and data as being only used at initialization
  * or exit time.
  */
+
 #define __init		__attribute__ ((__section__ (".text.init")))
 #define __exit		__attribute__ ((unused, __section__(".text.exit")))
 #define __initdata	__attribute__ ((__section__ (".data.init")))
@@ -153,6 +154,14 @@ typedef void (*__cleanup_module_func_t)(void);
 #define __devinitdata __initdata
 #define __devexit __exit
 #define __devexitdata __exitdata
+#endif
+
+#ifndef __ASSEMBLY__
+#define __instrument
+#define __noinstrument __attribute__ ((no_instrument_function))
+#ifdef CONFIG_KFI
+extern int kfi_dump_log(char* buf);
+#endif
 #endif
 
 /* Functions marked as __devexit may be discarded at kernel link time, depending

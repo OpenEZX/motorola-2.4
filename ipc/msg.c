@@ -25,6 +25,8 @@
 #include <asm/uaccess.h>
 #include "util.h"
 
+#include <linux/trace.h>
+
 /* sysctl: */
 int msg_ctlmax = MSGMAX;
 int msg_ctlmnb = MSGMNB;
@@ -326,6 +328,7 @@ asmlinkage long sys_msgget (key_t key, int msgflg)
 		msg_unlock(id);
 	}
 	up(&msg_ids.sem);
+	TRACE_IPC(TRACE_EV_IPC_MSG_CREATE, ret, msgflg);
 	return ret;
 }
 

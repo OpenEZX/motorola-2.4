@@ -98,7 +98,11 @@
  * Note that even if DMA is turned off we still support the 'dma' and  'use_dma'
  * module options so we don't break any startup scripts.
  */
+#ifdef CONFIG_BEECH   /* IBM 405LP/Beech does not have external DMA */
+#define ALLOW_DMA	0
+#else
 #define ALLOW_DMA	1
+#endif
 
 /*
  * Set this to zero to remove all the debug statements via
@@ -142,7 +146,7 @@
 #include "cs89x0.h"
 
 static char version[] __initdata =
-"cs89x0.c: v2.4.3-pre1 Russell Nelson <nelson@crynwr.com>, Andrew Morton <andrewm@uow.edu.au>\n";
+"cs89x0.c: v2.4.3-pre1 Russell Nelson <nelson@crynwr.com>, Andrew Morton <andrewm@uow.edu.au>, Modified by Ralph Blach for the Earl\n";
 
 /* First, a few definitions that the brave might change.
    A zero-terminated list of I/O addresses to be probed. Some special flags..
@@ -163,6 +167,19 @@ static unsigned int cs8900_irq_map[] = {12,0,0,0};
 static unsigned int netcard_portlist[] __initdata =
    { 0x0300, 0};
 static unsigned int cs8900_irq_map[] = {1,0,0,0};
+#elif defined (CONFIG_BEECH)
+static unsigned int netcard_portlist[] __initdata =
+{ 0 /* filled in with mapped virtual addr later */, 0};
+static unsigned int cs8900_irq_map[] = {UIC_IRQ_EIR4};
+
+/*
+ * Undo PCMCIA definition and replace with zero for no offset from the 
+ * ioremapped address.
+ */
+
+#undef _IO_BASE
+#define _IO_BASE 0
+
 #else
 static unsigned int netcard_portlist[] __initdata =
    { 0x300, 0x320, 0x340, 0x360, 0x200, 0x220, 0x240, 0x260, 0x280, 0x2a0, 0x2c0, 0x2e0, 0};
@@ -292,11 +309,22 @@ int __init cs89x0_probe(struct net_device *dev)
 	else if (base_addr != 0)	/* Don't probe at all. */
 		return -ENXIO;
 
+#ifdef CONFIG_BEECH
+	netcard_portlist[0] = 
+		(int) ioremap(BEECH_ETHERNET_PADDR, BEECH_ETHERNET_SIZE)
+		+ 0x301;
+#endif
+
 	for (i = 0; netcard_portlist[i]; i++) {
 		if (cs89x0_probe1(dev, netcard_portlist[i]) == 0)
 			return 0;
 	}
 	printk(KERN_WARNING "cs89x0: no cs8900 or cs8920 detected.  Be sure to disable PnP with SETUP\n");
+
+#ifdef CONFIG_BEECH
+	iounmap((void *)netcard_portlist[0]);
+#endif
+
 	return -ENODEV;
 }
 
@@ -476,7 +504,17 @@ printk("PP_addr=0x%x\n", inw(ioaddr + ADD_PORT));
 	       lp->chip_revision,
 	       dev->base_addr);
 
+#ifdef CONFIG_BEECH
+	/*
+	 * Leave firmware settings alone, except for forcing the required fixed
+         * IRQ pin setting (in the event the firmware does not set this
+         * up). Beech does not currently provide a means of retrieving MAC
+         * address, etc. known only to f/w.  
+         */
+	writereg(dev, PP_CS8900_ISAINT, 0);
+#else
 	reset_chip(dev);
+#endif
    
         /* Here we read the current configuration of the chip. If there
 	   is no Extended EEPROM then the idea is to not disturb the chip
@@ -519,6 +557,15 @@ printk("PP_addr=0x%x\n", inw(ioaddr + ADD_PORT));
 
         if ((readreg(dev, PP_SelfST) & (EEPROM_OK | EEPROM_PRESENT)) == 
 	      (EEPROM_OK|EEPROM_PRESENT)) {
+		printk( "[Cirrus EEPROM] ");
+#ifdef CONFIG_BEECH
+	}
+	/* HACK: Beech needs to do this configuration even though it
+	 * doesn't have a Cirrus EEPROM */
+	{
+		printk( "[Beech] ");
+#endif
+
 	        /* Load the MAC. */
 		for (i=0; i < ETH_ALEN/2; i++) {
 	                unsigned int Addr;
@@ -563,8 +610,6 @@ printk("PP_addr=0x%x\n", inw(ioaddr + ADD_PORT));
 		/* IRQ. Other chips already probe, see below. */
 		if (lp->chip_type == CS8900) 
 			lp->isa_config = readreg(dev, PP_CS8900_ISAINT) & INT_NO_MASK;
-	   
-		printk( "[Cirrus EEPROM] ");
 	}
 
         printk("\n");
@@ -654,7 +699,6 @@ printk("PP_addr=0x%x\n", inw(ioaddr + ADD_PORT));
 				printk("\ncs89x0: invalid ISA interrupt number %d\n", i);
 			else
 				i = cs8900_irq_map[i];
-			
 			lp->irq_map = CS8900_IRQ_MAP; /* fixed IRQ map for CS8900 */
 		} else {
 			int irq_map_buff[IRQ_MAP_LEN/2];

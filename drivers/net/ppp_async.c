@@ -253,6 +253,7 @@ ppp_asynctty_ioctl(struct tty_struct *tty, struct file *file,
 		   unsigned int cmd, unsigned long arg)
 {
 	struct asyncppp *ap = ap_get(tty);
+    	struct ppp_idle idle;
 	int err, val;
 
 	if (ap == 0)
@@ -297,7 +298,13 @@ ppp_asynctty_ioctl(struct tty_struct *tty, struct file *file,
 			break;
 		err = 0;
 		break;
-
+	case PPPIOCGIDLE:
+              if( 0!= ppp_idle_time( (&ap->chan), &idle ) )
+                     break;
+		if (copy_to_user((void *) arg, &idle, sizeof(idle)))
+			break;
+		err = 0;
+		break;
 	default:
 		err = -ENOIOCTLCMD;
 	}
@@ -385,7 +392,7 @@ ppp_async_ioctl(struct ppp_channel *chan, unsigned int cmd, unsigned long arg)
 	struct asyncppp *ap = chan->private;
 	int err, val;
 	u32 accm[8];
-
+    
 	err = -EFAULT;
 	switch (cmd) {
 	case PPPIOCGFLAGS:
@@ -453,7 +460,6 @@ ppp_async_ioctl(struct ppp_channel *chan, unsigned int cmd, unsigned long arg)
 		ap->mru = val;
 		err = 0;
 		break;
-
 	default:
 		err = -ENOTTY;
 	}

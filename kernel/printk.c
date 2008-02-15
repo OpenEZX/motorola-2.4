@@ -26,6 +26,7 @@
 #include <linux/module.h>
 #include <linux/interrupt.h>			/* For in_interrupt() */
 #include <linux/config.h>
+#include <linux/delay.h>
 
 #include <asm/uaccess.h>
 
@@ -36,7 +37,11 @@
 #elif defined(CONFIG_SMP)
 #define LOG_BUF_LEN	(32768)
 #else	
+#ifdef CONFIG_PANIC_LOG
+#define LOG_BUF_LEN     (1024*128)	// same to PANIC_BUFSIZE, also LOGO_SIZE
+#else
 #define LOG_BUF_LEN	(16384)			/* This must be a power of two */
+#endif		// CONFIG_PANIC_LOG
 #endif
 
 #define LOG_BUF_MASK	(LOG_BUF_LEN-1)
@@ -71,6 +76,7 @@ int oops_in_progress;
 static DECLARE_MUTEX(console_sem);
 struct console *console_drivers;
 
+
 /*
  * logbuf_lock protects log_buf, log_start, log_end, con_start and logged_chars
  * It is also used in interesting ways to provide interlocking in
@@ -89,6 +95,15 @@ static unsigned long log_start;			/* Index into log_buf: next char to be read by
 static unsigned long con_start;			/* Index into log_buf: next char to be sent to consoles */
 static unsigned long log_end;			/* Index into log_buf: most-recently-written-char + 1 */
 static unsigned long logged_chars;		/* Number of chars produced since last read+clear operation */
+
+/* The function will fetch current log buf info */
+void logbuf_info(char **start, unsigned long *cnt)
+{
+	printk("****** log buf length: 0x%x, start offset: 0x%x ******\n", LOG_BUF_LEN, (log_start & LOG_BUF_MASK));
+	*start = log_buf;
+	*cnt = LOG_BUF_LEN;
+}
+
 
 struct console_cmdline console_cmdline[MAX_CMDLINECONSOLES];
 static int preferred_console = -1;
@@ -432,6 +447,12 @@ asmlinkage int printk(const char *fmt, ...)
 	 * Copy the output into log_buf.  If the caller didn't provide
 	 * appropriate log level tags, we insert them here
 	 */
+#if	defined(CONFIG_DEBUG_LL)
+	{
+		extern void printascii(const char *);
+		printascii(printk_buf);
+	}
+#endif
 	for (p = printk_buf; *p; p++) {
 		if (log_level_unknown) {
 			if (p[0] != '<' || p[1] < '0' || p[1] > '7' || p[2] != '>') {

@@ -1,5 +1,5 @@
 /*
- * $Id: pmc551.c,v 1.20 2002/03/05 13:47:08 dwmw2 Exp $
+ * $Id: pmc551.c,v 1.21 2002/10/21 13:40:07 jocke Exp $
  *
  * PMC551 PCI Mezzanine Ram Device
  *
@@ -216,7 +216,7 @@ static int pmc551_point (struct mtd_info *mtd, loff_t from, size_t len, size_t *
 }
 
 
-static void pmc551_unpoint (struct mtd_info *mtd, u_char *addr)
+static void pmc551_unpoint (struct mtd_info *mtd, u_char *addr, loff_t from, size_t len)
 {
 #ifdef CONFIG_MTD_PMC551_DEBUG
 	printk(KERN_DEBUG "pmc551_unpoint()\n");

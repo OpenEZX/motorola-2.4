@@ -16,6 +16,10 @@
 #include <linux/ext2_fs.h>
 #include <linux/romfs_fs.h>
 
+#ifdef CONFIG_ARCH_EZX
+#include <linux/ezx_roflash.h>
+#endif
+
 #define BUILD_CRAMDISK
 
 extern int get_filesystem_list(char * buf);
@@ -138,6 +142,7 @@ static struct dev_name_struct {
 	{ "scd",     0x0b00 },
 	{ "mcd",     0x1700 },
 	{ "cdu535",  0x1800 },
+	{ "gdrom",   0xFA00 },
 	{ "sonycd",  0x1800 },
 	{ "aztcd",   0x1d00 },
 	{ "cm206cd", 0x2000 },
@@ -377,6 +382,27 @@ static int __init mount_nfs_root(void)
 }
 #endif
 
+#ifdef CONFIG_ARCH_EZX
+
+static int __init mount_cramfs_root(void)
+{
+	if (sys_mount("/dev/root","/root","cramfs",root_mountflags,root_mount_data) == 0)
+		return 1;
+	return 0;
+}
+
+#else
+
+#ifdef CONFIG_ROOT_CRAMFS_LINEAR
+static int __init mount_cramfs_linear_root(void)
+{
+	if (sys_mount("/dev/root","/root","cramfs",root_mountflags,root_mount_data) == 0)
+		return 1;
+	return 0;
+}
+#endif
+
+#endif
 static int __init create_dev(char *name, kdev_t dev, char *devfs_name)
 {
 	void *handle;
@@ -593,7 +619,7 @@ static int __init rd_load_image(char *from)
 		rd_blocks >>= 1;
 
 	if (nblocks > rd_blocks) {
-		printk("RAMDISK: image too big! (%d/%d blocks)\n",
+		printk("RAMDISK: image too big! (%d/%ld blocks)\n",
 		       nblocks, rd_blocks);
 		goto done;
 	}
@@ -620,11 +646,11 @@ static int __init rd_load_image(char *from)
 		goto done;
 	}
 
-	printk(KERN_NOTICE "RAMDISK: Loading %d blocks [%d disk%s] into ram disk... ", 
+	printk(KERN_NOTICE "RAMDISK: Loading %d blocks [%ld disk%s] into ram disk... ", 
 		nblocks, ((nblocks-1)/devblocks)+1, nblocks>devblocks ? "s" : "");
 	for (i=0; i < nblocks; i++) {
 		if (i && (i % devblocks == 0)) {
-			printk("done disk #%d.\n", i/devblocks);
+			printk("done disk #%ld.\n", i/devblocks);
 			rotate = 0;
 			if (close(in_fd)) {
 				printk("Error closing the disk.\n");
@@ -636,7 +662,7 @@ static int __init rd_load_image(char *from)
 				printk("Error opening disk.\n");
 				goto noclose_input;
 			}
-			printk("Loading disk #%d... ", i/devblocks+1);
+			printk("Loading disk #%ld... ", i/devblocks+1);
 		}
 		read(in_fd, buf, BLOCK_SIZE);
 		write(out_fd, buf, BLOCK_SIZE);
@@ -731,6 +757,36 @@ static void __init devfs_make_root(char *name)
 
 static void __init mount_root(void)
 {
+#ifdef  CONFIG_ARCH_EZX
+/* Susan -- support simultaneous linear cramfs and block cramfs */
+	if (MAJOR(ROOT_DEV) == ROFLASH_MAJOR) 
+	{
+		if (mount_cramfs_root()) 
+		{
+			sys_chdir("/root");
+			ROOT_DEV = current->fs->pwdmnt->mnt_sb->s_dev;
+			printk ("VFS: Mounted root (linear cramfs filesystem).\n");
+			return;
+		}
+		printk (KERN_ERR "VFS: Unable to mount linear cramfs root\n");
+	}
+
+#else
+
+#ifdef CONFIG_ROOT_CRAMFS_LINEAR
+	if (ROOT_DEV == MKDEV(0, 0)) {
+		if (mount_cramfs_linear_root()) {
+			sys_chdir("/root");
+			ROOT_DEV = current->fs->pwdmnt->mnt_sb->s_dev;
+			printk ("VFS: Mounted root (linear cramfs filesystem).\n");
+			return;
+		}
+		printk (KERN_ERR "VFS: Unable to mount linear cramfs root\n");
+	}
+#endif
+
+#endif
+
 #ifdef CONFIG_ROOT_NFS
 	if (MAJOR(ROOT_DEV) == UNNAMED_MAJOR) {
 		if (mount_nfs_root()) {

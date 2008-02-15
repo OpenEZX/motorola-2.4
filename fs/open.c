@@ -16,6 +16,8 @@
 #include <linux/tty.h>
 #include <linux/iobuf.h>
 
+#include <linux/trace.h>
+
 #include <asm/uaccess.h>
 
 #define special_file(m) (S_ISCHR(m)||S_ISBLK(m)||S_ISFIFO(m)||S_ISSOCK(m))
@@ -797,6 +799,10 @@ asmlinkage long sys_open(const char * filename, int flags, int mode)
 			error = PTR_ERR(f);
 			if (IS_ERR(f))
 				goto out_error;
+			TRACE_FILE_SYSTEM(TRACE_EV_FILE_SYSTEM_OPEN,
+					  fd,
+					  f->f_dentry->d_name.len,
+					  f->f_dentry->d_name.name); 
 			fd_install(fd, f);
 		}
 out:
@@ -863,6 +869,10 @@ asmlinkage long sys_close(unsigned int fd)
 	filp = files->fd[fd];
 	if (!filp)
 		goto out_unlock;
+	TRACE_FILE_SYSTEM(TRACE_EV_FILE_SYSTEM_CLOSE,
+			  fd,
+			  0,
+			  NULL);
 	files->fd[fd] = NULL;
 	FD_CLR(fd, files->close_on_exec);
 	__put_unused_fd(files, fd);

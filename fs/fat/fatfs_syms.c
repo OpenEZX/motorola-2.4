@@ -12,6 +12,13 @@
 #include <linux/msdos_fs.h>
 #include <linux/fat_cvf.h>
 
+/* add by w20598 used to notify user-space if fat fs panic */
+DECLARE_COMPLETION(fatpanic_completion);
+unsigned short panicdev = 0;
+EXPORT_SYMBOL(fatpanic_completion);
+EXPORT_SYMBOL(panicdev);
+/* add end */
+
 EXPORT_SYMBOL(fat_new_dir);
 EXPORT_SYMBOL(fat_get_block);
 EXPORT_SYMBOL(fat_clear_inode);

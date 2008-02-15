@@ -203,7 +203,7 @@ static void sound_remove_unit(struct sound_unit **list, int unit)
  *	1	*8		Sequencers
  *	2	*16		Midi
  *	3	*16		DSP
- *	4	*16		SunDSP
+ *	4	*16		SunDSP / audio
  *	5	*16		DSP16
  *	6	--		sndstat (obsolete)
  *	7	*16		unused
@@ -250,7 +250,7 @@ int register_sound_special(struct file_operations *fops, int unit)
 		name = "audio";
 		break;
 	    case 5:
-		name = "unknown5";
+		name = "dsp16";
 		break;
 	    case 6:		/* Was once sndstat */
 		name = "unknown6";
@@ -349,6 +349,22 @@ int register_sound_dsp(struct file_operations *fops, int dev)
 				 "dsp", S_IWUSR | S_IRUSR);
 }
 
+/* add by zq, 2002-6-19, 
+   add sound device audio */
+int register_sound_audio(struct file_operations *fops, int dev)
+{
+	return sound_insert_unit(&chains[4], fops, dev, 4, 132,
+				 "audio", S_IWUSR | S_IRUSR);
+}
+
+/* add by zq, 2002-6-19, 
+   add sound device dsp16 */
+int register_sound_dsp16(struct file_operations *fops, int dev)
+{
+	return sound_insert_unit(&chains[5], fops, dev, 5, 133,
+				 "dsp16", S_IWUSR | S_IRUSR);
+}
+
 EXPORT_SYMBOL(register_sound_dsp);
 
 /**
@@ -432,6 +448,19 @@ void unregister_sound_dsp(int unit)
 	return sound_remove_unit(&chains[3], unit);
 }
 
+/* add by zq, 2002-6-19, 
+   add sound device audio */
+void unregister_sound_audio(int unit)
+{
+	return sound_remove_unit(&chains[4], unit);
+}
+
+/* add by zq, 2002-6-19, 
+   add sound device dsp16 */
+void unregister_sound_dsp16(int unit)
+{
+	return sound_remove_unit(&chains[5], unit);
+}
 
 EXPORT_SYMBOL(unregister_sound_dsp);
 
@@ -484,14 +513,18 @@ int soundcore_open(struct inode *inode, struct file *file)
 	struct sound_unit *s;
 	struct file_operations *new_fops = NULL;
 
+/*  modified by zq, 2002-6-19  
+   add sound device dsp16 and audio
+*/
+
 	chain=unit&0x0F;
-	if(chain==4 || chain==5)	/* dsp/audio/dsp16 */
+/*	if(chain==4 || chain==5)	// dsp/audio/dsp16 
 	{
 		unit&=0xF0;
 		unit|=3;
 		chain=3;
 	}
-	
+*/	
 	spin_lock(&sound_loader_lock);
 	s = __look_for_unit(chain, unit);
 	if (s)
@@ -571,3 +604,4 @@ static int __init init_soundcore(void)
 
 module_init(init_soundcore);
 module_exit(cleanup_soundcore);
+

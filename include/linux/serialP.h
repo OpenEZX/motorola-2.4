@@ -30,6 +30,10 @@
 #include <linux/serial.h>
 #endif
 
+#ifdef CONFIG_PM
+#include <linux/pm.h>
+#endif
+
 struct serial_state {
 	int	magic;
 	int	baud_base;
@@ -53,6 +57,9 @@ struct serial_state {
 	int	io_type;
 	struct async_struct *info;
 	struct pci_dev	*dev;
+#ifdef CONFIG_PM
+	struct pm_dev *pm_dev;
+#endif
 };
 
 struct async_struct {

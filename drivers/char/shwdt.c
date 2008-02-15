@@ -41,6 +41,7 @@
   #define WTCSR		0xffffff86
 #else
   #error "Can't use SuperH watchdog on this platform"
+  #error "Can't use SuperH watchdog on this processor."
 #endif
 
 #define WTCNT_HIGH	0x5a00
@@ -90,6 +91,7 @@ static int clock_division_ratio = WTCSR_CKS_4096;
 
 #define msecs_to_jiffies(msecs)	(jiffies + ((HZ * msecs + 999) / 1000))
 #define next_ping_period(cks)	msecs_to_jiffies(cks - 4)
+#define user_ping_period(cks)	(next_ping_period(cks) * 10)
 
 static unsigned long sh_is_open;
 static struct watchdog_info sh_wdt_info;
@@ -139,7 +141,7 @@ static void sh_wdt_write_csr(__u8 val)
 static void sh_wdt_start(void)
 {
 	timer.expires = next_ping_period(clock_division_ratio);
-	next_heartbeat = jiffies + (sh_heartbeat * HZ);
+	next_heartbeat = user_ping_period(clock_division_ratio);
 	add_timer(&timer);
 
 	sh_wdt_write_csr(WTCSR_WT | WTCSR_CKS_4096);

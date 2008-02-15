@@ -27,12 +27,17 @@
 #include <linux/devfs_fs_kernel.h>
 #include <linux/major.h>
 #include <linux/acct.h>
+#include <linux/quotaops.h>
 
 #include <asm/uaccess.h>
 
 #include <linux/kmod.h>
 #define __NO_VERSION__
 #include <linux/module.h>
+
+#ifdef CONFIG_ARCH_EZX
+#include <linux/ezx_roflash.h>
+#endif
 
 LIST_HEAD(super_blocks);
 spinlock_t sb_lock = SPIN_LOCK_UNLOCKED;
@@ -279,6 +284,7 @@ static struct super_block *alloc_super(void)
 		sema_init(&s->s_dquot.dqio_sem, 1);
 		sema_init(&s->s_dquot.dqoff_sem, 1);
 		s->s_maxbytes = MAX_NON_LFS;
+		s->s_qop = sb_generic_quota_ops;
 	}
 	return s;
 }
@@ -445,7 +451,7 @@ static inline void write_super(struct super_block *sb)
  * hold up the sync while mounting a device. (The newly
  * mounted device won't need syncing.)
  */
-void sync_supers(kdev_t dev)
+void sync_supers(kdev_t dev, int wait)
 {
 	struct super_block * sb;
 
@@ -454,6 +460,8 @@ void sync_supers(kdev_t dev)
 		if (sb) {
 			if (sb->s_dirt)
 				write_super(sb);
+			if (wait && sb->s_op && sb->s_op->sync_fs)
+				sb->s_op->sync_fs(sb);
 			drop_super(sb);
 		}
 		return;
@@ -462,15 +470,45 @@ restart:
 	spin_lock(&sb_lock);
 	sb = sb_entry(super_blocks.next);
 	while (sb != sb_entry(&super_blocks))
-		if (sb->s_dirt) {
+		if (sb->s_dirt) 
+		{
 			sb->s_count++;
 			spin_unlock(&sb_lock);
 			down_read(&sb->s_umount);
 			write_super(sb);
+			if (wait && sb->s_root && sb->s_op && sb->s_op->sync_fs)
+				sb->s_op->sync_fs(sb);
 			drop_super(sb);
 			goto restart;
-		} else
+		} 
+		else
+		{
+			/* Added by Susan to trigger GC in kupdate kernel thread */
+			if ( (!strcmp(current->comm,"kupdated")) && (!strcmp(sb->s_type->name,"vfm")) ) //we are in kupdate kernel thread //
+			{
+				unsigned int result = 0;
+				
+				sb->s_count++;
+				spin_unlock(&sb_lock);
+				try_down_read(&sb->s_umount, &result);
+				if ( result )  //We get the read lock //
+				{
+					//Susan -- not necessory -- lock_super(sb);
+					if (sb->s_op->write_super)   //Susan -- this super_block belongs to VFM //
+						sb->s_op->write_super(sb);
+					//Susan -- not necessory -- unlock_super(sb);
+					drop_super(sb);
+				}
+				else  //We didn't get the read lock //
+				{
+					put_super(sb);
+				}
+				spin_lock(&sb_lock);  //goto restart;
+			}
+		
 			sb = sb_entry(sb->s_list.next);
+		}
+		
 	spin_unlock(&sb_lock);
 }
 
@@ -753,6 +791,42 @@ static struct super_block *get_sb_nodev(struct file_system_type *fs_type,
 	return s;
 }
 
+#ifdef CONFIG_ARCH_EZX
+/* Added by Susan */
+struct super_block *get_linear_super(struct file_system_type *type, kdev_t dev)
+{
+	struct super_block *s = alloc_super();
+	if (!s)
+		return ERR_PTR(-ENOMEM);
+
+retry:
+	spin_lock(&sb_lock);
+
+	s->s_dev = dev;
+	insert_super(s, type);
+	return s;
+}
+
+static struct super_block *get_sb_linear_dev(struct file_system_type *fs_type, int flags, void * data, kdev_t dev)
+{
+	struct super_block *s = get_linear_super(fs_type, dev);
+
+	if (IS_ERR(s))
+		return s;
+
+	s->s_flags = flags;
+	if (!fs_type->read_super(s, data, flags & MS_VERBOSE ? 1 : 0)) {
+		deactivate_super(s);
+		remove_super(s);
+		return ERR_PTR(-EINVAL);
+	}
+	s->s_flags |= MS_ACTIVE;
+	return s;
+}
+
+#endif
+
+
 static int compare_single(struct super_block *s, void *p)
 {
 	return 1;
@@ -791,12 +865,65 @@ do_kern_mount(const char *fstype, int flags, char *name, void *data)
 	mnt = alloc_vfsmnt(name);
 	if (!mnt)
 		goto out;
+
+#ifdef CONFIG_ARCH_EZX
+	/* Added by Susan */
+	if ( !strcmp(fstype,"cramfs") )
+	{
+		roflash_area dev_def;
+		struct nameidata nd;
+		unsigned short dev_nr;
+		int error = 0;
+		
+		if ( !strcmp(name,"/dev/root") )
+		{
+			dev_def = *((roflash_area *)roflash_get_dev(0));
+			dev_nr = MKDEV(ROFLASH_MAJOR,0);
+		}
+		else
+		{
+			if (path_init(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, &nd))
+			error = path_walk(name, &nd);
+			if (error)
+				return ERR_PTR(error);
+
+			printk(KERN_NOTICE "do_kern_mount:dev_nr(i_dev)(%d)\n",nd.dentry->d_inode->i_dev);
+			printk(KERN_NOTICE "do_kern_mount:dev_nr(i_rdev)(%d)\n",nd.dentry->d_inode->i_rdev);
+
+			dev_nr = nd.dentry->d_inode->i_rdev;
+			
+			if (MAJOR(dev_nr) == ROFLASH_MAJOR)
+				dev_def = *((roflash_area *)roflash_get_dev(MINOR(dev_nr)));
+//			printk(KERN_NOTICE "do_kern_mount:dev_def.l_x_b(%x)\n",dev_def.l_x_b);
+		}				
+		
+		if (MAJOR(dev_nr) == ROFLASH_MAJOR)  //cramfs is mounted on NOR //
+		{
+			if ( (dev_def.l_x_b == ROFLASH_LINEAR) || (dev_def.l_x_b == ROFLASH_LINEAR_XIP) )
+				sb = get_sb_linear_dev(type, flags, data,dev_nr);
+			if (dev_def.l_x_b == ROFLASH_BLOCK)
+				sb = get_sb_bdev(type, flags, name, data);
+		}
+		else  //cramfs is mounted on DOC //
+			sb = get_sb_bdev(type,flags,name,data);
+	}
+	else
+	{
+#endif
+
+	
 	if (type->fs_flags & FS_REQUIRES_DEV)
 		sb = get_sb_bdev(type, flags, name, data);
 	else if (type->fs_flags & FS_SINGLE)
 		sb = get_sb_single(type, flags, name, data);
 	else
 		sb = get_sb_nodev(type, flags, name, data);
+
+
+#ifdef CONFIG_ARCH_EZX
+	}
+#endif
+
 	if (IS_ERR(sb))
 		goto out_mnt;
 	if (type->fs_flags & FS_NOMOUNT)

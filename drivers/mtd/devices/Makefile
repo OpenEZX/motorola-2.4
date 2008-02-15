@@ -1,9 +1,13 @@
 #
 # linux/drivers/devices/Makefile
 #
-# $Id: Makefile,v 1.4 2001/06/26 21:10:05 spse Exp $
+# $Id: Makefile,v 1.6 2002/11/27 10:28:14 gleixner Exp $
 
+BELOW25		:= $(shell echo $(PATCHLEVEL) | sed s/[1234]/y/)
+
+ifeq ($(BELOW25),y)
 O_TARGET	:= devlink.o
+endif
 
 #                       *** BIG UGLY NOTE ***
 #

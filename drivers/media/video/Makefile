@@ -25,13 +25,33 @@ O_TARGET := video.o
 # All of the (potential) objects that export symbols.
 # This list comes from 'grep -l EXPORT_SYMBOL *.[hc]'.
 
-export-objs     :=	i2c-old.o videodev.o bttv-if.o cpia.o
+export-objs     :=	i2c-old.o videodev.o bttv-if.o cpia.o \
+			 v4l2-common.o v4l1-compat.o
 
-list-multi	:=	bttv.o zoran.o
+list-multi	:=	bttv.o zoran.o h3600_backpaq_camera.o
 bttv-objs	:=	bttv-driver.o bttv-cards.o bttv-if.o
+ifdef CONFIG_ARCH_EZX_E680
+pxa-camera-objs :=	pxa_camera.o adcm2700.o adcm2700_hw.o mt9v111.o  
+endif
+ifdef CONFIG_ARCH_EZX_A780
+  pxa-camera-objs :=  pxa_camera.o
+  ifdef CONFIG_CAMERA_OV9640
+    pxa-camera-objs +=  ov9640.o ov9640_hw.o
+  endif
+  ifdef CONFIG_CAMERA_OV9650
+    pxa-camera-objs +=  ov9650.o ov9650_hw.o
+  endif
+  ifdef CONFIG_CAMERA_MT9M111
+    pxa-camera-objs +=  mt9m111.o mt9m111_hw.o
+  endif
+  ifdef CONFIG_CAMERA_ADCM3800
+    pxa-camera-objs +=  adcm3800.o adcm3800_hw.o
+  endif
+endif
 zoran-objs      :=	zr36120.o zr36120_i2c.o zr36120_mem.o
+h3600-objs      :=      h3600_backpaq_core.o h3600_backpaq_algo.o
 
-obj-$(CONFIG_VIDEO_DEV) += videodev.o
+obj-$(CONFIG_VIDEO_DEV) += videodev.o v4l2-common.o v4l1-compat.o
 
 obj-$(CONFIG_BUS_I2C) += i2c-old.o
 obj-$(CONFIG_VIDEO_BT848) += bttv.o msp3400.o tvaudio.o \
@@ -48,6 +68,7 @@ obj-$(CONFIG_VIDEO_ZORAN) += zr36067.o i2c-old.o
 obj-$(CONFIG_VIDEO_ZORAN_BUZ) += saa7111.o saa7185.o
 obj-$(CONFIG_VIDEO_ZORAN_DC10) += saa7110.o adv7175.o
 obj-$(CONFIG_VIDEO_ZORAN_LML33) += bt819.o bt856.o
+obj-$(CONFIG_VIDEO_CYBERPRO) += cyberpro.o i2c-old.o saa7111.o
 obj-$(CONFIG_VIDEO_LML33) += bt856.o bt819.o
 obj-$(CONFIG_VIDEO_PMS) += pms.o
 obj-$(CONFIG_VIDEO_PLANB) += planb.o
@@ -58,6 +79,13 @@ obj-$(CONFIG_VIDEO_CPIA_PP) += cpia_pp.o
 obj-$(CONFIG_VIDEO_CPIA_USB) += cpia_usb.o
 obj-$(CONFIG_VIDEO_MEYE) += meye.o
 obj-$(CONFIG_TUNER_3036) += tuner-3036.o
+obj-$(CONFIG_PXA_CAMERA) += camera.o
+obj-$(CONFIG_VIDEO_H3600_BACKPAQ) += h3600_backpaq_camera.o
+
+subdir-$(CONFIG_VIDEO_OMAP) += omap
+ifeq ($(CONFIG_VIDEO_OMAP),y)
+obj-y += omap/v4l2-omap.o
+endif
 
 # Extract lists of the multi-part drivers.
 # The 'int-*' lists are the intermediate files used to build the multi's.
@@ -85,3 +113,7 @@ zoran.o: zr36120.o zr36120_i2c.o zr36120_mem.o
 
 bttv.o: $(bttv-objs)
 	$(LD) $(LD_RFLAG) -r -o $@ $(bttv-objs)
+camera.o: $(pxa-camera-objs)
+	$(LD) $(LD_RFLAG) -r -o $@ $(pxa-camera-objs)
+h3600_backpaq_camera.o: $(h3600-objs)
+	$(LD) $(LD_RFLAG) -r -o $@ $(h3600-objs)

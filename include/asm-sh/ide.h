@@ -40,7 +40,11 @@ static __inline__ int ide_default_irq(ide_ioreg_t base)
 		return ide_default_irq_hp600(base);
 	}
 	switch (base) {
+#if defined(CONFIG_SH_SOLUTION_ENGINE) && defined(CONFIG_CF_ENABLER)
+                case 0x01f0: return 7;
+#else
 		case 0x01f0: return 14;
+#endif
 		case 0x0170: return 15;
 		default:
 			return 0;

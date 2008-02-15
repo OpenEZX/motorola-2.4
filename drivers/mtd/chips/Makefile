@@ -1,9 +1,13 @@
 #
 # linux/drivers/chips/Makefile
 #
-# $Id: Makefile,v 1.8 2002/01/10 20:27:40 eric Exp $
+# $Id: Makefile,v 1.9 2002/11/27 10:28:51 gleixner Exp $
 
+BELOW25		:= $(shell echo $(PATCHLEVEL) | sed s/[1234]/y/)
+
+ifeq ($(BELOW25),y)
 O_TARGET	:= chipslink.o
+endif
 
 export-objs	:= chipreg.o gen_probe.o
 
@@ -18,7 +22,7 @@ obj-$(CONFIG_MTD)		+= chipreg.o
 obj-$(CONFIG_MTD_AMDSTD)	+= amd_flash.o 
 obj-$(CONFIG_MTD_CFI)		+= cfi_probe.o
 obj-$(CONFIG_MTD_CFI_AMDSTD)	+= cfi_cmdset_0002.o
-obj-$(CONFIG_MTD_CFI_INTELEXT)	+= cfi_cmdset_0001.o
+obj-$(CONFIG_MTD_CFI_INTELEXT)	+= cfi_cmdset_0001.o cfi_cmdset_0001_mp.o
 obj-$(CONFIG_MTD_GEN_PROBE)	+= gen_probe.o
 obj-$(CONFIG_MTD_JEDEC)		+= jedec.o
 obj-$(CONFIG_MTD_JEDECPROBE)	+= jedec_probe.o

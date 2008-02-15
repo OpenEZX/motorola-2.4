@@ -1033,9 +1033,19 @@ int fat_notify_change(struct dentry * dentry, struct iattr * attr)
 			return -EPERM;
 	}
 
+	/* FIX DRM user cant modify attributes of fat format file */
+	/* Modify by w20598 */
+	/* FIXED ME: find the "DRM" user automatically */
+        //printk("current->fsuid = %d\n",current->fsuid);
+        if ((current->fsuid == 518) && (attr->ia_valid & ATTR_MODE))
+	    attr->ia_valid |= ATTR_FORCE;
+        
 	error = inode_change_ok(inode, attr);
 	if (error)
-		return MSDOS_SB(sb)->options.quiet ? 0 : error;
+	{
+		printk("inode_change_ok is not passed\n");
+	        return MSDOS_SB(sb)->options.quiet ? 0 : error;
+	}
 
 	if (((attr->ia_valid & ATTR_UID) && 
 	     (attr->ia_uid != MSDOS_SB(sb)->options.fs_uid)) ||

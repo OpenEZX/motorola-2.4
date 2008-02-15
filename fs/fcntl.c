@@ -199,7 +199,11 @@ asmlinkage long sys_dup(unsigned int fildes)
 	return ret;
 }
 
-#define SETFL_MASK (O_APPEND | O_NONBLOCK | O_NDELAY | FASYNC | O_DIRECT)
+/*
+ * file I/O flags that can legally be set via fcntl()
+ */
+#define SETFL_MASK	(O_APPEND | O_NONBLOCK | O_NDELAY | \
+			 FASYNC | O_DIRECT | O_STREAMING)
 
 static int setfl(int fd, struct file * filp, unsigned long arg)
 {

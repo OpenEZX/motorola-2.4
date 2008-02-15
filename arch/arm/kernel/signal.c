@@ -22,6 +22,7 @@
 #include <linux/personality.h>
 #include <linux/tty.h>
 #include <linux/elf.h>
+#include <linux/spinlock.h>
 
 #include <asm/pgalloc.h>
 #include <asm/ucontext.h>
@@ -189,6 +190,67 @@ struct rt_sigframe
 	unsigned long retcode;
 };
 
+#ifdef CONFIG_XSCALE_WMMX
+
+/* wmmx_area is 0x98 bytes long, preceeded by 8 bytes of signature */
+#define WMMX_STORAGE_SIZE	(0x98 + 8)
+
+#define WMMX_MAGIC0		0x12ef842a
+#define WMMX_MAGIC1		0x1c07ca71
+
+extern void wmmx_task_copy(struct task_struct *task, void *storage);
+extern void wmmx_task_restore(struct task_struct *task, void *storage);
+	
+static int
+preserve_wmmx_context(void *wmmx_save_area)
+{
+	int err = 0;
+
+	/* the wmmx context is 64 bit aligned */
+	long *wmmx_storage = (long *)(((long)wmmx_save_area + 4) & ~7);
+
+	__put_user_error(WMMX_MAGIC0, wmmx_storage+0, err);
+	__put_user_error(WMMX_MAGIC1, wmmx_storage+1, err);
+	/* 
+	 * wmmx_task_copy() doesn't check user permissions.
+	 * Let's do a dummy write on the upper boundary to ensure
+	 * access to user mem is OK all way up.
+	 */
+	__put_user_error(0, wmmx_storage+WMMX_STORAGE_SIZE/4-1, err);
+	if (!err) {
+		wmmx_task_copy(current, wmmx_storage+2);
+		return 0;
+	}
+	return err;
+}
+
+static int
+restore_wmmx_context(void *wmmx_save_area)
+{
+	int err = 0;
+	long *wmmx_storage, magic0, magic1, dummy;
+
+	/* the wmmx context is 64 bit aligned */
+	wmmx_storage = (long *)(((long)wmmx_save_area + 4) & ~7);
+
+	/*
+	 * Validate wmmx signature.
+	 * Also, wmmx_task_restore() doesn't check user permissions.
+	 * Let's do a dummy write on the upper boundary to ensure
+	 * access to user mem is OK all way up.
+	 */
+	__get_user_error(magic0, wmmx_storage+0, err);
+	__get_user_error(magic1, wmmx_storage+1, err);
+	if (!err && magic0 == WMMX_MAGIC0 && magic1 == WMMX_MAGIC1 &&
+	    !__get_user(dummy, wmmx_storage+WMMX_STORAGE_SIZE/4-1)) {
+		wmmx_task_restore(current, wmmx_storage+2);
+		return 0;
+	}
+	return -1;
+}
+
+#endif
+
 static int
 restore_sigcontext(struct pt_regs *regs, struct sigcontext *sc)
 {
@@ -251,6 +313,11 @@ asmlinkage int sys_sigreturn(struct pt_regs *regs)
 	if (restore_sigcontext(regs, &frame->sc))
 		goto badframe;
 
+#ifdef CONFIG_XSCALE_WMMX
+	if (current->thread.want_wmmx && restore_wmmx_context(frame+1))
+		goto badframe;
+#endif
+
 	/* Send SIGTRAP if we're single-stepping */
 	if (ptrace_cancel_bpt(current))
 		send_sig(SIGTRAP, current, 1);
@@ -290,6 +357,11 @@ asmlinkage int sys_rt_sigreturn(struct pt_regs *regs)
 
 	if (restore_sigcontext(regs, &frame->uc.uc_mcontext))
 		goto badframe;
+
+#ifdef CONFIG_XSCALE_WMMX
+	if (current->thread.want_wmmx && restore_wmmx_context(frame+1))
+		goto badframe;
+#endif
 
 	/* Send SIGTRAP if we're single-stepping */
 	if (ptrace_cancel_bpt(current))
@@ -340,6 +412,11 @@ static inline void *
 get_sigframe(struct k_sigaction *ka, struct pt_regs *regs, int framesize)
 {
 	unsigned long sp = regs->ARM_sp;
+
+#ifdef CONFIG_XSCALE_WMMX
+	if (current->thread.want_wmmx)
+		framesize = (framesize + 4 + WMMX_STORAGE_SIZE) & ~7;
+#endif
 
 	/*
 	 * This is the X/Open sanctioned signal stack switching.
@@ -405,7 +482,7 @@ setup_return(struct pt_regs *regs, struct k_sigaction *ka,
 	regs->ARM_r0 = usig;
 	regs->ARM_sp = (unsigned long)frame;
 	regs->ARM_lr = retcode;
-	regs->ARM_pc = handler & (thumb ? ~1 : ~3);
+	regs->ARM_pc = handler;
 
 #ifdef CONFIG_CPU_32
 	regs->ARM_cpsr = cpsr;
@@ -420,8 +497,11 @@ setup_frame(int usig, struct k_sigaction *ka, sigset_t *set, struct pt_regs *reg
 	struct sigframe *frame = get_sigframe(ka, regs, sizeof(*frame));
 	int err = 0;
 
-	if (!access_ok(VERIFY_WRITE, frame, sizeof (*frame)))
+	preempt_disable();
+	if (!access_ok(VERIFY_WRITE, frame, sizeof (*frame))) {
+		preempt_enable();
 		return 1;
+	}
 
 	err |= setup_sigcontext(&frame->sc, /*&frame->fpstate,*/ regs, set->sig[0]);
 
@@ -430,9 +510,15 @@ setup_frame(int usig, struct k_sigaction *ka, sigset_t *set, struct pt_regs *reg
 				      sizeof(frame->extramask));
 	}
 
+#ifdef CONFIG_XSCALE_WMMX
+	if (current->thread.want_wmmx)
+		err |= preserve_wmmx_context(frame+1);
+#endif
+
 	if (err == 0)
 		err = setup_return(regs, ka, &frame->retcode, frame, usig);
 
+	preempt_enable();
 	return err;
 }
 
@@ -446,6 +532,7 @@ setup_rt_frame(int usig, struct k_sigaction *ka, siginfo_t *info,
 	if (!access_ok(VERIFY_WRITE, frame, sizeof (*frame)))
 		return 1;
 
+	preempt_disable();
 	__put_user_error(&frame->info, &frame->pinfo, err);
 	__put_user_error(&frame->uc, &frame->puc, err);
 	err |= copy_siginfo_to_user(&frame->info, info);
@@ -456,6 +543,11 @@ setup_rt_frame(int usig, struct k_sigaction *ka, siginfo_t *info,
 	err |= setup_sigcontext(&frame->uc.uc_mcontext, /*&frame->fpstate,*/
 				regs, set->sig[0]);
 	err |= __copy_to_user(&frame->uc.uc_sigmask, set, sizeof(*set));
+
+#ifdef CONFIG_XSCALE_WMMX
+	if (current->thread.want_wmmx)
+		err |= preserve_wmmx_context(frame+1);
+#endif
 
 	if (err == 0)
 		err = setup_return(regs, ka, &frame->retcode, frame, usig);
@@ -469,7 +561,7 @@ setup_rt_frame(int usig, struct k_sigaction *ka, siginfo_t *info,
 		regs->ARM_r1 = (unsigned long)frame->pinfo;
 		regs->ARM_r2 = (unsigned long)frame->puc;
 	}
-
+	preempt_enable();
 	return err;
 }
 
@@ -613,7 +705,7 @@ asmlinkage int do_signal(sigset_t *oldset, struct pt_regs *regs, int syscall)
 				continue;
 
 			switch (signr) {
-			case SIGCONT: case SIGCHLD: case SIGWINCH:
+			case SIGCONT: case SIGCHLD: case SIGWINCH: case SIGURG:
 				continue;
 
 			case SIGTSTP: case SIGTTIN: case SIGTTOU:
@@ -621,13 +713,17 @@ asmlinkage int do_signal(sigset_t *oldset, struct pt_regs *regs, int syscall)
 					continue;
 				/* FALLTHRU */
 
-			case SIGSTOP:
+			case SIGSTOP: {
+				struct signal_struct *sig;
 				current->state = TASK_STOPPED;
 				current->exit_code = signr;
-				if (!(current->p_pptr->sig->action[SIGCHLD-1].sa.sa_flags & SA_NOCLDSTOP))
+				sig = current->p_pptr->sig;
+				if (sig && !(sig->action[SIGCHLD-1].sa.sa_flags & SA_NOCLDSTOP))
 					notify_parent(current, SIGCHLD);
 				schedule();
+				single_stepping |= ptrace_cancel_bpt(current);
 				continue;
+			}
 
 			case SIGQUIT: case SIGILL: case SIGTRAP:
 			case SIGABRT: case SIGFPE: case SIGSEGV:

@@ -34,7 +34,9 @@
  * hardcoded at present.)
  */
 #define NR_PTYS		256	/* ptys/major */
-#define NR_LDISCS	16
+/* porting from A760 GPRS feature  lin weiqiang   2003-12-17 */
+/*#define NR_LDISCS	16 */
+#define NR_LDISCS	17
 
 /*
  * Unix98 PTY's can be defined as any multiple of NR_PTYS up to

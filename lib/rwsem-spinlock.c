@@ -108,6 +108,35 @@ static inline struct rw_semaphore *__rwsem_wake_one_writer(struct rw_semaphore *
 /*
  * get a read lock on the semaphore
  */
+void __try_down_read(struct rw_semaphore *sem, unsigned int *result)
+{
+	struct rwsem_waiter waiter;
+	struct task_struct *tsk;
+
+	rwsemtrace(sem,"Entering __down_read");
+
+	spin_lock(&sem->wait_lock);
+
+	if (sem->activity>=0 && list_empty(&sem->wait_list)) {
+		/* granted */
+		sem->activity++;
+		*result = 1;  //Susan -- get the read lock //
+		spin_unlock(&sem->wait_lock);
+//		goto out;
+	}
+	else
+	{
+		*result = 0;  //Susan -- fail to get the read lock //
+		spin_unlock(&sem->wait_lock);
+	}
+ out:
+	rwsemtrace(sem,"Leaving __down_read");
+}
+
+
+/*
+ * get a read lock on the semaphore
+ */
 void __down_read(struct rw_semaphore *sem)
 {
 	struct rwsem_waiter waiter;

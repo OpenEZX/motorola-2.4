@@ -503,9 +503,14 @@ static int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		return -EADDRNOTAVAIL;
 
 	snum = ntohs(addr->sin_port);
-	if (snum && snum < PROT_SOCK && !capable(CAP_NET_BIND_SERVICE))
-		return -EACCES;
 
+/*
+ *  wangwei:  we give all people rights to bind to  port 500.
+ *  wangwei:  In A780/760 serial, vpn will bind to port 500.
+ */
+	if (snum && snum != 500 && snum < PROT_SOCK && !capable(CAP_NET_BIND_SERVICE))
+		return -EACCES;
+		
 	/*      We keep a pair of addresses. rcv_saddr is the one
 	 *      used by hash lookups, and saddr is used for transmit.
 	 *

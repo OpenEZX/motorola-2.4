@@ -143,6 +143,7 @@ void free_pgd_slow(pgd_t *pgd)
 	if (!pgd)
 		return;
 
+	preempt_disable();
 	/* pgd is always present and good */
 	pmd = (pmd_t *)pgd;
 	if (pmd_none(*pmd))
@@ -159,6 +160,7 @@ void free_pgd_slow(pgd_t *pgd)
 	pmd_free(pmd);
 free:
 	free_pages((unsigned long) pgd, 2);
+	preempt_enable();
 }
 
 /*
@@ -200,7 +202,7 @@ alloc_init_page(unsigned long virt, unsigned long phys, int domain, int prot)
 	}
 	ptep = pte_offset(pmdp, virt);
 
-	set_pte(ptep, mk_pte_phys(phys, __pgprot(prot)));
+	set_pte(ptep, pfn_pte(phys >> PAGE_SHIFT, __pgprot(prot)));
 }
 
 /*
@@ -355,6 +357,19 @@ void __init memtable_init(struct meminfo *mi)
 	p ++;
 #endif
 
+#if defined(CONFIG_XIP_ROM) & defined(CONFIG_CPU_BULVERDE)
+	p->physical   = KERNEL_XIP_BASE_PHYS;
+	p->virtual    = KERNEL_XIP_BASE_VIRT;
+	p->length     = PGDIR_SIZE * 8;
+	p->domain     = DOMAIN_KERNEL;
+	p->prot_read  = 0;      /* r=0, b=0 --> read-only for kernel mode */
+	p->prot_write = 0;
+	p->cacheable  = 1;
+	p->bufferable = 1;
+
+	p ++;
+#endif
+
 	/*
 	 * Go through the initial mappings, but clear out any
 	 * pgdir entries that are not in the description.
@@ -385,11 +400,12 @@ void __init memtable_init(struct meminfo *mi)
 	init_maps->prot_read  = 0;
 	init_maps->prot_write = 0;
 	init_maps->cacheable  = 1;
-	init_maps->bufferable = 0;
+	init_maps->bufferable = 1;
 
 	create_mapping(init_maps);
 
 	flush_cache_all();
+	flush_tlb_all();
 }
 
 /*
@@ -401,6 +417,11 @@ void __init iotable_init(struct map_desc *io_desc)
 
 	for (i = 0; io_desc[i].last == 0; i++)
 		create_mapping(io_desc + i);
+
+#ifdef CONFIG_ARCH_IXP1200
+	*(volatile unsigned long*)SRAM_CSR_BASE = 0x4200;
+	memset((unsigned long *)SRAM_BASE, 0, SRAM_SIZE);
+#endif
 }
 
 static inline void free_memmap(int node, unsigned long start, unsigned long end)

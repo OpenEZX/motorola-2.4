@@ -692,6 +692,7 @@ static int try_to_unuse(unsigned int type)
 		 * interactive performance.  Interruptible check on
 		 * signal_pending() would be nice, but changes the spec?
 		 */
+		debug_lock_break(551);
 		if (current->need_resched)
 			schedule();
 	}
@@ -1120,6 +1121,13 @@ void si_swapinfo(struct sysinfo *val)
 		if (swap_info[i].flags != SWP_USED)
 			continue;
 		for (j = 0; j < swap_info[i].max; ++j) {
+			if (conditional_schedule_needed()) {
+				debug_lock_break(551);
+				swap_list_unlock();
+				debug_lock_break(551);
+				unconditional_schedule();
+				swap_list_lock();
+			}
 			switch (swap_info[i].swap_map[j]) {
 				case 0:
 				case SWAP_MAP_BAD:

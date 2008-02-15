@@ -65,6 +65,7 @@
 #include <asm/uaccess.h>
 #include "util.h"
 
+#include <linux/trace.h>
 
 #define sem_lock(id)	((struct sem_array*)ipc_lock(&sem_ids,id))
 #define sem_unlock(id)	ipc_unlock(&sem_ids,id)
@@ -181,6 +182,7 @@ asmlinkage long sys_semget (key_t key, int nsems, int semflg)
 	}
 
 	up(&sem_ids.sem);
+	TRACE_IPC(TRACE_EV_IPC_SEM_CREATE, err, semflg);
 	return err;
 }
 

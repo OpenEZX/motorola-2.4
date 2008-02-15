@@ -14,7 +14,9 @@
 #include <linux/prctl.h>
 #include <linux/init.h>
 #include <linux/highuid.h>
-
+#ifdef CONFIG_KFI
+#include <linux/kfi.h>
+#endif
 #include <asm/uaccess.h>
 #include <asm/io.h>
 
@@ -220,10 +222,10 @@ asmlinkage long sys_setpriority(int which, int who, int niceval)
 		}
 		if (error == -ESRCH)
 			error = 0;
-		if (niceval < p->nice && !capable(CAP_SYS_NICE))
+		if (niceval < task_nice(p) && !capable(CAP_SYS_NICE))
 			error = -EACCES;
 		else
-			p->nice = niceval;
+			set_user_nice(p, niceval);
 	}
 	read_unlock(&tasklist_lock);
 
@@ -249,7 +251,7 @@ asmlinkage long sys_getpriority(int which, int who)
 		long niceval;
 		if (!proc_sel(p, which, who))
 			continue;
-		niceval = 20 - p->nice;
+		niceval = 20 - task_nice(p);
 		if (niceval > retval)
 			retval = niceval;
 	}
@@ -285,6 +287,9 @@ asmlinkage long sys_reboot(int magic1, int magic2, unsigned int cmd, void * arg)
 	switch (cmd) {
 	case LINUX_REBOOT_CMD_RESTART:
 		notifier_call_chain(&reboot_notifier_list, SYS_RESTART, NULL);
+#ifdef CONFIG_KFI
+		kfi_dump_log(NULL);
+#endif
 		printk(KERN_EMERG "Restarting system.\n");
 		machine_restart(NULL);
 		break;
@@ -299,6 +304,9 @@ asmlinkage long sys_reboot(int magic1, int magic2, unsigned int cmd, void * arg)
 
 	case LINUX_REBOOT_CMD_HALT:
 		notifier_call_chain(&reboot_notifier_list, SYS_HALT, NULL);
+#ifdef CONFIG_KFI
+		kfi_dump_log(NULL);
+#endif
 		printk(KERN_EMERG "System halted.\n");
 		machine_halt();
 		do_exit(0);
@@ -306,6 +314,9 @@ asmlinkage long sys_reboot(int magic1, int magic2, unsigned int cmd, void * arg)
 
 	case LINUX_REBOOT_CMD_POWER_OFF:
 		notifier_call_chain(&reboot_notifier_list, SYS_POWER_OFF, NULL);
+#ifdef CONFIG_KFI
+		kfi_dump_log(NULL);
+#endif
 		printk(KERN_EMERG "Power down.\n");
 		machine_power_off();
 		do_exit(0);
@@ -320,6 +331,9 @@ asmlinkage long sys_reboot(int magic1, int magic2, unsigned int cmd, void * arg)
 
 		notifier_call_chain(&reboot_notifier_list, SYS_RESTART, buffer);
 		printk(KERN_EMERG "Restarting system with command '%s'.\n", buffer);
+#ifdef CONFIG_KFI
+		kfi_dump_log(NULL);
+#endif
 		machine_restart(buffer);
 		break;
 
@@ -1272,6 +1286,16 @@ asmlinkage long sys_prctl(int option, unsigned long arg2, unsigned long arg3,
 			}
 			current->keep_capabilities = arg2;
 			break;
+
+#ifdef SET_FP_EXC_MODE
+		case PR_SET_FP_EXC:
+			error = SET_FP_EXC_MODE(current, arg2);
+			break;
+		case PR_GET_FP_EXC:
+			error = GET_FP_EXC_MODE(current);
+			break;
+#endif
+
 		default:
 			error = -EINVAL;
 			break;

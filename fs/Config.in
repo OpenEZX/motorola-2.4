@@ -5,6 +5,7 @@ mainmenu_option next_comment
 comment 'File systems'
 
 bool 'Quota support' CONFIG_QUOTA
+bool 'POSIX Access Control List support' CONFIG_FS_POSIX_ACL
 tristate 'Kernel automounter support' CONFIG_AUTOFS_FS
 tristate 'Kernel automounter version 4 support (also supports v3)' CONFIG_AUTOFS4_FS
 
@@ -47,6 +48,10 @@ if [ "$CONFIG_JFFS2_FS" = "y" -o "$CONFIG_JFFS2_FS" = "m" ] ; then
    int 'JFFS2 debugging verbosity (0 = quiet, 2 = noisy)' CONFIG_JFFS2_FS_DEBUG 0
 fi
 tristate 'Compressed ROM file system support' CONFIG_CRAMFS
+dep_mbool '  Use linear addressing for cramfs' CONFIG_CRAMFS_LINEAR $CONFIG_CRAMFS
+dep_bool '    Support XIP on linear cramfs' CONFIG_CRAMFS_LINEAR_XIP $CONFIG_CRAMFS_LINEAR
+dep_bool '    Root file system on linear cramfs' CONFIG_ROOT_CRAMFS_LINEAR $CONFIG_CRAMFS_LINEAR $CONFIG_CRAMFS
+
 bool 'Virtual memory file system support (former shm fs)' CONFIG_TMPFS
 define_bool CONFIG_RAMFS y
 
@@ -92,6 +97,16 @@ dep_mbool '  UDF write support (DANGEROUS)' CONFIG_UDF_RW $CONFIG_UDF_FS $CONFIG
 
 tristate 'UFS file system support (read only)' CONFIG_UFS_FS
 dep_mbool '  UFS file system write support (DANGEROUS)' CONFIG_UFS_FS_WRITE $CONFIG_UFS_FS $CONFIG_EXPERIMENTAL
+
+tristate 'SGI XFS filesystem support' CONFIG_XFS_FS
+dep_mbool    '  Enable XFS Realtime support' CONFIG_XFS_RT $CONFIG_XFS_FS
+dep_mbool    '  Enable XFS Quota' CONFIG_XFS_QUOTA $CONFIG_XFS_FS
+if [ "$CONFIG_XFS_FS" != "n" ]; then
+    dep_tristate '  Enable XFS DMAPI' CONFIG_XFS_DMAPI $CONFIG_XFS_FS
+    if [ "$CONFIG_XFS_DMAPI" != "n" ]; then
+       define_bool CONFIG_HAVE_XFS_DMAPI y
+    fi
+fi
 
 if [ "$CONFIG_NET" = "y" ]; then
 

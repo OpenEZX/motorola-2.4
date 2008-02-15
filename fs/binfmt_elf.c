@@ -46,7 +46,9 @@ static int load_elf_binary(struct linux_binprm * bprm, struct pt_regs * regs);
 static int load_elf_library(struct file*);
 static unsigned long elf_map (struct file *, unsigned long, struct elf_phdr *, int, int);
 extern int dump_fpu (struct pt_regs *, elf_fpregset_t *);
+extern int dump_task_fpu (struct pt_regs *, struct task_struct *, elf_fpregset_t *);
 extern void dump_thread(struct pt_regs *, struct user *);
+extern struct pt_regs *get_task_registers(struct task_struct* task);
 
 #ifndef elf_addr_t
 #define elf_addr_t unsigned long
@@ -606,6 +608,7 @@ static int load_elf_binary(struct linux_binprm * bprm, struct pt_regs * regs)
 	current->mm->rss = 0;
 	retval = setup_arg_pages(bprm);
 	if (retval < 0) {
+		/* Someone check-me: is this error path enough? */
 		send_sig(SIGKILL, current, 0);
 		return retval;
 	}
@@ -782,8 +785,12 @@ static int load_elf_binary(struct linux_binprm * bprm, struct pt_regs * regs)
 #endif
 
 	start_thread(regs, elf_entry, bprm->p);
-	if (current->ptrace & PT_PTRACED)
-		send_sig(SIGTRAP, current, 0);
+	if (unlikely(current->ptrace & PT_PTRACED)) {
+		if (current->ptrace & PT_TRACE_EXEC)
+			ptrace_notify ((PTRACE_EVENT_EXEC << 8) | SIGTRAP);
+		else
+			send_sig(SIGTRAP, current, 0);
+	}
 	retval = 0;
 out:
 	return retval;
@@ -951,7 +958,7 @@ static int notesize(struct memelfnote *en)
 	int sz;
 
 	sz = sizeof(struct elf_note);
-	sz += roundup(strlen(en->name), 4);
+	sz += roundup(strlen(en->name) + 1, 4);
 	sz += roundup(en->datasz, 4);
 
 	return sz;
@@ -982,11 +989,69 @@ static void dump_regs(const char *str, elf_greg_t *r)
 #define DUMP_SEEK(off)	\
 	do { if (!dump_seek(file, (off))) return 0; } while(0)
 
+static void create_prstatus_note(struct task_struct *task, long signr,
+				 struct memelfnote *note, 
+				 struct elf_prstatus *prstatus,
+				 struct pt_regs *regs)
+{
+	memset(prstatus, 0, sizeof(*prstatus));
+
+	note->name = "CORE";
+	note->type = NT_PRSTATUS;
+	note->datasz = sizeof(struct elf_prstatus);
+	note->data = prstatus;
+
+	prstatus->pr_info.si_signo = prstatus->pr_cursig = signr;
+	prstatus->pr_sigpend = task->pending.signal.sig[0];
+	prstatus->pr_sighold = task->blocked.sig[0];
+	prstatus->pr_utime.tv_sec = CT_TO_SECS(task->times.tms_utime);
+	prstatus->pr_utime.tv_usec = CT_TO_USECS(task->times.tms_utime);
+	prstatus->pr_stime.tv_sec = CT_TO_SECS(task->times.tms_stime);
+	prstatus->pr_stime.tv_usec = CT_TO_USECS(task->times.tms_stime);
+	prstatus->pr_cutime.tv_sec = CT_TO_SECS(task->times.tms_cutime);
+	prstatus->pr_cutime.tv_usec = CT_TO_USECS(task->times.tms_cutime);
+	prstatus->pr_cstime.tv_sec = CT_TO_SECS(task->times.tms_cstime);
+	prstatus->pr_cstime.tv_usec = CT_TO_USECS(task->times.tms_cstime);
+
+	prstatus->pr_pid = task->pid;
+	prstatus->pr_ppid = task->p_pptr->pid;
+	prstatus->pr_pgrp = task->pgrp;
+	prstatus->pr_sid = task->session;
+
+	/*
+	 * This transfers the registers from regs into the standard
+	 * coredump arrangement, whatever that is.  If the regs are 
+	 * passed in, use them, otherwise go fishing for them in the
+	 * specified process.
+	 */
+	if (regs == 0)
+	  {
+	    regs = get_task_registers(task);
+	  }
+
+#ifdef ELF_CORE_COPY_REGS
+	ELF_CORE_COPY_REGS(prstatus->pr_reg, regs)
+#else
+	if (sizeof(elf_gregset_t) != sizeof(struct pt_regs))
+	{
+		printk("sizeof(elf_gregset_t) (%ld) != sizeof(struct pt_regs) (%ld)\n",
+			(long)sizeof(elf_gregset_t), (long)sizeof(struct pt_regs));
+	}
+	else
+		*(struct pt_regs *)&prstatus->pr_reg = *regs;
+#endif
+
+#ifdef DEBUG
+	dump_regs("Passed in regs", (elf_greg_t *)regs);
+	dump_regs("prstatus regs", (elf_greg_t *)&prstatus->pr_reg);
+#endif
+}
+
 static int writenote(struct memelfnote *men, struct file *file)
 {
 	struct elf_note en;
 
-	en.n_namesz = strlen(men->name);
+	en.n_namesz = strlen(men->name) + 1;
 	en.n_descsz = men->datasz;
 	en.n_type = men->type;
 
@@ -1026,11 +1091,20 @@ static int elf_core_dump(long signr, struct pt_regs * regs, struct file * file)
 	struct elfhdr elf;
 	off_t offset = 0, dataoff;
 	unsigned long limit = current->rlim[RLIMIT_CORE].rlim_cur;
-	int numnote = 4;
-	struct memelfnote notes[4];
-	struct elf_prstatus prstatus;	/* NT_PRSTATUS */
-	elf_fpregset_t fpu;		/* NT_PRFPREG */
-	struct elf_prpsinfo psinfo;	/* NT_PRPSINFO */
+	int numnote = 5;
+	struct memelfnote *notes = 0;
+	struct elf_prstatus *prstatus = 0;	/* NT_PRSTATUS */
+	elf_fpregset_t *fpu = 0;	        /* NT_PRFPREG */
+#ifdef ELF_CORE_COPY_XFPREGS
+	elf_xfpregset_t *xfpu = 0;		/* NT_PRXFPREG */
+#endif
+	struct elf_prpsinfo psinfo;	        /* NT_PRPSINFO */
+	int n_pids;
+#ifdef CONFIG_MULTITHREADED_CORES
+	struct task_struct *p = 0;
+	int note = 0;
+	int prcount;
+#endif
 
 	/* first copy the parameters from user space */
 	memset(&psinfo, 0, sizeof(psinfo));
@@ -1049,26 +1123,58 @@ static int elf_core_dump(long signr, struct pt_regs * regs, struct file * file)
 
 	}
 
-	memset(&prstatus, 0, sizeof(prstatus));
-	/*
-	 * This transfers the registers from regs into the standard
-	 * coredump arrangement, whatever that is.
-	 */
-#ifdef ELF_CORE_COPY_REGS
-	ELF_CORE_COPY_REGS(prstatus.pr_reg, regs)
-#else
-	if (sizeof(elf_gregset_t) != sizeof(struct pt_regs))
-	{
-		printk("sizeof(elf_gregset_t) (%ld) != sizeof(struct pt_regs) (%ld)\n",
-			(long)sizeof(elf_gregset_t), (long)sizeof(struct pt_regs));
-	}
-	else
-		*(struct pt_regs *)&prstatus.pr_reg = *regs;
-#endif
-
 	/* now stop all vm operations */
 	down_write(&current->mm->mmap_sem);
 	segs = current->mm->map_count;
+
+#ifdef CONFIG_MULTITHREADED_CORES
+        /* Count the total number of tasks */
+	n_pids = 0;
+	read_lock(&tasklist_lock);
+	for_each_task(p) {
+	        if (p->mm == current->mm) {
+			n_pids++;
+		}
+	}
+	read_unlock(&tasklist_lock);
+
+#ifdef CONFIG_MULTITHREADED_CORES_DEBUG
+	printk("Multithreaded core dump with %d threads.\n", n_pids);
+	printk("[%d]", current->pid);
+#endif
+#else /* CONFIG_MULTITHREADED_CORES */
+	n_pids = 1;
+#endif
+
+	fs = get_fs();
+
+	/* Allocate notes */
+	notes = (struct memelfnote *)kmalloc(sizeof(struct memelfnote) * 
+					     (n_pids * 2 + 2), GFP_KERNEL);
+	if (!notes)
+		goto end_coredump;
+	memset((char *) notes, 0, sizeof(struct memelfnote) * (n_pids * 2 + 2));
+
+	/* Allocate process status */
+	prstatus = (struct elf_prstatus *)kmalloc(sizeof(struct elf_prstatus) *
+						  n_pids, GFP_KERNEL);
+	if (!prstatus)
+		goto end_coredump;
+	memset((char *) prstatus, 0, sizeof(struct elf_prstatus) * n_pids);
+
+	fpu = (elf_fpregset_t *)kmalloc(sizeof(elf_fpregset_t)
+					       * n_pids, GFP_KERNEL);
+	if (!fpu)
+		goto end_coredump;
+	memset((char *) fpu, 0, sizeof(elf_fpregset_t) * n_pids);
+
+#ifdef ELF_CORE_COPY_XFPREGS
+	xfpu = (elf_xfpregset_t *)kmalloc(sizeof(elf_xfpregset_t)
+					       * n_pids, GFP_KERNEL);
+	if (!xfpu)
+		goto end_coredump;
+	memset((char *) xfpu, 0, sizeof(elf_xfpregset_t) * n_pids);
+#endif
 
 #ifdef DEBUG
 	printk("elf_core_dump: %d segs %lu limit\n", segs, limit);
@@ -1095,7 +1201,6 @@ static int elf_core_dump(long signr, struct pt_regs * regs, struct file * file)
 	elf.e_shnum = 0;
 	elf.e_shstrndx = 0;
 
-	fs = get_fs();
 	set_fs(KERNEL_DS);
 
 	has_dumped = 1;
@@ -1110,40 +1215,23 @@ static int elf_core_dump(long signr, struct pt_regs * regs, struct file * file)
 	 * with info from their /proc.
 	 */
 
-	notes[0].name = "CORE";
-	notes[0].type = NT_PRSTATUS;
-	notes[0].datasz = sizeof(prstatus);
-	notes[0].data = &prstatus;
-	prstatus.pr_info.si_signo = prstatus.pr_cursig = signr;
-	prstatus.pr_sigpend = current->pending.signal.sig[0];
-	prstatus.pr_sighold = current->blocked.sig[0];
-	psinfo.pr_pid = prstatus.pr_pid = current->pid;
-	psinfo.pr_ppid = prstatus.pr_ppid = current->p_pptr->pid;
-	psinfo.pr_pgrp = prstatus.pr_pgrp = current->pgrp;
-	psinfo.pr_sid = prstatus.pr_sid = current->session;
-	prstatus.pr_utime.tv_sec = CT_TO_SECS(current->times.tms_utime);
-	prstatus.pr_utime.tv_usec = CT_TO_USECS(current->times.tms_utime);
-	prstatus.pr_stime.tv_sec = CT_TO_SECS(current->times.tms_stime);
-	prstatus.pr_stime.tv_usec = CT_TO_USECS(current->times.tms_stime);
-	prstatus.pr_cutime.tv_sec = CT_TO_SECS(current->times.tms_cutime);
-	prstatus.pr_cutime.tv_usec = CT_TO_USECS(current->times.tms_cutime);
-	prstatus.pr_cstime.tv_sec = CT_TO_SECS(current->times.tms_cstime);
-	prstatus.pr_cstime.tv_usec = CT_TO_USECS(current->times.tms_cstime);
+	/* Main thread note */
+	create_prstatus_note(current, signr, &notes[0], &prstatus[0], regs);
 
-#ifdef DEBUG
-	dump_regs("Passed in regs", (elf_greg_t *)regs);
-	dump_regs("prstatus regs", (elf_greg_t *)&prstatus.pr_reg);
-#endif
-
+	memset(&psinfo, 0, sizeof(psinfo));
 	notes[1].name = "CORE";
 	notes[1].type = NT_PRPSINFO;
 	notes[1].datasz = sizeof(psinfo);
 	notes[1].data = &psinfo;
 	i = current->state ? ffz(~current->state) + 1 : 0;
+	psinfo.pr_pid = current->pid;
+	psinfo.pr_ppid = current->p_pptr->pid;
+	psinfo.pr_pgrp = current->pgrp;
+	psinfo.pr_sid = current->session;
 	psinfo.pr_state = i;
 	psinfo.pr_sname = (i < 0 || i > 5) ? '.' : "RSDZTD"[i];
 	psinfo.pr_zomb = psinfo.pr_sname == 'Z';
-	psinfo.pr_nice = current->nice;
+	psinfo.pr_nice = task_nice(current);
 	psinfo.pr_flag = current->flags;
 	psinfo.pr_uid = NEW_TO_OLD_UID(current->uid);
 	psinfo.pr_gid = NEW_TO_OLD_GID(current->gid);
@@ -1155,8 +1243,8 @@ static int elf_core_dump(long signr, struct pt_regs * regs, struct file * file)
 	notes[2].data = current;
 
 	/* Try to dump the FPU. */
-	prstatus.pr_fpvalid = dump_fpu (regs, &fpu);
-	if (!prstatus.pr_fpvalid)
+	prstatus[0].pr_fpvalid = dump_fpu (regs, &fpu[0]);
+	if (!prstatus[0].pr_fpvalid)
 	{
 		numnote--;
 	}
@@ -1164,10 +1252,78 @@ static int elf_core_dump(long signr, struct pt_regs * regs, struct file * file)
 	{
 		notes[3].name = "CORE";
 		notes[3].type = NT_PRFPREG;
-		notes[3].datasz = sizeof(fpu);
-		notes[3].data = &fpu;
+		notes[3].datasz = sizeof(elf_fpregset_t);
+		notes[3].data = &fpu[0];
 	}
+
+#ifdef ELF_CORE_COPY_XFPREGS
+	/* Try to dump the extra registers. */
+	if (! ELF_CORE_COPY_XFPREGS (current, &xfpu[0]))
+	{
+		numnote--;
+	}
+	else
+	{
+		notes[numnote - 1].name = "LINUX";
+		notes[numnote - 1].type = NT_PRXFPREG;
+		notes[numnote - 1].datasz = sizeof(elf_xfpregset_t);
+		notes[numnote - 1].data = &xfpu[0];
+	}
+#else
+	numnote--;
+#endif
 	
+#ifdef CONFIG_MULTITHREADED_CORES
+	/* Threads other than main one */
+	prcount = 1;
+	note = numnote;
+	read_lock(&tasklist_lock);
+	for_each_task(p) {
+		if (prcount > n_pids) {
+			printk (KERN_ERR " Task forked under us!");
+			BUG ();
+			break;
+		}
+	        if (p->mm == current->mm && p != current) {
+#ifdef CONFIG_MULTITHREADED_CORES_DEBUG
+		        printk("[%d]", p->pid);
+#endif
+		        create_prstatus_note(p, 0, &notes[note],
+					     &prstatus[prcount], 0);
+			prstatus[prcount].pr_fpvalid
+				= dump_task_fpu (get_task_registers (p), p, &fpu[prcount]);
+			note++;
+			numnote++;
+			if (prstatus[prcount].pr_fpvalid)
+			{
+				notes[note].name = "CORE";
+				notes[note].type = NT_PRFPREG;
+				notes[note].datasz = sizeof(elf_fpregset_t);
+				notes[note].data = &fpu[prcount];
+				note++;
+				numnote++;
+			}
+#ifdef ELF_CORE_COPY_XFPREGS
+			if (ELF_CORE_COPY_XFPREGS (p, &xfpu[prcount]))
+			{
+				notes[note].name = "LINUX";
+				notes[note].type = NT_PRXFPREG;
+				notes[note].datasz = sizeof(elf_xfpregset_t);
+				notes[note].data = &xfpu[prcount];
+				note++;
+				numnote++;
+			}
+#endif
+			prcount++;
+		}
+	}
+	read_unlock(&tasklist_lock);
+
+#ifdef CONFIG_MULTITHREADED_CORES_DEBUG
+	printk("\n");
+#endif
+#endif
+
 	/* Write notes phdr entry */
 	{
 		struct elf_phdr phdr;
@@ -1262,6 +1418,14 @@ static int elf_core_dump(long signr, struct pt_regs * regs, struct file * file)
 	}
 
  end_coredump:
+
+	if (notes)
+		kfree(notes);
+	if (prstatus)
+		kfree(prstatus);
+	if (fpu)
+		kfree(fpu);
+
 	set_fs(fs);
 	up_write(&current->mm->mmap_sem);
 	return has_dumped;

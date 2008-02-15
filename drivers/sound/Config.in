@@ -69,6 +69,9 @@ fi
 if [ "$CONFIG_MIPS_AU1000" = "y" ]; then
     dep_tristate '  Au1000 Sound' CONFIG_SOUND_AU1000 $CONFIG_SOUND
 fi
+if [ "$CONFIG_VRC4173" = "y" ]; then
+    dep_tristate '  NEC VRC4173 AC97 sound' CONFIG_SOUND_VRC4173 $CONFIG_SOUND
+fi
 
 dep_tristate '  Trident 4DWave DX/NX, SiS 7018 or ALi 5451 PCI Audio Core' CONFIG_SOUND_TRIDENT $CONFIG_SOUND $CONFIG_PCI
 
@@ -124,6 +127,21 @@ fi
 
 dep_tristate '  VIA 82C686 Audio Codec' CONFIG_SOUND_VIA82CXXX $CONFIG_PCI
 dep_mbool    '  VIA 82C686 MIDI' CONFIG_MIDI_VIA82CXXX $CONFIG_SOUND_VIA82CXXX
+
+if [ "$CONFIG_ARCH_SA1100" = "y" ]; then
+   dep_tristate '  StrongARM-11x0 Sound Drivers' CONFIG_SOUND_SA1100 $CONFIG_ARCH_SA1100 $CONFIG_SOUND
+   dep_tristate '    UDA1341 Stereo Codec' CONFIG_SOUND_UDA1341 $CONFIG_L3 $CONFIG_SOUND_SA1100 $CONFIG_SOUND
+   dep_tristate '      Assabet audio support' CONFIG_SOUND_ASSABET_UDA1341 $CONFIG_SA1100_ASSABET $CONFIG_SOUND_UDA1341
+   dep_tristate '      Compaq iPAQ audio support' CONFIG_SOUND_H3600_UDA1341 $CONFIG_SA1100_H3XXX $CONFIG_SOUND_UDA1341
+   dep_tristate '      Pangolin audio support' CONFIG_SOUND_PANGOLIN_UDA1341 $CONFIG_SA1100_PANGOLIN $CONFIG_SOUND_UDA1341
+   dep_tristate '      SA1111 audio support' CONFIG_SOUND_SA1111_UDA1341 $CONFIG_SA1111 $CONFIG_SOUND_UDA1341
+   dep_tristate '    Generic DAC on the SA11x0 SSP port' CONFIG_SOUND_SA1100SSP $CONFIG_SOUND_SA1100
+fi
+if [ "$CONFIG_ARCH_OMAP1510" = "y" ]; then
+   dep_tristate '  OMAP Sound Drivers' CONFIG_SOUND_OMAP $CONFIG_ARCH_OMAP1510 $CONFIG_SOUND
+   dep_mbool    '    Allow DSP to control Audio McBSP' CONFIG_DSP_MCBSP1 $CONFIG_SOUND_OMAP
+   dep_tristate '    AIC23 Stereo Codec' CONFIG_SOUND_OMAP_AIC23 $CONFIG_I2C $CONFIG_SOUND_OMAP $CONFIG_SOUND
+fi
 
 dep_tristate '  OSS sound modules' CONFIG_SOUND_OSS $CONFIG_SOUND
 
@@ -212,14 +230,19 @@ if [ "$CONFIG_SOUND_OSS" = "y" -o "$CONFIG_SOUND_OSS" = "m" ]; then
          bool '      Audio Excel DSP 16 (MPU401 emulation)' CONFIG_AEDSP16_MPU401
       fi
    fi
+	 
+fi
 
-   if [ "$CONFIG_ARM" = "y" ]; then
-      if [ "$CONFIG_ARCH_ACORN" = "y" -o "$CONFIG_ARCH_CLPS7500" = "y" ]; then
-         dep_tristate '    VIDC 16-bit sound' CONFIG_SOUND_VIDC $CONFIG_SOUND_OSS
-      fi
-      dep_tristate '    Netwinder WaveArtist' CONFIG_SOUND_WAVEARTIST $CONFIG_SOUND_OSS $CONFIG_ARCH_NETWINDER
+if [ "$CONFIG_ARM" = "y" ]; then
+   if [ "$CONFIG_ARCH_ACORN" = "y" -o "$CONFIG_ARCH_CLPS7500" = "y" ]; then
+      dep_tristate '    VIDC 16-bit sound' CONFIG_SOUND_VIDC $CONFIG_SOUND_OSS
    fi
-
+   dep_tristate '    Netwinder WaveArtist' CONFIG_SOUND_WAVEARTIST $CONFIG_SOUND_OSS $CONFIG_ARCH_NETWINDER
+   dep_tristate '  Intel PXA250/210 AC97 audio' CONFIG_SOUND_PXA_AC97 $CONFIG_ARCH_PXA $CONFIG_SOUND
+   if [ "$CONFIG_ARCH_EZX" = "y" ]; then
+      dep_tristate '  Vibrator' CONFIG_SOUND_VIBRATOR $CONFIG_ARCH_EZX_A780 $CONFIG_SOUND
+      dep_tristate '  Mot SSP sound driver' CONFIG_SOUND_SSP_DRIVER $CONFIG_SOUND
+   fi
 fi
 
 dep_tristate '  TV card (bt848) mixer support' CONFIG_SOUND_TVMIXER $CONFIG_SOUND $CONFIG_I2C
@@ -233,3 +256,14 @@ if [ "$CONFIG_INPUT_GAMEPORT" != "n" ]; then
     define_tristate CONFIG_INPUT_GAMEPORT y
   fi
 fi
+
+if [ "$CONFIG_BEECH" = "y" ]; then
+  dep_tristate '    CSI/Si3000 on Beech' CONFIG_SOUND_CSI3K $CONFIG_SOUND
+fi
+
+if [ "$CONFIG_ARCTIC2" = "y" ]; then
+  dep_tristate '    CSI/TI-TLV320AIC23 on Arctic-II' CONFIG_SOUND_CSITI $CONFIG_SOUND
+fi
+
+# haptics feature support for E680
+dep_bool '  Motorola E680 Haptics Support' MAKE_FTR_HAPTICS $CONFIG_ARCH_EZX_E680

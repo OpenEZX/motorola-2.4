@@ -106,11 +106,11 @@ static int loadavg_read_proc(char *page, char **start, off_t off,
 	a = avenrun[0] + (FIXED_1/200);
 	b = avenrun[1] + (FIXED_1/200);
 	c = avenrun[2] + (FIXED_1/200);
-	len = sprintf(page,"%d.%02d %d.%02d %d.%02d %d/%d %d\n",
+	len = sprintf(page,"%d.%02d %d.%02d %d.%02d %ld/%d %d\n",
 		LOAD_INT(a), LOAD_FRAC(a),
 		LOAD_INT(b), LOAD_FRAC(b),
 		LOAD_INT(c), LOAD_FRAC(c),
-		nr_running, nr_threads, last_pid);
+		nr_running(), nr_threads, last_pid);
 	return proc_calc_metrics(page, start, off, count, eof, len);
 }
 
@@ -122,7 +122,7 @@ static int uptime_read_proc(char *page, char **start, off_t off,
 	int len;
 
 	uptime = jiffies;
-	idle = init_tasks[0]->times.tms_utime + init_tasks[0]->times.tms_stime;
+	idle = init_task.times.tms_utime + init_task.times.tms_stime;
 
 	/* The formula for the fraction parts really is ((t * 100) / HZ) % 100, but
 	   that would overflow about every five days at HZ == 100.
@@ -149,12 +149,120 @@ static int uptime_read_proc(char *page, char **start, off_t off,
 	return proc_calc_metrics(page, start, off, count, eof, len);
 }
 
+#if defined(CONFIG_MEMORY_ACCOUNTING) && !defined(CONFIG_DISCONTIGMEM)
+/*
+ * We walk all the page structs and translate them to pfns
+ * We get the free pages by the page count, count == 0.
+ *
+ * We have an array of unsigned ints of which each bit in an int 
+ * represents one page in memory.
+ *
+ * The pfn is the index into the array, pfn 0 == index 0 (index = pfn / 32).  
+ * We figure out which bit of the unsigned int to set by the following:
+ * bit = pfn % 32, we then set that bit to zero to denote it's free via:
+ * array[index] &= ~(1<<bit);   then we pump the data to /proc 
+ */
+
+#define BITS_PER_INT 	32
+#define ONE_LINE	65
+static int highwater = 0;
+static int lowwater = 0;
+static int mem_acc_debug = 0;
+static int index = 0;
+
+static int memmap_read_proc(char *page, char **start, off_t off,
+    int count, int *eof, void *data)
+{
+	static  int *bitmap = NULL;
+	struct page *p, *end;
+	int mark;
+	int len = 0;
+	int free = 0;
+	int total = 0;
+	int i, bit, start_pfn, end_pfn, array_size = 0;
+	int array_bounds, pfn = 0;
+
+        p = NODE_MEM_MAP(0);
+        start_pfn = (int)page_to_pfn(p);
+	end_pfn = start_pfn + num_physpages;
+        end = pfn_to_page(end_pfn);
+	array_size = end_pfn - start_pfn;
+	array_bounds = array_size / BITS_PER_INT;
+
+	if (bitmap == NULL) {
+		bitmap = (unsigned int *)kmalloc(array_size / sizeof (int),
+	    	    GFP_KERNEL);
+	}
+
+	/*
+	 * one means used, zero means free, set them all to 1,
+	 * clear them as we find them free.
+	 */
+
+	for (i = 0; i < array_bounds; i++) {
+		bitmap[i] = 0xffffffff;
+	}
+
+	total = free = 0;
+	do {
+		total++;
+		pfn = page_to_pfn(p);
+		if (!PageReserved(p) && page_count(p) == 0 && pfn_valid(pfn)) {
+			i = pfn - start_pfn;
+			bit = i % BITS_PER_INT;
+			i /= BITS_PER_INT;
+			free++;
+			bitmap[i] &= ~(1<<bit);
+			if (mem_acc_debug)
+				printk("i %d bit %d pfn %d pa 0x%x c %d\n",
+			    	    index, bit, pfn, page_to_phys(p),
+				    page_count(p));
+		}
+		p++;
+	} while (p < end);
+
+	mark = total - free;
+	if (mark < lowwater) {
+		lowwater = mark;
+	}
+	if (mark > highwater) {
+		highwater = mark;
+	}
+	if (off == 0) {
+		index  = 0;
+		len = sprintf(page,
+	    "High water used pages %d Low water used pages %d\n",
+		       highwater, lowwater);
+	} else if (index == -1) {
+		index = 0;
+		*eof = 1;
+		return 0;
+	}
+
+	for (index; index < array_bounds && len+ONE_LINE < count; index += 8) {
+		len += sprintf(page + len, "%08x%08x%08x%08x%08x%08x%08x%08x\n",
+		    bitmap[index], bitmap[index + 1], bitmap[index + 2],
+		    bitmap[index + 3], bitmap[index + 4], bitmap[index + 5],
+		    bitmap[index + 6], bitmap[index + 7]);
+	}
+	if (index >= array_bounds || len > count) {
+		index == -1;
+		kfree(bitmap);
+		bitmap = NULL;
+	}
+	*start = page;
+	return len;
+}
+#endif
+
+extern atomic_t vm_committed_space;
+
 static int meminfo_read_proc(char *page, char **start, off_t off,
 				 int count, int *eof, void *data)
 {
 	struct sysinfo i;
 	int len;
-	int pg_size ;
+	int pg_size, committed;
 
 /*
  * display in kilobytes.
@@ -164,6 +272,7 @@ static int meminfo_read_proc(char *page, char **start, off_t off,
 	si_meminfo(&i);
 	si_swapinfo(&i);
 	pg_size = atomic_read(&page_cache_size) - i.bufferram ;
+	committed = atomic_read(&vm_committed_space);
 
 	len = sprintf(page, "        total:    used:    free:  shared: buffers:  cached:\n"
 		"Mem:  %8Lu %8Lu %8Lu %8Lu %8Lu %8Lu\n"
@@ -191,7 +300,8 @@ static int meminfo_read_proc(char *page, char **start, off_t off,
 		"LowTotal:     %8lu kB\n"
 		"LowFree:      %8lu kB\n"
 		"SwapTotal:    %8lu kB\n"
-		"SwapFree:     %8lu kB\n",
+		"SwapFree:     %8lu kB\n"
+		"Committed_AS: %8u kB\n",
 		K(i.totalram),
 		K(i.freeram),
 		K(i.sharedram),
@@ -205,7 +315,8 @@ static int meminfo_read_proc(char *page, char **start, off_t off,
 		K(i.totalram-i.totalhigh),
 		K(i.freeram-i.freehigh),
 		K(i.totalswap),
-		K(i.freeswap));
+		K(i.freeswap),
+		K(committed));
 
 	return proc_calc_metrics(page, start, off, count, eof, len);
 #undef B
@@ -371,10 +482,10 @@ static int kstat_read_proc(char *page, char **start, off_t off,
 	}
 
 	proc_sprintf(page, &off, &len,
-		"\nctxt %u\n"
+		"\nctxt %lu\n"
 		"btime %lu\n"
 		"processes %lu\n",
-		kstat.context_swtch,
+		nr_context_switches(),
 		xtime.tv_sec - jif / HZ,
 		total_forks);
 
@@ -404,12 +515,14 @@ static int filesystems_read_proc(char *page, char **start, off_t off,
 	return proc_calc_metrics(page, start, off, count, eof, len);
 }
 
+#ifdef CONFIG_GENERIC_ISA_DMA
 static int dma_read_proc(char *page, char **start, off_t off,
 				 int count, int *eof, void *data)
 {
 	int len = get_dma_list(page);
 	return proc_calc_metrics(page, start, off, count, eof, len);
 }
+#endif
 
 static int ioports_read_proc(char *page, char **start, off_t off,
 				 int count, int *eof, void *data)
@@ -469,6 +582,21 @@ static int memory_read_proc(char *page, char **start, off_t off,
 	return proc_calc_metrics(page, start, off, count, eof, len);
 }
 
+//Susan for reporting potential free pages
+extern int slab_cache_freeable_info(void);
+static int slabfree_read_proc(char *page, char **start, off_t off, int count, int *eof, void *data)
+{
+	int ret = 0;
+	int len = 0;
+
+	ret = slab_cache_freeable_info();
+	if (ret == -EAGAIN)
+		len = sprintf(page, "BUSY: %d\n", -1);
+	else
+		len = sprintf(page, "SLABFREE: %d\n", (ret * PAGE_SIZE));
+
+	return proc_calc_metrics(page, start, off, count, eof, len);
+}
 /*
  * This function accesses profiling information. The returned data is
  * binary: the sampling step and the actual contents of the profile
@@ -568,7 +696,9 @@ void __init proc_misc_init(void)
 		{"interrupts",	interrupts_read_proc},
 #endif
 		{"filesystems",	filesystems_read_proc},
+#ifdef CONFIG_GENERIC_ISA_DMA
 		{"dma",		dma_read_proc},
+#endif		
 		{"ioports",	ioports_read_proc},
 		{"cmdline",	cmdline_read_proc},
 #ifdef CONFIG_SGI_DS1286
@@ -578,10 +708,25 @@ void __init proc_misc_init(void)
 		{"swaps",	swaps_read_proc},
 		{"iomem",	memory_read_proc},
 		{"execdomains",	execdomains_read_proc},
+#ifdef CONFIG_MEMORY_ACCOUNTING
+		{"memmap",	memmap_read_proc},
+#endif
+	//Susan for reporting potential free pages
+		{"slabfree", slabfree_read_proc},
+
 		{NULL,}
 	};
 	for (p = simple_ones; p->name; p++)
 		create_proc_read_entry(p->name, 0, NULL, p->read_proc, NULL);
+#ifdef CONFIG_MEMORY_ACCOUNTING
+	/*
+	 * get the amount of free pages right here, as this
+	 * should be the lowest amount of allocated pages
+	 * the system ever sees.  After log in there
+	 * should just be more allocated pages.
+	 */
+	lowwater = num_physpages - nr_free_pages();
+#endif
 
 	proc_symlink("mounts", NULL, "self/mounts");
 

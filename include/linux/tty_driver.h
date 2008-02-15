@@ -132,7 +132,9 @@ struct tty_driver {
 	int	*refcount;	/* for loadable tty drivers */
 	struct proc_dir_entry *proc_entry; /* /proc fs entry */
 	struct tty_driver *other; /* only used for the PTY driver */
-
+//#if defined(CONFIG_ARCH_EZX_A780) || defined(CONFIG_ARCH_EZX_E680)
+    	int btuart;
+//#endif
 	/*
 	 * Pointer to the tty data structures
 	 */
@@ -141,6 +143,11 @@ struct tty_driver {
 	struct termios **termios_locked;
 	void *driver_state;	/* only used for the PTY driver */
 	
+	/*
+	 * Used for reverse lookup of port from driver (mostly for gs_read_proc) 
+	 */
+	void* local_data;
+
 	/*
 	 * Interface routines from the upper tty layer to the tty
 	 * driver.

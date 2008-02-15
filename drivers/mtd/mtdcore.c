@@ -212,7 +212,7 @@ EXPORT_SYMBOL(unregister_mtd_user);
 /*====================================================================*/
 /* Power management code */
 
-#ifdef CONFIG_PM
+// linux-pm #ifdef CONFIG_PM
 
 #include <linux/pm.h>
 
@@ -240,7 +240,87 @@ static int mtd_pm_callback(struct pm_dev *dev, pm_request_t rqst, void *data)
 	up(&mtd_table_mutex);
 	return ret;
 }
+// linux-pm #endif
+
+#if 1 /* linux-pm */
+#include <linux/device.h>
+
+static int mtd_suspend(struct device * dev, u32 state, u32 level);
+static int mtd_resume(struct device * dev, u32 level);
+
+static struct device_driver mtd_driver_ldm = {
+       name:      "mtd",
+       probe:     NULL,
+       suspend:   mtd_suspend,
+       resume:    mtd_resume,
+       remove:    NULL,
+};
+
+static struct device mtd_device_ldm = {
+       name: "flash",
+       bus_id: "flash",
+       driver: &mtd_driver_ldm,
+       power_state: DPM_POWER_ON,
+};
+
+static void mtd_ldm_register()
+{
+#ifdef CONFIG_405LP
+   extern void ebc_driver_register(struct device_driver *driver);
+   extern void ebc_device_register(struct device *device);
+
+   ebc_driver_register(&mtd_driver_ldm);
+   ebc_device_register(&mtd_device_ldm);
 #endif
+#ifdef CONFIG_ARCH_MAINSTONE
+   extern void pxasys_driver_register(struct device_driver *driver);
+   extern void pxasys_device_register(struct device *device);
+
+   pxasys_driver_register(&mtd_driver_ldm);
+   pxasys_device_register(&mtd_device_ldm);
+#endif
+}
+
+static void mtd_ldm_unregister()
+{
+#ifdef CONFIG_405LP
+   extern void ebc_driver_unregister(struct device_driver *driver);
+   extern void ebc_device_unregister(struct device *device);
+
+   ebc_device_unregister(&mtd_device_ldm);
+   ebc_driver_unregister(&mtd_driver_ldm);
+#endif
+#ifdef CONFIG_ARCH_MAINSTONE
+   extern void pxasys_driver_unregister(struct device_driver *driver);
+   extern void pxasys_device_unregister(struct device *device);
+
+   pxasys_device_unregister(&mtd_device_ldm);
+   pxasys_driver_unregister(&mtd_driver_ldm);
+#endif
+}
+
+static int mtd_suspend(struct device * dev, u32 state, u32 level)
+{
+	switch (level) {
+	case SUSPEND_POWER_DOWN:
+		mtd_pm_callback(NULL, PM_SUSPEND, NULL);
+		break;
+        }
+	
+	return 0;
+}
+
+static int mtd_resume(struct device * dev, u32 level)
+{
+	switch (level) {
+	case RESUME_POWER_ON:
+		mtd_pm_callback(NULL, PM_RESUME, NULL);
+		break;
+        }
+	
+	return 0;
+}
+#endif /* linux-pm */
 
 /*====================================================================*/
 /* Support for /proc/mtd */
@@ -332,20 +412,26 @@ int __init init_mtd(void)
 	init_mtd_devices();
 #endif
 
-#ifdef CONFIG_PM
+// linux-pm #ifdef CONFIG_PM
 	mtd_pm_dev = pm_register(PM_UNKNOWN_DEV, 0, mtd_pm_callback);
-#endif
+#if 1 /* linux-pm */
+	mtd_ldm_register();
+#endif /* linux-pm */
+// linux-pm #endif
 	return 0;
 }
 
 static void __exit cleanup_mtd(void)
 {
-#ifdef CONFIG_PM
+// linux-pm #ifdef CONFIG_PM
 	if (mtd_pm_dev) {
 		pm_unregister(mtd_pm_dev);
 		mtd_pm_dev = NULL;
 	}
-#endif
+#if 1 /* linux-pm */
+	mtd_ldm_unregister();
+#endif /* linux-pm */
+// linux-pm #endif
 
 #ifdef CONFIG_PROC_FS
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,2,0)

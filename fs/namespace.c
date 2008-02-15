@@ -638,6 +638,25 @@ static int do_add_mount(struct nameidata *nd, char *type, int flags,
 	if (nd->mnt->mnt_sb == mnt->mnt_sb && nd->mnt->mnt_root == nd->dentry)
 		goto unlock;
 
+	if (mnt->mnt_sb->s_op && mnt->mnt_sb->s_op->dmapi_mount_event) {
+		char *mntpt;
+		char *buf;
+
+		err = 0;
+		buf = (char *)__get_free_pages(GFP_KERNEL, 0);
+		if ( buf == NULL ){
+			printk("Failing mount of %s -- unable to allocate space for DMAPI mount event.\n", name );
+			err = -ENOMEM;
+		}
+		else {
+			mntpt = d_path(nd->dentry, nd->mnt, buf, PAGE_SIZE);
+			err = mnt->mnt_sb->s_op->dmapi_mount_event(mnt->mnt_sb, mntpt);
+			free_pages( (unsigned long)buf, 0 );
+		}
+		if (err)
+			goto unlock;
+	}
+
 	mnt->mnt_flags = mnt_flags;
 	err = graft_tree(mnt, nd);
 unlock:

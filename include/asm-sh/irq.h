@@ -331,6 +331,11 @@ extern int cat68701_irq_demux(int irq);
 extern int systemasic_irq_demux(int irq);
 #define irq_demux systemasic_irq_demux
 
+#elif defined(CONFIG_SH_7751_SOLUTION_ENGINE)
+
+extern int se51_irq_demux(int irq);
+#define irq_demux se51_irq_demux
+
 #else
 
 #define irq_demux(irq) __irq_demux(irq)

@@ -6,7 +6,7 @@
  *
  * (C) 2000 Red Hat. GPLd.
  *
- * $Id: flashchip.h,v 1.7 2001/01/18 03:52:36 nico Exp $
+ * $Id: flashchip.h,v 1.8 2002/10/21 13:20:52 jocke Exp $
  *
  */
 
@@ -36,6 +36,7 @@ typedef enum {
 	FL_UNLOADING,
 	FL_LOCKING,
 	FL_UNLOCKING,
+	FL_POINT,
 	FL_UNKNOWN
 } flstate_t;
 
@@ -54,6 +55,7 @@ struct flchip {
 	   a given offset, and we'll want to add the per-chip length field
 	   back in.
 	*/
+	int ref_point_counter;
 	flstate_t state;
 	flstate_t oldstate;
 	spinlock_t *mutex;
@@ -63,6 +65,8 @@ struct flchip {
 	int word_write_time;
 	int buffer_write_time;
 	int erase_time;
+
+	void *priv;
 };
 
 

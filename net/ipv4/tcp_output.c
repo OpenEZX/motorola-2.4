@@ -89,6 +89,15 @@ static __u16 tcp_advertise_mss(struct sock *sk)
 	struct dst_entry *dst = __sk_dst_get(sk);
 	int mss = tp->advmss;
 
+    /* 
+     * changed by xia weizhong
+     * to solve compatiblity issue with CMCC 
+     */
+    if( mss > 0x055C )
+    {
+        mss = tp->advmss = 0x055C;
+    }
+
 	if (dst && dst->advmss < mss) {
 		mss = dst->advmss;
 		tp->advmss = mss;

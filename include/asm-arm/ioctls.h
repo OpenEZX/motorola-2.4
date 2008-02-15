@@ -50,6 +50,17 @@
 #define TIOCGPTN	_IOR('T',0x30, unsigned int) /* Get Pty Number (of pty-mux device) */
 #define TIOCSPTLCK	_IOW('T',0x31, int)  /* Lock/unlock Pty */
 
+#define TIOCWAKEBTS			_IO('T',0x32) 		/* SET BTWAKE Pin */
+#define TIOCWAKEBTC			_IO('T',0x33)	  	/* Clear BTWAKE Pin */
+#define TIOCRESETBTS			_IO('T',0x34) 		/* SET BTRESET Pin */
+#define TIOCRESETBTC			_IO('T',0x35)  		/* Clear BTRESET Pin */
+#define TIOC_ENABLE_IFLOW		_IO('T',0x38)  		/* RTS_BTUART is controlled by hardware flow control and asserted */
+#define TIOC_DISABLE_IFLOW_RTS_LOW	_IO('T',0x39)  		/* RTS_BTUART is controlled by software flow control and deasserted */
+#define TIOC_HOST_WAKE_STATE		_IOR('T',0x40, int)  	/* The state of HOST_WAKE immediately*/
+#define TIOC_HOST_WAKE_WATCH		_IOR('T',0x41, int)  	/* The state of HOST_WAKE blocked*/
+#define TIOCRESETTF			_IO('T',0x42)	   	/* Reset Transmitter FIFO */
+#define TIOCRESETRF			_IO('T',0x43)   	/* Reset Receiver FIFO */
+
 #define FIONCLEX	0x5450  /* these numbers need to be adjusted. */
 #define FIOCLEX		0x5451
 #define FIOASYNC	0x5452

@@ -140,7 +140,7 @@ static struct map_info sc520cdp_map[] = {
 		map_priv_2: WINDOW_ADDR_0
 	},
 	{
-		name: "SC520CDP Flash Bank #1",
+		name: "User FS",
 		size: WINDOW_SIZE_1,
 		buswidth: 4,
 		read8: sc520cdp_read8,

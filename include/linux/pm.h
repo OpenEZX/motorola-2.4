@@ -48,6 +48,18 @@ enum
 	PM_LOCK,
 };
 
+enum
+{
+  CPUMODE_RUN,
+  CPUMODE_IDLE,
+  CPUMODE_STANDBY,
+  CPUMODE_SLEEP,
+  CPUMODE_RESERVED,
+  CPUMODE_SENSE,
+  CPUMODE_RESERVED2,
+  CPUMODE_DEEPSLEEP,
+};
+
 typedef int pm_request_t;
 
 /*
@@ -78,6 +90,7 @@ enum
 	PM_SYS_FDC =	 0x41d00700, /* floppy controller */
 	PM_SYS_VGA =	 0x41d00900, /* VGA controller */
 	PM_SYS_PCMCIA =	 0x41d00e00, /* PCMCIA controller */
+	PM_SYS_ARCH_SPECIFIC,        /* arch-specific */
 };
 
 /*

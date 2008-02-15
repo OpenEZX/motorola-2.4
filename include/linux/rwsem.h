@@ -38,6 +38,16 @@ extern void FASTCALL(rwsemtrace(struct rw_semaphore *sem, const char *str));
 #endif
 
 /*
+ * Added by Susan -- try to lock for reading
+ */
+static inline void try_down_read(struct rw_semaphore *sem, unsigned int *result)
+{
+	rwsemtrace(sem,"Entering down_read");
+	__try_down_read(sem, result);
+	rwsemtrace(sem,"Leaving down_read");
+}
+
+/*
  * lock for reading
  */
 static inline void down_read(struct rw_semaphore *sem)

@@ -66,7 +66,8 @@ struct termio {
 #define N_HDLC		13	/* synchronous HDLC */
 #define N_SYNC_PPP	14
 #define N_HCI		15  /* Bluetooth HCI UART */
-
+ /* porting from A760 GPRS  feature   linweiqiang   2003-12-17 */
+#define N_GPRS      16  /* virtual GPRS data line discipline  */
 #ifdef __KERNEL__
 
 /*

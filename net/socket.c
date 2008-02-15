@@ -75,6 +75,8 @@
 #include <linux/module.h>
 #include <linux/highmem.h>
 
+#include <linux/trace.h>
+
 #if defined(CONFIG_KMOD) && defined(CONFIG_NET)
 #include <linux/kmod.h>
 #endif
@@ -132,7 +134,7 @@ static struct file_operations socket_file_ops = {
 
 static struct net_proto_family *net_families[NPROTO];
 
-#ifdef CONFIG_SMP
+#if defined(CONFIG_SMP) || defined(CONFIG_PREEMPT)
 static atomic_t net_family_lockct = ATOMIC_INIT(0);
 static spinlock_t net_family_lock = SPIN_LOCK_UNLOCKED;
 
@@ -502,6 +504,8 @@ int sock_sendmsg(struct socket *sock, struct msghdr *msg, int size)
 	int err;
 	struct scm_cookie scm;
 
+	TRACE_SOCKET(TRACE_EV_SOCKET_SEND, sock->type, size);
+
 	err = scm_send(sock, msg, &scm);
 	if (err >= 0) {
 		err = sock->ops->sendmsg(sock, msg, size, &scm);
@@ -515,6 +519,8 @@ int sock_recvmsg(struct socket *sock, struct msghdr *msg, int size, int flags)
 	struct scm_cookie scm;
 
 	memset(&scm, 0, sizeof(scm));
+
+	TRACE_SOCKET(TRACE_EV_SOCKET_RECEIVE, sock->type, size);
 
 	size = sock->ops->recvmsg(sock, msg, size, flags, &scm);
 	if (size >= 0)
@@ -694,6 +700,7 @@ static int sock_mmap(struct file * file, struct vm_area_struct * vma)
 {
 	struct socket *sock = socki_lookup(file->f_dentry->d_inode);
 
+	vma->vm_flags &= ~VM_IO;
 	return sock->ops->mmap(file, sock, vma);
 }
 
@@ -910,6 +917,8 @@ asmlinkage long sys_socket(int family, int type, int protocol)
 	retval = sock_map_fd(sock);
 	if (retval < 0)
 		goto out_release;
+
+	TRACE_SOCKET(TRACE_EV_SOCKET_CREATE, retval, type);
 
 out:
 	/* It may be already another descriptor 8) Not kernel problem. */
@@ -1548,7 +1557,9 @@ asmlinkage long sys_socketcall(int call, unsigned long *args)
 		
 	a0=a[0];
 	a1=a[1];
-	
+
+	TRACE_SOCKET(TRACE_EV_SOCKET_CALL, call, a0);
+
 	switch(call) 
 	{
 		case SYS_SOCKET:

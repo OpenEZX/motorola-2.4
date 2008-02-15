@@ -1,6 +1,8 @@
 /*
  *  linux/drivers/video/fbcon.c -- Low level frame buffer based console driver
  *
+ *      (c) Copyright Motorola 2003, All rights reserved.
+ *
  *	Copyright (C) 1995 Geert Uytterhoeven
  *
  *
@@ -75,6 +77,7 @@
 #include <linux/selection.h>
 #include <linux/smp.h>
 #include <linux/init.h>
+#include <linux/vmalloc.h>
 #include <linux/pm.h>
 
 #include <asm/irq.h>
@@ -110,8 +113,25 @@
 #  define DPRINTK(fmt, args...)
 #endif
 
-#define LOGO_H			80
-#define LOGO_W			80
+#ifndef CONFIG_MOT_LOGO
+#define CONFIG_MOT_LOGO
+#endif
+
+#ifdef CONFIG_MOT_LOGO
+#define LOGO_H			320 //80 for default logo
+#define LOGO_W			240 //80 for default logo
+#define FLASH_ADDR		0x0
+#define FLASH_SIZE		32*1024*1024
+#define FLASH_BLOCK_SIZE	0x20000
+#define IMAGE_SIZE		LOGO_H*LOGO_W*2
+#define MOT_LOGO_LINE		LOGO_W*2
+#define FILE_SIZE		LOGO_H*LOGO_W*2+0x100
+#define LOGO_ADDR               0x1fc0000
+#else
+#define LOGO_H                  80
+#define LOGO_W                  80
+#endif
+
 #define LOGO_LINE	(LOGO_W/8)
 
 struct display fb_display[MAX_NR_CONSOLES];
@@ -576,6 +596,8 @@ static void fbcon_setup(int con, int init, int logo)
     if (con != fg_console || (p->fb_info->flags & FBINFO_FLAG_MODULE) ||
         p->type == FB_TYPE_TEXT)
     	logo = 0;
+
+    vt_cons[conp->vc_num]->vc_mode = KD_GRAPHICS;
 
     p->var.xoffset = p->var.yoffset = p->yscroll = 0;  /* reset wrap/pan */
 
@@ -2138,7 +2160,13 @@ static int __init fbcon_show_logo( void )
     int line = p->next_line;
     unsigned char *fb = p->screen_base;
     unsigned char *logo;
+#ifdef CONFIG_MOT_LOGO
+    unsigned char *dst;
+    unsigned short *src;
+    unsigned long base;
+#else
     unsigned char *dst, *src;
+#endif
     int i, j, n, x1, y1, x;
     int logo_depth, done = 0;
 
@@ -2268,38 +2296,93 @@ static int __init fbcon_show_logo( void )
         }
 #endif
 #if defined(CONFIG_FBCON_CFB16) || defined(CONFIG_FBCON_CFB24) || \
-    defined(CONFIG_FBCON_CFB32) || defined(CONFIG_FB_SBUS)
-	if ((depth % 8 == 0) && (p->visual == FB_VISUAL_TRUECOLOR)) {
+    defined(CONFIG_FBCON_CFB32) || defined(CONFIG_FBCON_CFB18) || \
+    defined(CONFIG_FB_SBUS)
+	if ((p->visual == FB_VISUAL_TRUECOLOR)) {
 	    /* Modes without color mapping, needs special data transformation... */
+
+            /* modified by zq, for show motorola logo */
 	    unsigned int val;		/* max. depth 32! */
+#ifndef CONFIG_FBCON_CFB18
 	    int bdepth = depth/8;
+#else
+	    int bdepth = 3;
+#endif
+
+#ifdef CONFIG_MOT_LOGO
+	    unsigned int px[4], wd0, wd1, wd2;
+	    int i, c, buflen, imglen;
+	    unsigned char *image, *temp;
+	    base = (unsigned long)__ioremap(FLASH_ADDR, FLASH_SIZE, 0);
+	    logo = base + LOGO_ADDR;
+	    printk("address of logo is 0x%x\n", virt_to_phys(logo));
+	    buflen = FLASH_BLOCK_SIZE;
+	    imglen = FILE_SIZE;
+	    image = vmalloc(imglen);	   
+	    decompress_logo(logo, image, buflen, imglen);
+	    temp = image + 72;  /* discard bitmap header */
+#else
 	    unsigned char mask[9] = { 0,0x80,0xc0,0xe0,0xf0,0xf8,0xfc,0xfe,0xff };
 	    unsigned char redmask, greenmask, bluemask;
 	    int redshift, greenshift, blueshift;
 		
 	    /* Bug: Doesn't obey msb_right ... (who needs that?) */
+
 	    redmask   = mask[p->var.red.length   < 8 ? p->var.red.length   : 8];
 	    greenmask = mask[p->var.green.length < 8 ? p->var.green.length : 8];
 	    bluemask  = mask[p->var.blue.length  < 8 ? p->var.blue.length  : 8];
 	    redshift   = p->var.red.offset   - (8-p->var.red.length);
 	    greenshift = p->var.green.offset - (8-p->var.green.length);
 	    blueshift  = p->var.blue.offset  - (8-p->var.blue.length);
-
+	    
 	    src = logo;
-	    for( y1 = 0; y1 < LOGO_H; y1++ ) {
-		dst = fb + y1*line + x*bdepth;
+#endif
+
+
+	    
+            for( y1 = 0; y1 < LOGO_H; y1++ ) {
+	        dst = fb + y1*line + x*bdepth;
+#ifdef CONFIG_MOT_LOGO
+		src = temp + (LOGO_H-1-y1)*MOT_LOGO_LINE;
+#endif
 		for( x1 = 0; x1 < LOGO_W; x1++, src++ ) {
+#ifdef CONFIG_MOT_LOGO
+		    val=*src;
+#else
 		    val = safe_shift((linux_logo_red[*src-32]   & redmask), redshift) |
 		          safe_shift((linux_logo_green[*src-32] & greenmask), greenshift) |
 		          safe_shift((linux_logo_blue[*src-32]  & bluemask), blueshift);
-		    if (bdepth == 4 && !((long)dst & 3)) {
+#endif
+
+
+		    if ((bdepth == 4) && !((long)dst & 3)) {
 			/* Some cards require 32bit access */
 			fb_writel (val, dst);
 			dst += 4;
-		    } else if (bdepth == 2 && !((long)dst & 1)) {
+		    } else if ((bdepth == 2 || bdepth == 3) && !((long)dst & 1)) {
+			//This case is used by E680
 			/* others require 16bit access */
+#ifndef CONFIG_FB_PXA_18BPP
 			fb_writew (val,dst);
-			dst +=2;
+			dst += 2;
+#else
+			c = x1 & 0x3;
+
+			//Convert 16-bit pixel to 18-bit pixel
+			px[c] = ((val & 0xF800)<<2) | ((val & 0x7E0)<<1) | ((val & 0x1F)<<1);		
+
+			if (c == 3) //just finished reading 4th pixel, let's convert and write to fb
+			{
+			    //construct packed words
+			    wd0 = px[0] | (px[1] << 24);
+			    wd1 = (px[1] >> 8) | (px[2] << 16);
+			    wd2 = (px[2] >> 16) | (px[3] << 8);
+
+			    fb_writel (wd0, dst); dst+=4;
+			    fb_writel (wd1, dst); dst+=4;
+			    fb_writel (wd2, dst); dst+=4; 
+			}	
+#endif
 		    } else {
 #ifdef __LITTLE_ENDIAN
 			for( i = 0; i < bdepth; ++i )
@@ -2310,6 +2393,10 @@ static int __init fbcon_show_logo( void )
 		    }
 		}
 	    }
+#ifdef CONFIG_MOT_LOGO
+	    vfree(image);
+	    iounmap((void *)base);	
+#endif
 	    done = 1;
 	}
 #endif
