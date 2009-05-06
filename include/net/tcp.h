@@ -10,11 +10,26 @@
  * Authors:	Ross Biro, <bir7@leland.Stanford.Edu>
  *		Fred N. van Kempen, <waltje@uWalt.NL.Mugnet.ORG>
  *
+ *
  *		This program is free software; you can redistribute it and/or
  *		modify it under the terms of the GNU General Public License
  *		as published by the Free Software Foundation; either version
  *		2 of the License, or (at your option) any later version.
  */
+/*
+ *
+ *   2005-Apr-04 Motorola   Add security patch 
+ */
+/*
+ * Copyright (c) 2005 Motorola, Inc.
+ * Revision History:
+                    Modification
+    Date             Description of Changes
+ ------------      -------------------------
+ 09/15/2005   	   modify retries and MAX_RTO to get better performance 
+                    for wireless environment.
+*/
+
 #ifndef _TCP_H
 #define _TCP_H
 
@@ -28,6 +43,7 @@
 #include <linux/tcp.h>
 #include <linux/slab.h>
 #include <linux/cache.h>
+#include <linux/security.h>
 #include <net/checksum.h>
 #include <net/sock.h>
 
@@ -295,7 +311,7 @@ static __inline__ int tcp_sk_listen_hashfn(struct sock *sk)
 				 * to ~3sec-8min depending on RTO.
 				 */
 
-#define TCP_RETR2	15	/*
+#define TCP_RETR2	5	/*   modify to match wireless environment 
 				 * This should take at least
 				 * 90 minutes to time out.
 				 * RFC1122 says that the limit is 100 sec.
@@ -331,7 +347,7 @@ static __inline__ int tcp_sk_listen_hashfn(struct sock *sk)
 #define TCP_DELACK_MIN	4U
 #define TCP_ATO_MIN	4U
 #endif
-#define TCP_RTO_MAX	((unsigned)(120*HZ))
+#define TCP_RTO_MAX	((unsigned)(60*HZ))   /*  modify to match wireless environment */
 #define TCP_RTO_MIN	((unsigned)(HZ/5))
 #define TCP_TIMEOUT_INIT ((unsigned)(3*HZ))	/* RFC 1122 initial RTO value	*/
 
@@ -519,13 +535,34 @@ struct open_request {
 		struct tcp_v6_open_req v6_req;
 #endif
 	} af;
+#ifdef CONFIG_SECURITY_NETWORK
+	/* LSM security field */
+	void			*security;
+#endif
 };
 
 /* SLAB cache for open requests. */
 extern kmem_cache_t *tcp_openreq_cachep;
 
-#define tcp_openreq_alloc()		kmem_cache_alloc(tcp_openreq_cachep, SLAB_ATOMIC)
-#define tcp_openreq_fastfree(req)	kmem_cache_free(tcp_openreq_cachep, req)
+static inline struct open_request *tcp_openreq_alloc(void)
+{
+	struct open_request *req =
+		kmem_cache_alloc(tcp_openreq_cachep, SLAB_ATOMIC);
+
+	if (req != NULL) {
+		if (security_open_request_alloc(req)) {
+			kmem_cache_free(tcp_openreq_cachep, req);
+			return NULL;
+		}
+	}
+	return req;
+}
+
+static inline void tcp_openreq_fastfree(struct open_request *req)
+{
+	security_open_request_free(req);
+	kmem_cache_free(tcp_openreq_cachep, req);
+}
 
 static inline void tcp_openreq_free(struct open_request *req)
 {

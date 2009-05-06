@@ -1,0 +1,1080 @@
+================================================================================
+			U S E R  M A N U A L
+
+1) FOR DRIVER INSTALL
+	Default Helper and FW are included in Marvell Driver. 
+	Marvell Driver is able to use user-specified helper and firmware code.  
+
+	For example, to install SD8385 Driver with the default helper and firmware, using
+	the following command: 
+		insmod sdio.o
+		insmod sd8385.o
+
+	To install SD8385 Driver with user-specified helper file /usr/fw/helper.h and 
+	firmware file /usr/fw/sd8385.h, using the following command:
+		insmod sdio.o
+		insmod sd8385.o helper_name=/usr/fw/helper.h fw_name=/usr/fw/sd8385.h
+		
+
+2) FOR IWPRIV COMMAND
+NAME
+	This section describes the usage of private commands used in Marvell WLAN
+	Linux Driver.
+
+SYNOPSIS
+	iwpriv <ethX> <command> [sub-command] ...
+
+	iwpriv ethX version
+	iwpriv ethX scantype [sub-command]
+	iwpriv ethX getSNR <n>
+	iwpriv ethX getNF <n>
+	iwpriv ethX getRSSI <n>
+	iwpriv ethX setrxant <n>
+	iwpriv ethX getrxant
+	iwpriv ethX settxant <n>
+	iwpriv ethX gettxant
+	iwpriv ethX authalgs <n>
+	iwpriv ethX pre-TBTT <n>
+	iwpriv ethX 8021xauthalgs <n>
+	iwpriv ethX encryptionmode <n>
+	iwpriv ethX setregioncode <n>
+	iwpriv ethX getregioncode 
+	iwpriv ethX setbcnavg <n>
+	iwpriv ethX getbcnavg
+	iwpriv ethX setdataavg <n>
+	iwpriv ethX setlisteninter <n>
+	iwpriv ethX getlisteninter
+	iwpriv ethX setmultipledtim <n>
+	iwpriv ethX getmultipledtim
+	iwpriv ethX atimwindow <n>
+	iwpriv ethX deepsleep <n>
+	iwpriv ethX hostwakeupcfg <n>
+	iwpriv ethX deauth
+	iwpriv ethX adhocstop
+	iwpriv ethX radioon
+	iwpriv ethX radiooff
+	iwpriv ethX reasso-on
+	iwpriv ethX reasso-off
+	iwpriv ethX scanmode  [sub-command]
+	iwpriv ethX setwpaie <n>
+	iwpriv ethX wlanidle-off
+	iwpriv ethX wlanidle-on
+	iwpriv ethX tx-mode <n>
+	iwpriv ethX txcontrol-mode <n>
+	iwpriv ethX setaeskey <n>
+	iwpriv ethX getaeskey 
+	iwpriv ethX rmaeskey
+	iwpriv ethX setband <n>
+	iwpriv ethX getband
+	iwpriv ethX getcis
+	iwpriv ethX getlog
+	iwpriv ethX getadhocstatus
+	iwpriv ethX adhocgrate <n>
+	iwpriv ethX atimgen <n>
+
+Version 4 Command:
+	iwpriv ethX inactvityto <n>
+	iwpriv ethX sleeppd <n>
+	iwpriv ethX enable11d <n>
+	iwpriv ethX enable11htpc <n>
+	iwpriv ethX setpowercons <n>
+	iwpriv ethX setpowercap <n> <m>
+	iwpriv ethX bgscan <n>
+	iwpriv ethX wmm <n>
+	iwpriv ethX tpccfg <n>
+	iwpriv ethX powercfg <n>	
+	iwpriv ethX setafc <n>
+	iwpriv ethX getafc
+	iwpriv ethX sdioclock <n>
+
+Version 5 Command:
+	iwpriv ethX ledgpio <n>
+	iwpriv ethX wmm_qosinfo <n>
+	iwpriv ethX scanprobes <n>
+	iwpriv ethX lolisteninter <n>
+	iwpriv ethX rateadapt <n> <m>
+	iwpriv ethX fwwakeupmethod <n>
+	iwpriv ethX txcontrol <n>
+	iwpriv ethX uapsdnullgen <n>
+	iwpriv ethX psnullinterval <n>
+
+DESCRIPTION
+	Those commands are used to send additional commands to the Marvell WLAN
+	card via the Linux device driver.
+
+	The ethX parameter specifies the network device that is to be used to 
+		perform this command on. it could be eth0, eth1 etc.
+
+version	
+	This is used to get the current version of the driver and the firmware.
+
+scantype	
+	This command is used to set the scan type to be used by the driver in 
+	the scan command. This setting will not be used while performing a scan
+	for a specific SSID, as it is always done with scan type being active. 
+	
+	where the sub-commands are: - 
+			active 	-- to set the scan type to active
+			passive -- to set the scan type to passive
+			get 	-- to get the scan type set in the driver
+
+getSNR  
+	This command gets the average and non average value of Signal to Noise 
+	Ratio of Beacon and Data.
+	
+	where value is:-
+			0 	-- Beacon non-average.
+	        	1 	-- Beacon average.
+	        	2 	-- Data non-average.
+	        	3 	-- Data average.
+
+	If no value is given, all four values are returned in the order mentioned
+	above.
+
+	Note: This command is available only when STA is connected.
+
+getRSSI	
+	This command gets the average and non average value os Receive Signal 
+	Strength of Beacon and Data.
+	
+	where value is:-
+			0 	-- Beacon non-average.
+	        	1 	-- Beacon average.
+	        	2 	-- Data non-average.
+	        	3 	-- Data average.
+
+	Note: This command is available only when STA is connected.
+
+getNF   
+	This command gets the average and non average value of Noise Floor of 
+	Beacon and Data.
+	
+	where value is:-
+			0 	-- Beacon non-average.
+	        	1 	-- Beacon average.
+	        	2 	-- Data non-average.
+	        	3 	-- Data average.
+
+	Note: This command is available only when STA is connected.
+
+setrxant	
+	This command is used to set the mode for Rx antenna. 
+	
+	The options that can be sent are:- 
+			1 	-- Antenna 1. 
+			2 	-- Antenna 2.
+			0xFFFF 	-- Diversity.
+
+	Usage:
+		iwpriv ethX setrxant 0x01: select Antenna 1.
+
+getrxant                    
+	This command is used to get the mode for Rx antenna.
+
+
+settxant	
+	This command is used to set the mode for Tx antenna.
+		The options that can be sent are:- 
+			1 	-- Antenna 1. 
+			2 	-- Antenna 2.
+			0xFFFF 	-- Diversity.
+	Usage:
+		iwpriv ethX settxant 0x01: select Antenna 1.
+
+gettxant                    
+	This command is used to get the mode for Tx antenna.
+
+authalgs	
+	This command is used by the WPA supplicant to set the authentication 
+	algorithms in the station.
+
+8021xauthalgs
+	This command is used by the WPA supplicant to set the 8021.x authentication algorithm type
+	station.
+	
+	where values can be:-
+			1 	-- None
+			2 	-- LEAP
+			4 	-- TLS
+			8 	-- TTLs
+			16	-- MD5	
+
+
+encryptionmode
+	This command is used by the WPA supplicant to set the encryption algorithm.
+		
+	where values can be:-
+			0 	-- NONE
+			1 	-- WEP40
+			2 	-- TKIP
+			3 	-- CCMP
+			4 	-- WEP104
+
+pre-TBTT	
+	This command is used to set pre-TBTT time period where value is in microseconds.
+
+setregioncode           
+	This command is used to set the region code in the station.
+	where value is 'region code' for various regions like
+	USA FCC, Canada IC, Spain, France, Europe ETSI,	Japan ...
+
+	Usage:
+		iwpriv ethX setregioncode 0x10: set region code to USA (0x10).
+
+getregioncode           
+	This command is used to get the region code information set in the 
+	station. 
+
+setbcnavg
+	Set the weighting factor/sliding window for calculating RSSI/SNR in received beacon.
+	
+	The maximum value of sliding window is 8.
+
+getbcnavg
+	Get weighting factor for calculating RSSI.
+
+setdataavg
+	Set the weighting factor/sliding window for calculating RSSI/SNR in received data packet.
+
+	The maximum value of sliding window is 8.
+
+setlisteninter             
+	This command is used to set the listen interval in the 
+	station.
+	
+	where the value ranges between 1 - 255
+
+getlisteninter            
+	This command is used to get the listen interval value set in the 
+	station.
+
+setmultipledtim         
+	This command is used to set the multiple dtim value in the 
+	station.
+		where the value is 1,2,3,4,5,0xfffe
+		0xfffe means the firmware will use listen interval in association
+		command for waking up
+
+getmultipledtim        
+	This command is used to get the multiple dtim value set in the station.
+
+atimwindow         
+	This command is used to set the atim value in the 
+	station. 
+
+	where the value ranges between 0 - 50
+
+deauth                      
+	This command is used to send the de-authentication to the AP with which 
+	the station is associated. This command is valid only when 
+	station is in Infrastructure mode.
+
+	Note: This command is available only when STA is connected.
+
+reasso-on                  
+	This command is used to enable re-association function in dirver.
+
+reasso-off                  
+	This command is used to disable re-association function in driver
+
+adhocstop                 
+	This command is used to stop beacon transmission from the station and 
+	go into idle state in ad-hoc mode.
+	
+	Note: This command is available only when STA is connected.
+
+radioon                     
+	This command is used to turn on the RF antenna.
+
+radiooff                    
+	This command is sued to turn off the RF antenna.   
+
+scanmode                 
+	This command is used to set the station to scan for either IBSS 
+	networks or BSS networks or both BSS and IBSS networks. This 
+	command can be used with sub commands,
+
+	where the value for 
+			bss 	-- Scan All the BSS networks.
+			ibss 	-- Scan All the IBSS networks.
+			any 	-- Scan both BSS and IBSS networks.
+			
+deepsleep                    
+	This command is used to configure the station in deepsleep mode.
+	
+	where the option is:
+        		1 	-- Enable deepsleep mode
+			0 	-- Disable deepsleep mode. 
+
+	Note: This command is available only when STA is connected.
+
+hostwakeupcfg	
+	This command is used to wakeup the host on the given parameters.
+		(Condition, GPIO pin , Gap).
+
+	where Condition is:-  
+		bit 0 = 1 	-- non unicast data
+		bit 1 = 1 	-- unicast data
+		bit 2 = 1 	-- mac event
+		bit 3 = 1 	-- magic packet
+		bit0:31=1	-- cancel host_wakeup_config
+
+	where GPIO is the pin number of GPIO used to wakeup the host.
+		It could be 0-7 (GPIO0 to GPIO7) or 0xff (SDIO will be used instead).
+		
+	where Gap is the gap in milli seconds between wakeup signal and wakeup event.
+
+	Where GPIO and Gap are one byte Hexical data.
+
+	Usage:
+		iwpriv eth1 hostwakeupcfg  "2 1 80"		# unicast data
+								# GPIO 1
+								# gap: 128ms
+
+		iwpriv eth1 hostwakeupcfg  "ffffffff 0 0"	# cancel host wakeup config
+
+	Note: This command is available only when STA is connected.
+
+setwpaie                      
+	This command is used by WPA supplicant to send the WPA-IE to the driver. 
+	
+wlanidle-off                 
+	This command is used to get into idle state.
+
+	Note: This command is available only when STA is connected.
+
+wlanidle-on                 
+	This command is used to get off the idle state.
+
+	Note: This command is available only when STA is connected.
+
+tx-mode
+	This command is used to set the transmit mode in the station.
+
+	where the value is:-
+			0 	-- TX_MODE_NORMAL
+			1 	-- TX_MODE_CONTINUOUS
+			2 	-- TX_MODE_CW.
+
+txcontrol-mode
+	This command is used to set the transmit control mode in the station.
+
+	where the value of the mode is:- 
+			0 	-- TX_CONTROL_MODE_NORMAL
+			1 	-- TX_CONTROL_MODE_RDONLY
+	
+setaeskey
+	This command is used to set the AES key, when the station is in Ad-hoc
+	mode.
+
+	where value can be any 16 byte value.
+
+	Usage:
+		iwpriv ethX setaeskey 12345678901234567890123456789012
+
+getaeskey
+	This command is used to get the AES key, when the station is in Ad-hoc
+	mode.
+
+rmaeskey
+	This command is used to remove the Ad-Hoc AES key that is previously set.
+	It will disable ad-hoc AES as well.
+
+setband              	
+	This command is used to set the band.
+
+	where bands are:-
+    	   		a
+			b
+			bg
+			abg
+	Usage:
+		iwpriv ethX setband a: set to a band
+		iwpriv ethX setband bg: set to b and g band
+
+getband             			
+	This command is used to get the user configured bands.
+
+getcis
+	This command is used to read the Card Info Structure Table.
+	
+getlog
+	This command is used to get the 802.11 statistics available in the 
+		station.
+	
+	Note: This command is available only when STA is connected.
+
+getadhocstatus
+	This command is used to get the ad-hoc Network Status.
+
+	The various status codes are:
+		AdhocStarted
+		AdhocJoined
+		AdhocIdle
+		InfraMode
+		AutoUnknownMode
+
+	Note: This command is available only when STA is connected.
+
+adhocgrate
+	This command is used to enable(1) g_rate, Disable(0) g_rate 
+	and request(2) the status which g_rate is disabled/enabled,
+	for Ad-hoc creator.
+
+	where value is:-
+		0	-- Disabled
+		1	-- Enabled
+		2	-- Get
+
+ledgpio
+	This command is used to set/get LEDs.
+
+	iwpriv ethX ledgpio <LEDs>
+		will set the corresponding LED for the GPIO Line.
+
+	iwpriv ethX ledgpio
+		will give u which LEDs are Enabled.
+
+	Usage:
+		iwpriv eth1 ledgpio 1 0 2 1 3 4
+			will enable 
+			LED 1 -> GPIO 0
+			LED 2 -> GPIO 1
+			LED 3 -> GPIO 4
+
+		iwpriv eth1 ledgpio 
+			shows LED information in the format as mentioned above.
+
+	Note: LED0 is invalid
+	Note: Maximum Number of LEDs are 16.		
+	
+inactivityto
+	This command is used by the host to set/get the inactivity timeout value, 
+	which specifies when WLAN device is put to sleep.
+	
+	Usage:
+		iwpriv ethX inactivityto [<timeout>]
+
+	where the parameter are:
+		timeout: timeout value in milliseconds.
+
+	Example:
+		iwpriv eth1 inactivityto
+			"get the timeout value"
+
+		iwpriv eth1 inactivityto X 
+			"set timeout value to X ms"
+
+
+sleeppd
+	This command is used to configure the sleep period of the WLAN device.
+
+	Usage:
+		iwpriv ethX sleeppd [<sleep period>]
+
+	where the parameter are:
+		Period: sleep period in milliseconds. Range 10~60.
+
+	Example:
+		iwpriv eth1 sleeppd 10 
+			"set period as 10 ms"
+		iwpriv eth1 sleeppd
+			"get the sleep period configuration"
+
+enable11d
+	This command is used to control 11d
+	where value is:-
+		1	-- Enabled
+		0	-- Disabled
+		2	-- Get
+
+enable11htpc
+	This command is used to control TPC
+
+	where value is:-
+		1	-- Enabled
+		0	-- Disabled
+		2	-- Get
+
+wmm
+	This command is used to control WMM
+
+	where value is:-
+		0	-- Disabled
+		1	-- Enabled
+		2	-- Get
+
+setpowercap	
+	This command is used to set the transmit power capability. MinTxPower 
+	and MaxTxPower are in dbm units.
+	
+	Usage:
+		iwpriv ethX setpowercap "5 14"
+	
+	set the minimum transmit power capability as 5 dbm, 
+		maximum transmit power capability as 14 dbm.
+
+setpowercons
+	This command is used to set the local transmit power constraint. Value 
+	is in dbm unit. This command is only used in the Ad-Hoc start.
+	
+	Usage:
+		iwpriv ethX setpowercons 12
+	
+bgscan
+	Enables or disables the Background scan.
+
+	The configuration for bg scan must be set using wlanconfig
+
+	Usage:
+		wlanconfig ethX bgscanconfig bg_scan_config.conf
+		iwpriv ethX bgscan 0 (disable)
+		iwpriv ethX bgscan 1 (enable)
+		iwpriv ethX bgscan 2 (display enable or disable)
+
+tpccfg
+	Enables or disables automatic transmit power control.
+
+	The first parameter turns this feature on (1) or off (0).  When turning 
+	on, the user must also supply four more parameters in the following 
+	order:
+		-UseSNR (Use SNR (in addition to PER) for TPC algorithm),
+		-P0 (P0 power level for TPC),
+		-P1 (P1 power level for TPC),
+		-P2 (P2 power level for TPC).
+
+	Usage:
+		iwpriv ethX tpccfg: Get current configuration
+		iwpriv ethX tpccfg 0: disable auto TPC
+		iwpriv ethX tpccfg 0x01 0x00 0x05 0x0a 0x0d: enable auto TPC; do not use SNR;
+							     P0=0x05; P1=0x0a; P2=0x0d;
+		iwpriv ethX tpccfg 0x01 0x01 0x05 0x0a 0x0d: enable auto TPC; use SNR;
+							     P0=0x05; P1=0x0a; P2=0x0d.
+
+powercfg
+	Enables or disables power adaptation.
+
+	The first parameter turns this feature on (1) or off (0).  When turning 
+	on, the user must also supply three more parameters in the following 
+	order:
+		-P0 (P0 power level for Power Adaptation),
+		-P1 (P1 power level for Power Adaptation),
+		-P2 (P2 power level for Power Adaptation).
+
+	Usage:
+		iwpriv ethX powercfg: Get current configuration
+		iwpriv ethX powercfg 0: disable power adaptation
+		iwpriv ethX powercfg 1 0x0d 0x0f 0x12: enable power adaptation;
+						       P0=0x0d; P1=0x0f; P2=0x12.
+getafc
+	This command returns automatic frequency control parameters.  It returns
+	three integers:
+		-P0: automatic is on (1), or off (0),
+		-P1: current timing offset in PPM (part per million), and
+		-P2: current frequency offset in PPM.
+
+setafc
+	Set automatic frequency control options.
+
+	The first parameter turns automatic on (1) or off (0).
+	The user must supply two more parameters in either case, in the following
+  order:
+
+  When auto is on:
+
+		-P0 (automatic adjustment frequency threshold in PPM),
+		-P1 (automatic adjustment period in beacon period),
+
+  When auto is off:
+
+		-P0 (manual adjustment timing offset in PPM), and
+		-P1 (manual adjustment frequency offset in PPM).
+
+	Usage:
+		iwpriv ethX setafc 0 10 10: manual adjustment, both timing and frequcncy 
+    offset are 10 PPM.
+
+		iwpriv ethX setafc 1 10 10 enable afc, automatic adjustment,
+    frequency threshold 10 PPM, for every 10 beacon periods.
+
+sdioclock
+	Turn On(1) or Off(0) the Bulverde SDIO clock.
+
+	Usage:
+		iwpriv ethX sdioclock 1 (on)
+		iwpriv ethX sdioclock 0 (off)
+
+wmm_qosinfo
+	This command sets WMM IE QOS info when an argument is given, and gets current WMM
+	IE QOS info when no argument is given.
+
+	Usage:
+		iwpriv ethX wmm_qosinfo 0x0f (set WMM IE QOS info to 0x0f)
+		iwpriv ethX wmm_qosinfo      (get WMM IE QOS info)
+
+scanprobes
+	This command sets number of probe requests per channel.
+
+	Usage:
+		iwpriv ethX scanprobes 3 (set scan probes to 3)
+		iwpriv ethX scanprobes   (get scan probes)
+
+lolisteninter
+	This command sets the value of listen interval.
+
+	Usage:
+	iwpriv ethX lolisteninter 234 (set the lolisteninter to 234)
+	iwpriv ethX lolisteninter     (get the lolisteninter value)
+
+rateadapt
+	This command sets the data rates bitmap.
+	Where <n>
+		0: Disable auto rate adapt
+		1: Enable auto rate adapt
+		
+	      <m>
+		 data rate bitmap
+			Bit	Data rate
+			0	1 Mbps
+			1	2 Mbps
+			2	5.5 Mbps
+			3	11 Mbps
+			4	Reserved
+			5	6 Mbps
+			6	9 Mbps
+			7	12 Mbps
+			8	18 Mbps
+			9	24 Mbps
+			10	36 Mbps
+			11	48 Mbps
+			12	54 Mbps
+			12-15	Reserved
+
+	Usage:
+	iwpriv ethX rateadapt
+			read the currect data rate setting
+	iwpriv ethX rateadapt 1 0x07
+			enable auto data rate adapt and 
+			data rates are 1Mbps, 2Mbsp and 5.5Mbps
+	
+fwwakeupmethod
+	This command is used to set the firmware wakeup method.
+
+	where value <n> is:
+		0	-- Leave the current method to wakeup firmware unchanged
+		1	-- Firmware wakeup through the interface command interrupt
+			-- (default setting for SDIO/GSPI)
+		2	-- Firmware wakeup through the GPIO pin
+			-- (default setting for CF)
+
+	Usage:
+	iwpriv ethX fwwakeupmethod
+			Read the currect firmware wakeup method setting
+	iwpriv ethX fwwakeupmethod 0
+			Leave the current method to wakeup firmware unchanged
+	iwpriv ethX fwwakeupmethod 1
+			Firmware wakeup through the interface command interrupt
+	iwpriv ethX fwwakeupmethod 2
+			Firmware wakeup through the GPIO pin
+	
+
+txcontrol
+	This command is used to set the Tx rate, ack policy, and retry limit on a per packet basis.
+
+	Where value <n> is:
+	    if bit[4] == 1:
+		bit[3:0]        -- 0   1   2   3   4   5   6   7   8   9   10   11   12   13-16
+		Data Rate(Mbps) -- 1   2   5.5 11  Rsv 6   9   12  18  24  36   48   54   Rsv
+
+	    bit[12:8] 
+		if bit[12] == 1, bit[11:8] specifies the Tx retry limit.
+
+	    bit[14:13] specifies per packet ack policy:
+		bit[14:13]   
+		     1  0	use immediate ack policy for this packet
+		     1  1       use no ack policy for this packet
+		     0  x	use the per-packet ack policy setting
+			
+	Usage:
+	iwpriv ethX txcontrol 0x7513
+			Use no-ack policy, 5 retires for Tx, 11Mbps rate
+
+atimgen
+	Enables or disables the atim generation.
+
+	Usage:
+		iwpriv ethX atimgen 0 (disable)
+		iwpriv ethX atimgen 1 (enable)
+		iwpriv ethX atimgen 2 (display enable or disable)
+
+uapsdnullgen
+	This command is used to enable(1) UAPSD null package generation, 
+	Disable(0) UAPSD null package generation, and request(2) the status 
+	which null package generation is disabled/enabled,
+	for Ad-hoc creator.
+
+	where value is:-
+		0	-- Disabled
+		1	-- Enabled
+		2	-- Get
+
+psnullinterval
+	This command is used to set/request NULL package interval for Power Save
+	under infrastructure mode.
+
+	where value is:-
+		-1	-- Disabled
+		n>0	-- Set interval as n (seconds)
+
+
+================================================================================
+
+		U S E R  M A N U A L  F O R  W L A N _ C O N F I G 
+
+NAME
+wlanconfig - configure the additional parameters available for the Marvell 
+		WLAN Linux Driver.
+
+SYNOPSIS
+wlanconfig <ethX> <command> [parameters] ...
+wlanconfig ethX version
+wlanconfig ethX <rdmac|rdbbp|rdrf> <offset>
+wlanconfig ethX <wrmac|wrbbp|wrrf> <offset> <n>
+wlanconfig ethX sdcmd52r  <FN no.>  <address>
+wlanconfig ethX sdcmd52w  <FN no.>  <address> <data>
+wlanconfig ethX caldata <filename>
+wlanconfig ethX caldataext <filename>
+wlanconfig ethX rdcfreg <offset>
+wlanconfig ethX wrcfreg <offset> <n>
+wlanconfig ethX rdeeprom <offset> <length>
+wlanconfig ethX getrate
+wlanconfig ethX sleepparams <config values>
+wlanconfig ethX bca <config values>
+wlanconfig ethX bca-ts <config values>
+wlanconfig ethX scanbssid <bssid>
+wlanconfig ethX setadhocch <band> <channel>
+wlanconfig ethX getadhocch
+wlanconfig ethX extscan <ssid>
+wlanconfig ethX getscanlist
+
+Version 4 Command:
+wlanconfig ethX bgscanconfig <filename>
+wlanconfig ethx wmmtspec <filename>
+wlanconfig ethx wmmparaie <filename>
+wlanconfig ethx wmm_ack_policy <AC> <Ack Policy>
+wlanconfig ethX requesttpc <MacAddr> <timeout> <RateIndex>
+
+Version 5 Command:
+wlanconfig ethX subevent config/sub_event.conf
+wlanconfig ethX cipher_test <alg> <key> <iv> < input_file
+
+DESCRIPTION
+
+those commands are used in Marvell specic applicaion called wlanconfig.
+
+===========
+rdmac 
+rdbbp
+rdrf	
+	These commands are used to read the MAC, BBP and RF registers from the 
+	card.  These commands take one parameter that specifies the offset 
+	location that is to be read.  This parameter can be specified either in 
+	decimal or in hexadecimal (by preceding the number with a "0x").
+		
+	Usage:	
+		wlanconfig ethX rdmac 0xa123
+		wlanconfig ethX rdbbp 0x0123
+		wlanconfig ethX rdrf 0x0123
+
+wrmac 
+wrbbp
+wrrf	
+	These commands are used to write the MAC, BBP and RF registers in the 
+	card.  These commands take two parameters that specify the offset 
+	location and the value that is to be written. This parameters can be 
+	specified either in decimal or in hexadecimal (by preceding the number 
+	with a "0x").
+	
+	Usage:
+		wlanconfig ethX wrmac 0xa123 0xaa
+		wlanconfig ethX wrbbp 0x0123 0xaa
+		wlanconfig ethX wrrf 0x0123 0xaa
+
+sdcmd52r  
+	This command is used to read a controller register in 
+	Secure Digital I/O Interfaces.
+	
+	wlanconfig eth1 sdcmd52r <function number> <register address> 
+
+	Usage:
+		wlanconfig eth1 sdcmd52r 0x00 0x07
+
+sdcmd52w
+	This command is used to write to a controller register in 
+	Secure Digital I/O Interfaces. 
+	
+	wlanconfig eth1 sdcmd52w <function number> <register address> <value>
+
+	Usage:
+		wlanconfig eth1 sdcmd52w 0x00 0x02 0x0a
+
+caldata
+	In order to overcome the situation without EEPROM in the WLAN module, 
+	we send the calibration command to modify the existing hardware-spec 
+	command. This command takes one parameter that specifies the file name 
+	of the configuration file.
+	
+	Usage:
+	wlanconfig eth1 caldata <cal_data.conf>
+		cal_data.conf is a configuration file to the wlanconfig to 
+			read the calibration values.
+		Edit this file for changing calibration values.			
+
+caldataext
+	In order to overcome the situation without EEPROM in the WLAN module, 
+	we send the extension calibration command to modify the existing 
+	hardware-spec command. This command takes one parameter that specifies 
+	the file name of the configuration file.
+
+	Usage:
+	wlanconfig eth1 caldataext <cal_data_ext_set_<version>.conf>
+		cal_data_ext_set_<version>.conf is a configuration file to the 
+		wlanconfig to set the calibration values. The 3 existing 
+		versions are v5, vA and v7. 
+		Example:
+		  wlanconfig eth1 caldataext cal_data_ext_set_v5.conf
+		Edit this file for changing calibration values.			
+
+rdcfreg
+	Reads the value from the specified CF register.
+
+	Usage:
+		wlanconfig ethX rdcfreg 0x04: read register at address 0x04
+
+wrcfreg
+	Writes the value to the specified CF register.
+
+	Usage:
+		wlanconfig ethX wrcfreg 0x04 0x10: write value 0x10 to register 0x04
+
+rdeeprom
+	To read the EEPROM contents of the card.
+	
+	Usage:
+	wlanconfig ethX rdeeprom 0x00 0x10
+
+getrate
+	To get the supported rates and the current rate.
+	
+sleepparams       
+	This command is used to set the sleepclock configurations
+	
+	Usage:
+		wlanconfig ethX sleepparams get: reads the current sleepclock configuration
+	
+		wlanconfig ethX sleepparams set p1 p2 p3 p4 p5 p6: writes the sleepclock configuration.
+			
+		where:
+			p1 is Sleep clock error in ppm (0-65535)
+			p2 is Wakeup offset in usec (0-65535)
+			p3 is Clock stabilization time in usec (0-65535)
+			p4 is Control periodic calibration (0-2)
+			p5 is Control the use of external sleep clock (0-2)
+			p6 is reserved for debug (0-65535)
+
+bca                              
+	This is command is used to set the blue-tooth configurations
+
+	Usage:
+		wlanconfig ethX bca set/get p1 p2 p3 p4 p5 p6 p7
+		where:
+			p1	Mode     
+	                p2      Antenna
+	                p3      BtFreq
+	                p4      TxPriorityLow32
+	                p5      TxPriorityHigh32
+	                p6      RxPriorityLow32
+	                p7      RxPriorityHigh32
+
+	Example:
+        	wlanconfig ethX bca get:
+         		reads the current bca configuration
+		wlanconfig ethX bca set 0 x x xxxxxxxx  xxxxxxxx  xxxxxxxx  xxxxxxxx:
+	        	disables bca (default)
+		wlanconfig ethX bca set 3 1 3 f0001000 0000aaaa f0001000 0000aaaa:
+	        	sets blue-tooth priority highest.
+		wlanconfig ethX bca set 7 1 3 f0001000 0000aaaa f0001000 0000aaaa:
+	        	sets wlan priority highest.
+
+bca-ts
+	This command configures the BCA timeshare interval and percentage of 
+	time in this timeshare interval.
+	This command gets the BCA timeshare interval and percentage of 
+		time in this timeshare interval. This takes one parameter 
+		TrafficType.
+
+	Usage:
+		wlanconfig ethX bca-ts <Traffic Type> <TimeShareInterval> <BTTime>
+
+		where:
+			Traffic Type 1/0 for WLAN/BCA.
+			TimeShareInterval value is not multiple of 10 then floor value 
+			is taken and the valid range is < 20 ... 60,000 > in milliseconds.
+
+			BTTime value is  not multiple of 10 then floor value is
+			taken and the valid range is < 0 ... TimeShareInterval value >
+			in milliseconds.
+
+	Example:
+		wlanconfig ethX bca-ts get 1
+		wlanconfig ethX bca-ts set 1 30 23
+
+scanbssid (Available for MS8380 only)
+	This command is used to do a specific scan of a bssid.
+	
+	Usage:
+	wlanconfig ethX scanbssid 11:22:33:44:55:66
+
+bgscanconfig
+	This will configure the various parameters for background scan.
+
+	wlanconfig ethX bgscanconfig bg_scan_config.conf
+	
+	bg_scan_config.conf is the configuration file to wlanconfig
+	
+	Edit this file for changing bg scan values.
+
+wmmtspec/wmmparaie
+	This will configure the various command for wmm.
+	A single configuration is used for both the commands.
+	The configuration may contain all the command. The configuration of
+	each command should be in [command] Configuration [/command].
+
+wmm_ack_policy
+	This command will set the acknowledgement policy for a particular AC.
+
+	Usage:
+		"wlanconfig eth1 wmm_ack_policy" - This will get the Ack Policy
+		for all the AC and will display it to the user.
+		
+		"wlanconfig eth1 wmm_ack_policy <AC> <Ack Policy>" - This
+		will set the given <Ack Policy> to a given <AC>.
+		<AC>: 0 for AC_BE
+		      1 for AC_BK
+		      2 for AC_VI
+		      3 for AC_VO
+		<Ack Policy>: 0 for IMM_ACK
+			      1 for NO_ACK
+
+requesttpc
+	This command is used to request 802.11H TPC info. 
+
+	where:
+		MacAddr specifies the peer Station,
+		timeout is the timeout value for the request reply, 
+		RateIndex specifies the TPC request transmit rate.
+
+	The following table shows RateIndex and Rate
+		Rate(Mbps)		RateIndex
+	    ________________________________
+		1			2
+		2			4
+		5.5			11
+		11			22
+		22			44
+		6			12
+		9			18
+		12			24
+		18			36
+		24			48
+		36			72
+		48			96
+		54			108
+	    __________________________________
+
+	Usage: wlanconfig ethX requesttpc <mac-address> <time-out> <index>
+	
+	Example:
+		wlanconfig ethX requesttpc 02:04:0e:06:01:12 100 22
+	
+		request TPC infomation from Peer station with MAC address 
+		02:04:0e:006:01:12, timeout is 100ms, the command is transmitted
+		in 11 Mbps.
+
+subevent
+	This command is used to set the configurations for 
+		event descriptor interface command.
+
+	Usage:
+		wlanconfig ethX subevent config/sub_event.conf
+
+setadhocch         	   
+	This command is used to start the ad-hoc network.
+
+	Usage:
+	wlanconfig eth1 setadhocch a 36
+	
+	This will store the band a and channel 36 information and will be used 
+		only to start the ad-hoc network.
+
+getadhocch        	
+	This command is used to get current band and channel of the ad-hoc 
+		network 
+
+extscan
+	This command is used to do a specific scan.
+	
+	Usage: wlanconfig ethX extscan <SSID>
+
+	Example:
+		wlanconfig ethX extscan LINKSYS-AP
+
+	To see the results of use getscanlist command.
+
+getscanlist
+	This command is used to get the scan results.
+
+	Usage: wlanconfig ethX getscanlist
+		
+	Example:
+		wlanconfig ethX getscanlist
+
+cipher_test
+	This command tests the encryption/decryption API of the firmware.  The
+	user must supply encryption type (AES or RC4), key (128 bit) and KEY
+	IV (128 bit).  The input and output of encryption material will go
+	through standard I/O re-direction.  Since both AES and RC4 are
+	symmerical ciphers, encryption and decription actions are identical.
+	Encryption the same data twice with the same key and key IV will
+        have the same effect of decryption.
+
+	Usage:
+		wlanconfig ethX cipher_test aes 11111111111111111111111111111111 22222222222222222222222222222222 < input_file > output_file
+
+================================================================================
+
+		U S E R  M A N U A L  F O R  W L A N C I S 
+
+NAME
+wlancis - Get and dump the CIS Information available from the Marvell 
+		Common Module Linux Driver.
+
+SYNOPSIS
+wlancis <ethX> [outfile] 
+
+DESCRIPTION
+	This command is used to read the CIS Information structure of the 
+	Marvell WLAN device using the ioctl provided by the Common Module 
+	Linux device driver.
+	
+	The ethX parameter specifies the network device that is to be used to 
+	perform this command on.
+	
+	The outfile parameter specifies the file to which the unparsed 
+	CIS Information is to be recorded. This parameter is an 
+	optional one.
+
+	Usage:
+		wlancis eth1
+
+================================================================================

@@ -1,0 +1,164 @@
+04/01/05:  version 21
+	1. Turn off SDIO/BULVERDE bus clock when enter Deep Sleep mode
+		and turn back on the bus clock when exit Deep Sleep mode
+
+03/30/05:  version 21
+	1. Changed variable type of "nb" from "int" to "u16" in
+		sbi_host_to_card()
+
+03/22/05:  version 20
+	1. Modified sbi_get_cis_info() function to read CIS information
+
+03/07/05:  version 19
+	1. Modified sbi_get_cis_info() function to read CIS information and
+		and copy it in to the Adapter structure variable.
+
+03/03/05:  version 19
+	1. Added sbi_get_cis_info() to copy CIS Table to Adapter.
+	
+02/22/05:  version 18
+	1. Added hw_tx_done, block_size_512 & async_int_mode handling
+
+02/21/05:  version 18
+	1. Changed wlan_notifier_fn_t to wlan_notifier_fn_add and 
+		wlan_notifier_fn_remove correspondingly. 
+	2. Added variable 'pwlanpriv' to hold the return value of the
+		wlan_add_card() during initilization of the driver.
+	3. Added finctions sbi_add_card() and sbi_remove_card() in if_sdio.c. 
+		sbi_add_card() is called during the card initilization and
+		sbi_remove_card() is called during the card uninitilization.
+		These finction are registered to the io-module instead of
+		wlan_add_card() and wlan_remove() when sbi_register() is called.
+		This is done because, the io-module should not call the
+		wlan-module functions directly, but the call has to go through
+		the if-module only. And also, the wlan_add_card() returns the
+		pointer of type	'wlan_private *' when successful but not zero.
+		So, this will cause problem, since the wlan_private structure is
+		not visible in the io-module, and also previously returning zero
+		was indicated as successful and non-zero as unsuccessful.
+
+		So, by introducing the above two functions we can solve the 
+		problem and also we can hold the return value of the 
+		wlan_add_card() in 'pwlanpriv' variable.
+	
+02/17/05:  version 17
+	1. Removed second arg pt_regs of wlan_interrupt(), as it is 
+		obsolete.
+
+02/11/05:  version 16
+	1. Code cleanup
+
+01/31/05:  version 15
+	1. Included os_headers.h
+	2. Renamed msd25_sdio_notifier to if_sdio_notifier
+	3. Renamed msd25_dnld_ready() to if_dnld_ready()
+	4. Renamed sd25_irq to sdio_irq
+
+01/28/05:  version 15
+	1) Renamed the structure name wlan_dev_rec_t to wlan_dev, in
+		sbi_get_int_status() and msd25_dnld_ready(), in msd25_sdio.c.
+	2) Renamed msd25_sdio.c to if_sdio.c & msd25_sdio.h to if_sdio.h
+
+01/03/05:  version 14
+	1) Added function sbi_reset_deepsleep_wakeup()
+
+12/27/04:  version 14
+	1) Removed developers' names
+
+12/21/04:  version 14
+	1) Added RF8015/RF8031 flag and f/w image
+
+12/15/04:  version 13
+	1) Added the functions sbi_suspend() and sbi_resume().
+	
+12/15/04:  version 13
+	1) Added THROUGHPUT_TEST code.
+
+12/13/04:  version 13
+	1) Changed default SDIO block size to 320 bytes.
+
+12/09/04:  version 12
+	1) Added '#ifndef SD8305' macro before the variable declaration 'bic' 
+		in sbi_probe_card() to remove the compilation warning.
+	2) sbi_exit_deep_sleep(): do not clear Host_Pwr_Up bit before
+		writing 1 to wake up the SD8385 device
+
+12/07/04:  version 12
+	1) Check if chiprev != 0 for all chips supporting TxDone and 512 bytes
+	2) Enable async interrupt mode for SD8385-B0 and SD8381-B2 1-bit mode
+
+11/29/04:  version 11
+	1) Debug levels are added in the code to control the number of
+		debug statements logged/displayed.
+		The debug level is configured in Makefile,
+		LEVEL:
+		  n:	No Debug
+		  0:	Only PRINTK
+		  1:	PRINTK and PRINTK1
+		  2:	PRINTK, PRINTK1, PRINTK2, ENTER and LEAVE.
+	2) Added '#ifdef DEBUG_LEVEL0' before 'cnt' variable in
+		sbi_download_wlan_fw_image() in if/if_sdio/msd25_sdio.c
+		due to conflict after introducing _debug levels_.
+
+11/23/04:  version 11
+	1) Updated the file msd25_sdio.c for TXRX_DEBUG macro defined in wlan/sbi.h
+
+11/22/04:  version 11
+	1) Check IO_READY bit before CMD53 R/W
+
+11/18/04:  version 10
+	1) Error handling: check upload data length from scratch registers 0x80fe
+
+11/11/04:  version 10
+	1) Commented reading CardStatus register in sbi_get_int_status()
+
+11/01/04:  version 9
+	1) To determine if TxDnLdRdy has been received, removed the HisRegCpy check
+
+10/25/04:  version 9
+	1) Added *ireg &= ~(HIS_RxUpLdRdy) in sbi_get_int_status().
+	 	This is done to avoid getting message "FRAME RECEIVED WITH
+		BAD LENGTH" in SD8385-A0 card when debug is enabled.
+	2) EventCause is read in mv_sdio_read_scratch()
+	3) int/mask debug code removed
+
+10/21/04:  version 8
+	1) CIS debug code removed
+
+10/18/04:  version 7
+	1) SD8305 fmimage compiling error fixed
+	2) When we get tx_done, we set the HIS_TxDnLdRdy bit in HisRegCpy in 
+		mv_sdio_read_scratch().
+	3) Commented the code where 'priv->wlan_dev.dnld_sent' is checked, 
+		in sbi_host_to_card().
+	4) In sbi_get_int_status(), we are doing *ireg |= adapter->HisRegCpy
+		at the end of the function, since we are accumulating the
+		HIS_TxDnLdRdy status when we get tx_done for A0 card.
+	5) sbi_register_dev() fills chip_rev variable.
+	6) In mv_sdio_read_scratch(), removed the code which is used to read
+		the event cause. Here the event cause is read when ever 
+		the call to this function is made.
+	7) New function mv_sdio_read_event_cause is added, which is used to
+		read the event cause.
+	8) Call to mv_sdio_read_event_cause() is made in sbi_get_int_status()
+		to get the event cause. Here we also accumulate the TxDnLdRdy
+		event in the 'ireg' variable which is used by the calling 
+		function.
+	9) Removed the code '*ireg |= adapter->HisRegCpy' at the end of the 
+		function sbi_get_int_status().
+
+10/15/04:  version 6
+	1) SD8385-B0 support (interrupt tx_done)
+	2) get SD83xx chip version from Revision Register
+	3) Download f/w image according to hw revision
+	4) use different block size and tx_done per chip revision (A0/B0)
+	5) check dnld_sent: non-0 means waiting for tx_done
+	6) fixed blocksize: 512 for SD8385-B0
+	7) New helper used: faster downloading
+	8) sbi_read_ioreg and sbi_write_ioreg added for cmd52 r/w
+	9) only check HostInterruptStatus register for TxDone/RxUpload events
+
+08/12/04:  version 5
+	a) SD8305 F/W 3.0.49
+	b) SD8385 F/W 3.0.9
+	c) DEEP SLEEP functions

@@ -1,0 +1,2762 @@
+2/16/06: version 85
+    1. Clear scan in progress flag when scan command failed and dropped.
+
+2/08/06: vresion 84
+    1. fix memory SSID with wrong size
+
+1/31/06: version 84
+    1. Added support for the channel scan filter in firmware.
+
+01/30/06: version 84
+	1) Added FW/Helper downlaod support
+
+01/12/06: version 83
+	1. Fix insmod/rmmod loop test failure due to FW load failure & memory leak
+12/30/05: version 83
+	1. Fix WIFI test wpa-psk roaming test fail to roaming back broadcom AP.
+12/19/05: version 83
+	1. Ported the command to support NULL packet generation interval in PS mode.
+
+12/19/05: version 83
+	1. Fix adapter not exit deep sleep mode during remove card 
+	2. Fix memory not been properly free
+
+12/13/05: version 82
+	1. Support MOT wildcard SSID in BGSCAN
+
+11/23/05: version 81
+	1. Add SLIDING_WIN_AVG define to support new SNR/NF Average Calculation
+
+11/10/05: version 80 
+	1. Set the unused PowerMode filed to 0 in HostCmd_DS_802_11_PS_MODE structure.
+
+11/10/05: version 79
+	1. When defined _MAINSTONE, watchdogtimeout is set to 2 second, otherwise
+        it will be set to 50 ms. 
+	2. Added support for dynamic WMM Parameter IE updates from the firmware.
+
+11/03/05: version 79
+	1.Enable TX queue data with PS mode when WMM is enabled
+
+09/28/05: version 78
+	1.If We find client is disconnected, we will call PSWakeup(priv, 0) function in 
+	Enter_PS command response. 
+
+09/26/05: version 77
+	1. Added back VALID_SRANGE for RxPD SNR/NF
+
+09/06/05: version 76
+	1. Add "CFLAGS += -DCF83xx" to MakeFile
+	2. Replace "#if defined (CF8385) || defined (CF8381) || defined (CF8305)" to "#if defined (CF83xx)" 
+           in sbi.h and wlan_ext.c
+	3. Disable host interrupt before issue RESET command
+	4. Send SIOCGIWAP wireless event instead of RTM_DELLINK to application
+		when unload wlan driver module
+
+09/01/05: version 76
+	1. wlan_debug.c been changed, file is under \proc\net\wlan\debug
+        2. all the varible in file \proc\net\wlan\debug can be read and write
+
+08/30/05: version 75:
+	1. Added Feature Pack "CF8385 FP=8385-103" in src/Makefile
+
+08/30/05: version 74:
+        1. fix complie issue 
+        2. return NULL when  init_etherdev function fail  
+        3. return US as default in wlan_code_2_region function(wlan_11d)
+	4. Added ATIMGEN compiler flag to control atimgen private command.
+	5. Added SD8399/8019 and GSPI8399/8019 support
+
+08/29/05: version 73:
+        1. Add error handling in wlan_wext.c
+        2. block wlan_cmd53rdwr_ioctl to avoid system hang
+        3. Add error handling in wlan_generate_parsed_region_chan_11d function.
+
+08/26/05: version 73:
+	1. Fixed rateadapt issue: returning old values to user before
+		issuing RATE_ADAPT_RATESET command (bug #5898)
+
+08/25/05: version 73:
+	1. Added uapsdnullgen command to control whether if NULL package 
+		is send out for UAPSD.
+	2. Enabled WMM AIFS compiler flag when WMM is enabled in Makefile
+	3. Implemented wmm_setup_ac_downgrade()
+
+08/23/05: version 73:
+	1. Changed wlan_pm_callbak() to reject host sleep request in any
+		of these conditions:
+		a) HostWakeupDevRequired is FALSE;
+		b) PS_State is non-SLEEP
+		c) Trying to wakeup device
+
+08/22/05: version 72:
+	1. Added atimgen private command; Updated readme file
+	2. Change BGSCAN data structure based on revision 0.4 spec 
+
+08/19/05: version 72:
+	1. Corrected the parameter parsing error in function
+		wlan_do_hostwakeupcfg_ioctl 
+
+08/17/05: version 72:
+	1. Changed HostCmd_CMD_802_11_KEY_ENCRYPT to 0x0054.
+	2. Added CurCmd null pointer check in wlan_process_rx_command
+	3. Added firmware workaround for sending Deauth/Link_Loss event
+		immediately after sleep confirm
+	4. Added Adapter->WakeupTries
+	5. Removed VALID_SRANGE check when getting SNR/RSSI
+
+08/15/05: version 72:
+	1. Ported RC4/AES API from CF driver.
+
+08/12/05: version 71:
+	1. Send SIOCGIWSCAN event to application after specific scan
+	2. Removed CONFIG_MARVELL_PM condition checks in wlan_wext.c
+	3. Renamed CONFIG_MARVELL_PM to CONFIG_PM
+	4. Added MultipleDtime ignore option
+
+08/10/05: version 71:
+	1. Implemented WMM AIFS under compiler flag CONFIG_WMM_AIFS
+	2. Allow zero sleep period in wlan_sleep_period().
+
+08/05/05: version 71:
+	1. Added debug counters in /proc/net/wlan.
+	2. Allow Tx data packet in PS_SLEEP state if host_wakeup_dev_is_required
+		in wlan_hard_start_xmit()
+
+08/04/05: version 71:
+	1. Removed autoHwmMode from Adapter
+	2. Replaced hwmMode by Reserved in Enter_PS, Sleep_Confirm
+		command structures
+	3. Removed hwmmode private command and related functions
+	4. Changed ENTER_DEEP_SLEEP event indication to HWM_CFG_DONE in
+		Enter_Deep_Sleep command
+
+08/03/05: version 70:
+	1. Removed HostWakeupCfg_Done due to driver/firmware new hand-shaking
+	2. Added handling of Bulverde extra-interrupt and interrupt received
+		after sleep confirm
+
+08/02/05: version 70:
+	1. Removed unused RSN IE pad from adhoc bss descriptor.
+		Matches new firmware adhoc join structure.
+
+08/02/05: version 69:
+	1. Added HOST_WAKEUP_CFG_CANCEL command option & handling
+	2. Added Mainstone LED display for main_thread debug
+	3. Added function send_iwevcustom_event() to send IWEVCUSTOM
+		type of wireless events
+	4. Added sending event for ENTER_DEEP_SLEEP indication
+	5. Removed send_bad_auth_event() & send_hwm_cfg_done()
+
+08/01/05: version 68:
+	1. comment out HostCmd_CMD_802_11_HOST_WAKE_UP_CFG inside the
+		array Commands_allowed_In_PS[] in wlan_cmd.c
+
+07/31/05: version 68:
+	1. Added check before call to interruptible_sleep_on_timeout with ds_awake_q
+	2. Calls to wake_up_interruptible() w/ ds_awake_q when Host WAKE UP event is received
+	3. change function name from send_sleep_confirm_event() to send_hwm_cfg_done_event.
+	4. Add fix for the issue of hostwake+ps on/off script:
+		don't check Adapter->PSMode before change the state to PS_STATE_SLEEP
+		in SendConfirmSleep();
+
+07/30/05: version 68
+	1. Fixed a problem in a2hex_or_atio().  It is said to cause some problems with
+		event subscription.
+	2. Added bHostWakeupConfigured variable
+
+07/28/05: version 68
+	1. Changed array size of CalData from 256 to 1024 for eeprom Rev A
+	2. Chnaged size 248 to CalDataLen in wlan_cmd_802_11_cal_data_ext()
+	3. Checked incoming data length to be not exceeding 1024
+	4. moved endian conversion to after data copy in 
+		wlan_cmd_802_11_cal_data_ext()
+
+07/28/05: version 68
+	1. Added handling of FW_Wakeup_Method_Unchanged command response
+	2. Send wireless event to application after sleep_confirm
+	3. Add HOST_AWAKE_CONFIRM command at beginning of the command queue
+	4. Get FW_WAKEUP_METHOD setting from f/w in driver init(),
+		instead of Wakeup_Thru_GPIO hardcoding
+
+07/27/05: version 67
+	1. added new private command "txcontrol" under wlan_private_args[].
+	2. added WLANTXCONTROL as subcommand under WLAN_SETONEINT_GETONEINT(23).
+	3. added "u32 PktTxCtrl" as a new field in struct waln_adapter.
+	4. add function "int wlasn_txcontrol()".
+	5. copy txcontrol value to adapter->PktTxCtrl.
+	6. copy adapter->PktTxCtrl to TxPD TxControl filed for each Tx packet. 
+	7. reset beacon SNR/NF/RSSI values before issuing 801_11_RSSI command.
+	8. HostWakeupCfg config_done only in PS_AWAKE state
+	9. added ds_awake_q wait queue for Exit_DeepSleep
+	10. set PS_SLEEP state after reset IntCounter in sleep_confirm
+	11. fixed WMM AC priority incorrect issue
+
+07/22/05: version 66
+	1. Added FW_WAKEUP_METHOD command options GET/SET
+
+07/22/05: version 65
+	1. Changed checking for extra interrupts in PSConfirmSleep(), for OMAP1510
+		and GSPI8385 ONLY.
+
+07/20/05: version 65
+	1. Added REASSOCIATION_SUPPORT private ioctl, support in wlan_config.
+    2. Added reassociationAP TLV to the association command for reassociations
+    3. Added set/get generic IE private ioctls.  Insertion of generic IEs
+        as a passthrough TLV in association requests.  Retrieval of association
+        responses for get generic ie calls (SAVE_ASSOC_RSP addition).
+    4. Added wlan_ccx module.  Calls to CCX support in association request
+        and BSS Scan interpretation.  Portion of CCX V2 support.
+    5. Added TIMESTAMP_SCAN_RESULTS preprocessor option for including the TSF
+        as a custom field in the scan results.
+    6. Added generic VENDOR_SPECIFIC 221 IE, cleaned up WMM/WPA reuse of 221.
+    7. Added error return to SSID association attempts that fail
+    8. Sync'd TLV types with new firmware additions
+
+07/20/05: version 65
+	1. Updated wlanconfig utility (wlan_config.c), for backgroud scan channel
+	   configuration bug.
+
+07/19/05: version 65
+	1. Implemented FW_WAKEUP_METHOD (through Interface or GPIO) host command
+	2. Updated tos2priority table in wlan_wmm.c
+
+07/18/05: version 65
+	1. The driver now would not set default sleep period for UAPSD.
+
+07/15/05: version 64
+	1. Added HostCmd_OPTION_WAITFORRSP host command option to DEEP_SLEEP command
+
+07/14/05: version 64
+	1. Changed getSNR command to get all types at once.
+	2. Fixed bug #5439, "wconnect" utility fails to associate with hidden AP.
+	3. Changed code not to reset bHostWakeupDevRequired flag if auto HwmMode
+		is enabled when HostWakeupCfg response is received.
+	4. Changed condition to wakeup firmware: if bHostWakeupDevRequired is set
+		AND it's in PS_STATE_SLEEP state
+	5. Removed unsed data field in HostCmd_DS_802_11_GET_LOG structure.
+
+07/12/05: version 64
+	1. Added SUBSCRIBE_EVENT_CTRL compiler flag to control subscribe event function
+	2. Removed unused data structure Buffer[20][100] in struct wlan_adapter, wlan_dev.h
+	3. Added condition check for main thread to go to sleep: schedule out if 
+		in PS_SLEEP state and bHostWakeupDevRequired is not set
+	4. Updated main thread for UAPSD conditions.
+	5. Changed CONFIG_PS_PRESLEEP default compiler flag to "n"
+	6. Changed default setting of auto-HostWakeupCfg mode to "disabled"
+	7. Added CONFIG_FW_WAKEUP_TIME debug code
+	8. Added HostCmd_CMD_802_11_RSSI host command into Commands_Allowed_In_PS pool
+
+07/08/05: version 63
+	1. Changed TLV_PAYLOAD_SIZE to 2
+	2. Added cmd response handling for Subscribe_Event_get command
+	3. Added Reserved to Mrvltypes_BecaonsMissed_t structure
+
+07/07/05: version 62
+	1. Changed default local listen interval to zero.
+
+07/06/05: version 61
+	1. Updated LED GPIO code after integration test.
+
+07/01/05: version 61
+	1. Modified to use corrct preamble attribute when associates to AP,
+		joins/starts an ad-hoc. 
+	2. Added new interface command HostCmd_CMD_802_11_RATE_ADAPT_RATESET
+	3. Added new private command rateadapt.	
+	4. Removed V4_CMDS compiler flag
+	5. Combined setps_inactto and getps_inactto into inactivityto
+	6. Added private command hwmmode to control auto hwmMode setting
+
+06/30/05: version 61
+	1. Moved sleep period initialization to wlan_init_fw().
+	2. Implemented LED GPIO as TLV style.
+	3. Removed check for IW_MAX_RATES in ad-hoc start/join: bug #5187
+	4. Moved TLV IDs definitions from host.h to wlan_types.h
+	5. Moved MrvlIEtypes_*_t definations from hostcmd.h to wlan_types.h
+	6. Commented out MrvlIEtypes_*_t variables in TLV_SCAN and
+		TLV_ASSOCIATION data structures in hostcmd.h
+	7. Changed Subscribe_Event ID to 0x0075
+
+06/29/05: version 61
+	1. Modified private command ps_sleeppd to accept sleep period only,
+		and change the command name to sleeppd.
+	2. Added private command locallistninter.
+	3. Modified HostCmd_DS_802_11_PS_MODE to add 2 new memebrs
+		hwmMode, LocalListenInterval.
+	4. Added New Data structures MrvlIEtypes_RssiThreshold_t
+		MrvlIEtypes_SnrThreshold_t, MrvlIEtypes_FailureCount_t,
+		MrvlIEtypes_BeaconMissed_t, HostCmd_DS_802_11_SUBSCRIBE_EVENT.
+	5. Added function wlan_cmd_802_11_subscribe_events() in wlan_cmd.c
+	6. Added function wlan_do_subscribe_event() in wlan_wext.c.
+	7. Modified wlan_config.c to support reading the SUBSCRIBE_EVENT
+		configurations from sub_event.conf file.
+	8. Updated UAPSD implementation to support "last packet".
+
+06/28/05: version 61
+	1. Added WMM parameter for Specific scan in wlan_config.c.
+	2. Removed get_ps_sleepd and set_ps_sleepd and Added ps_sleepd.
+	3. Added a new parameter for SupportLastPkt in 
+		HostCmd_DS_802_11_SLEEP_PERIOD in hostcmd.h and Updated
+		the README correspondingly.
+	4. Modified wlan_config.c to support bg_scan.conf TLV member order 
+		independent.
+	5. Added to signal link-up (send event SIOCGIWAP) to spplication, 
+		after ad-hoc start/join, in wlan_cmdresp.c
+
+06/27/05: version 60
+	1. Added Handling of Specific Scan in wlan_config.c and wlan_config.h
+		and Updated the README file.
+	2. Modified BG_SCAN_CONFIG data structure by removing the TLV members.
+	3. Modified wlan_config.c to support TLV data formation without adding
+		TLV fields in the BG_SCAN_CONFIG command definition.
+
+06/24/05: version 60
+	1. Implemented scanprobes command for TLV scan.
+
+06/23/05: version 60
+	1. Updated auto freq control code in wlan_cmd.c.
+	2. Added private ioctl ledgpio and updated README file correspondingly.
+
+06/22/05: version 59
+	1. Updated auto freq control code.
+
+06/21/05: version 59
+	1. Added PS_PRESLEEP compiling flag in Makefile
+	2. Added PS_STATE_PRE_SLEEP state & handing in PS state machine
+	3. Moved WLANWMM_ENABLE under SET1INT_GET1INT cmd in wlan_wext.h
+
+06/16/05: version 58
+	1. Bug #4990: Changed UAPSD to WMM UAPSD.
+
+06/15/05: version 58
+	1. Bug #4990: Added UAPSD implementation.
+	2. Bug #4922: Updated RSSI command structure.
+
+06/14/05: version 58
+	1. Modified cmd52r and cmd52w in wlan_config.c to accept both decimal 
+		and hex values and renamed then to sdcmd52r and sdcmd52w.
+	2. Updated the README file.
+
+06/13/05: version 58
+	1. Changed code to use wmm.enabled (instead of CurBssParams.wmm_enabled)
+		for WMM condition check
+	2. Reset CurBssParams in MacEventDisconnected() and wlan_init_adapter()
+	3. Changed to support max 6 ssid for BG_SCAN
+
+06/09/05: version 58
+	1. Added WMM comments per customer request
+	2. Merged CF8381P and CF8381PN to CF8381, SD8381P{N} to SD8381
+
+06/08/05: version 58
+	1. Added singapore/Korea/Australia region code for 11D
+	2. Changed ScanTime to MaxScanTime in ChanScanParamSet_t to match the 
+		API Documetation
+	3. Added to check chan vs channel list supported by region in 11d.c
+	4. Modified wlan_set_regiontable(), Added structure region_cfp_table, 
+		wlan_get_region_cfp_table() in wlan_main.c; in order to replace 
+		hardcoded region channel list from wlan_set_region_table() to
+		region_cfp_table;
+	5. Modified wlan_get_range() to show the channel list when 11D is enabled
+	6. Modified to not send disable 11D cmd to FW at startup, for FW disables
+		 11D at startup, based on 11D standard.
+
+06/07/05: version 57
+	1. Updated wlan_get_rssi() for the new RSSI avg firmware.
+	2. Updated discard_bad_ssid() so that IEBuffer matches BSSID list.
+	3. Moved done:  wlan_init_fw() in wlan_fw.c after
+		802_11d and 802_11h initialization.	
+	4. Changed wmm_tspec_ioctl and wmm_para_ie_ioctl handling
+		per customer request
+
+06/06/05: version 57
+	1. Fixed bug #4782: ad-hoc data rates 
+
+06/03/05: version 57
+	1. Fixed bug #4731: scan result re-order.
+	2. Fixed bug #4789: RSSI avg update.
+	3. Added buffer length check for WPA/WPA2, WMM IEs
+	4. Cancel re-associate timer in reassociation_off()
+	5. Set re-association flag to TRUE in reassociation_on()
+	6. Removed disassociate_scan_associate()
+
+06/02/05: version 56
+	1. Fixed bug #4572: CF card removal causes system crash.
+	2. Fixed bug #4614: "iwlist eth1 rate" displays wrong information.
+	3. Fixed bug #4686: The Supplicant is unable to make WEP association.
+	4. Fixed bug #4762: New RsnIE data structure is incompatible with V3
+		firmware.
+	5. Added SD8381 support on Bulverde
+	6. Added "sdioclock" private command to turn on/off SDIO clock
+	7. Removed "TimeOut" in AUTHENTICATE structure
+	8. Changed "Reserved" from 8 to 10 in AUTHENTICATE structure
+
+05/26/05: version 55
+	1. Added separate handling of BG_SCAN_QUERY response and send event to
+		application
+
+05/25/05: version 55
+	1. Updated automatic transmit power control code.
+	2. Added new private ioctls adhocgrate to disable, 
+		enable and get the status of AD-HOC grate for ad-hoc creator.
+		 A updated README correspondingly.
+	3. Fixed Bug #4602 by memsetting WLAN_802_11_KEY in wlan_remove_aes()
+		in wlan_wext.c.
+
+
+05/23/05: version 55
+	1. Fixed the issue that Linux system crashes if eject the card while
+		iperf/Chariot is running
+
+05/20/05: version 54
+	1. In MacEventDisconnected() added 1 sec. delay before sending de-auth
+		event to Supplicant (bug 4320), because Cisco AP sends de-auth
+		right after EAP fail packet (less than 0.5 ms), and the kernel
+		is not able to distinguish the order of the EAP packet and the
+		de-auth event, and they are swapped before getting to the
+		Supplicant.  Adding delay is not the best-looking solution, but
+		it is the simplest.
+	2. Changed the names 
+		priv->intThread		--  priv->MainThread; 
+		priv->eventThread	-- priv->ReassocThread;
+		"wlan_event"		-- "wlan_reassoc_service"; 
+		"wlan_service"		-- "wlan_main_service" 
+	3. Added support of SD8388H in Makefile, wlan_wext.c and if_sdio.c need 
+		to be changed for SD8388.
+	4. Removed association_q.	
+
+05/19/05: version 53
+	1. Modified wlan_scan_networks() to sleep on scan_q independent of 
+		PROGRESSIVE_SCAN flag as the scan was not blocking if
+		PROGRESSIVE_SCAN was disabled. This was a side effect of 
+		the change made on 05/17/05: version 52.
+	2. Modified #ifdef __KERNEL__ to 
+		#if defined(__KERNEL__) || !defined(linux) in hostcmd.h
+		to avoid compilation problems with non-linux platforms.
+
+05/18/05: version 53
+	1. Update adapter->IsGtk_SET according to KeyMaterial command 
+		(Bug #4457).
+	2. Removed ExpectedRetCode form CmdCtrlNode in hostcmd.h
+		and GetExpectedRetCode() from wlan_cmd.c
+	3. Added inclusion of wlan_passthrough.h in include.h
+	4. Removed CleanUpSingleTxBuffer() as it is obselete.
+	5. Removed MrvDrvTxPktTimer related code and data as it is obselete.
+	6. Removed SentPacket flag from Adapter structure as it is obselete.
+	7. Modified wmm_ack_policy command in wlan_config.c to take input on 
+		the command line and not from the file.
+	8. Modified wmm_ack_policy_ioctl to send down WMM_ACK_POLICY_PRIO times 
+		the GET command in wlan_wmm.c
+	9. Modified wmm_enable_ioctl to take input as 0/1/2 instead of 
+		disable/enable/get.
+	10. Updated README for WMM Changes.	
+	11. Changed WLAN_SET_GET_MULTIPLE to WLAN_SET_GET_SIXTEEN_BYTE.
+	12. Changed UserPriority to AC in WMM_ACK_POLICY data structure.
+
+05/17/05: version 52
+	1. Changed watchdog timer to 2s
+	2. Removed sleep on cmd_q,always sleep on scan_q 
+		in wlan_scan_networks()
+
+05/16/05: version 52
+	1. Disabled WMM for CF8385H and SD8385H in Makefile
+	2. Removed "CurrentTxAC" from WMM_DESC
+	3. Added "acstatus" to WMM_DESC
+	4. Added "direction" filed to WMM_TSPEC command structure
+	5. Added "FlowDirection" & "FlowRequired" to WMM_GET_STATUS
+	6. Modified wmm_tos2ac conversion tables per acstatus
+	7. Corrected handling of WMM_* command responses
+	8. Commented out sending WMM_PRIO_PKT_AVAIL command as
+		the firmware responds error code 0x01
+
+05/14/05: version 52
+	1. In wlan_cmd_802_11_associate() for TLV_ASSOCIATE
+		Copying Rates of MrvlIEtypes_RatesParamSet_t.Header.Len rather 
+		than sizeof MrvlIEtypes_RatesParamSet_t.rates into 
+		CurBssParams.DataRates.
+	2. Removed TxCtrlNode and WCB structures.
+	3. Removed DataRates from Host_DS_802_11_AD_HOC_JOIN structure	
+	
+05/14/05: version 52
+	1. breaking after a packet is popped in wmm_pop_highest_prio_skb.
+
+05/13/05: version 50
+	1. Implemented private commands "tpccfg" and "powercfg".
+	2. Corrected HostCmd_DS_802_11_AD_HOC_JOIN structure, Modified to set 
+		beaconPeriod, BSSType for ad-hoc join to fix the ad-hoc 
+		joiner cause ad-hoc starter crash
+	3. Changed watchdog timer to 50ms for non CF8385
+	4. Added WMM TOS_to_Priority conversion
+	5. Used skb->priority for WMM priority
+	6. Added ether packet type checking for IP_TOS value used by WMM
+
+05/12/05: version 49
+	1. Revised CAPINFI_MASK to CAPINFO_MASK
+	2. Added support for CONFIG_SDIO_M, the compilation will enable 
+		CONFIG_SDIO_M=y
+	3. Modified pxa270m bus driver to handle user defined mode and clkdiv
+	4. Added wmm_enabled to CurBssParams structure
+	5. INIT_LIST_HEAD(wmm.TxSkbQ[]) in initialization
+	6. Wakeup main thread after wmm_map_and_add_skb() in wlan_tx_packet()
+	7. Removed WAIT_FOR_RSP option in WWW_GET_STATUS command
+	8. Updated WMM command IDs
+
+05/11/05: version 49
+	1. Fixed bug #4339, association failure when WPA compiler option is off.
+	2. Added WMM fields into RxPD.
+	3. Added WPA/WPA2/WMM IEs into TLV_ASSOCIATION request.
+	4. Modified to Clear QOS bit for Associate/Join command, in wlan_cmd.c
+
+05/10/05: version 49
+	1. Modified to use config_bands to construct regiontable, in 
+		wlan_set_region(), wlan_wext.c
+	2. Consolidate struct _wlan_ioctl_cal_data_ext with 
+		struct HostCmd_DS_802_11_CAL_DATA_EXT
+	3. Modify wlan_cmd_802_11_cal_data_ext()for the data struct change 
+	4. Consolidate process_cal_data_ext()
+	5. Implement WMM TLV_ASSOCIATION (not complete)
+	6. Removed ad-hoc WMM
+
+05/09/05: version 49
+	1. Changed ChannelList to ChanListParamSet in wlan_ret_802_11_scan
+		in wlan_cmdresp.c to remove compilation errors for H cards.
+	2. Added #ifdef CAL_DATA ... #endif in wlan_config.c  for
+		process_cal_data(), process_cal_data_ext() to remove compilation
+		errors.
+	3. Added Wmm_ie_len variable in Adapter and display of wmm_ie in scan
+		results.
+	4. Removed card_rates in adhoc_start()
+	5. Updated "HostCmd_DS_802_11_ASSOCIATE->RsnIE" and "Adapter->Wpa_ie" to
+		256 byte long.  This is bug #4273.
+	6. Removed default config directory prefix in wlan_config.c
+	7. Added "iwpriv ethX setdataavg" command.
+	8. Modified to scan max 14 channels per scan, for Sepecific scan, 
+		in wlan_cmd.c.
+	9. Modified bg_scan_config.conf
+	10. Modified wlan_config.c to get correct scanbssid
+
+
+05/06/05: version 49
+	1. Reversed IFF_UP changes, since it caused other problems.
+ 	2. Reset BSSID list before issuing BG_SCAN Query command
+		to fix bug #4166.
+	3. Modified priv_ioctl_names table in wlan_config.c to arrange
+		them in compatibility with the ioctl and sub-ioctl mapping
+		macros to fix the issue of scanbssid command not working.
+	4. Modified process_scan_bssid() in wlan_config.c to handle the
+		user input correctly along with validation.
+	5. Moved handling setadhocch and getadhocch to wlan_config.c from
+		wlan_wext.c and updated the README.
+	6. Changed __attribute__ ((packed)) with __ATTRIB_PACK__
+	8. Added string parder and line parser functions in wlan_config.c
+	9. Added bg_config command processing in wlan_config.c
+	10. Added compilation flag check __KERNEL__ in hostcmd.h
+	11. Included hostcmd.h in wlan_config.c
+	12. Modified bg_scan_config.conf in config folder.  
+
+05/05/05: version 48
+	1. Changed Makefile to exit if user does make/make clean without
+		configuring.
+	2. Added private commands "getbcnavg" and "setbcnavg".
+	3. Change interface up/down status according to association status.
+	4. Changedto disallow user to change scanType while 11D enabled
+	5. Modified to use Adapter->ScanType to scan while 11D disabled, 
+		to fix bug:#4155. 
+	6. Removed TLV data structure definition with 
+		BG_SCAN enabled and TLV_SCAN disabled, in hostcmd.h
+	7. Modified the compiler flag #ifdef UNSUPPORTED to #ifdef 0, 
+		in wlan_cmd.c
+
+05/04/05: version 48
+	1. Removed all the unsued structures in hostcmd.h.
+	2. Moved all the function prototypes from all .c files
+	   and include.h to wlan_decl.h. 
+	3. KMALLOC and KFREE also has been moved to wlan_defs.h
+	4. Changed the paramters for list_add_tail in wmm_map_add_skb
+	   funtions as the previous was not correct.
+	5. Moved the initialization of the QueueSpinLock to 
+		wlan_allocate_adapter() from wlan_init_fw() in wlan_fw.c, to 
+		fix the issue of spinlock being used before it's initialization.
+	6. Moved the code related to waking up the command wait queue, from
+		wlan_process_rx_command() in wlan_cmdresp.c to 
+		CleanUpCmdCtrlNode() in wlan_cmd.c, to fix the issue of the 
+		wait queue not being woken up on cases of command failure, PS 
+		command not sent to the card due to the PSState and so on. This 
+		fixes the Bug #4190.
+	7. Indented the wlan_process_rx_command() in wlan_cmdresp.c.
+	8. Moved scanbssid and requesttpc from iwpriv(wlan_wext.c) to 
+		wlanconfig(wlan_config.c).
+	9. Seperated 11H functions and data structure to wlan_11d.h and
+	   wlan_11h.c
+	10. Moved 11D related data structucture and functions to wlan_11d.c
+	   and wlan_11d.h
+	11. Added wlan_types.h to hold the data types MrvlIEtypesHeader_t.
+
+05/03/05: version 48
+	1. Changed variable type u32 to boolean for Adapter->Is_DataRate_Auto
+	2. Removed __ATTRIB_PACK__ from data structure members in
+		os/linux/os_timers.h and wlan_dev.h
+	3. "#include hostcmd.h" after including wlan_wmm.h in include.h
+		as WMM data structures are used by hostcmd.h
+
+05/03/05: version 48
+	1. Moved all the #defines, enums to wlan_defs.h.
+	2. Renamed wlan.h to include.h.
+	3. Renamed mrvdrv_dev.h to wlan_dev.h.
+	4. Merged ieeetypes.h into hostcmd.h.
+	5. Merged macro_defs.h, dsdefs.h in wlan_defs.h.
+	6. Removed unused variables in WLAN_OBJECT structure.
+	7. Removed __attribute__((packed)) for wlan_dev_t and WLAN_OBJECT.
+	8. Included all the required files in include.h.(wlan_fw ...).
+	9. Moved all the #include <linux/..>, <asm/..> to <os_headers.h>.
+	10. Now including only <include.h> in all the .c files.
+	11. Added Handling of bca and bca-ts private ioctl to wlanconfig and
+		Removed the validating and parsing in the driver.
+		Updated the README file respectively.
+	12. Removed the invocation of wlan_sched_timeout() in all places 
+		except in wlan_remove_card() in and wlan_set_encode_wpa().
+	13. Modified invocation of PrepareAndSendCommand() in many places where 
+		the wlan_sched_timeout() call is removed, to specify the
+		HostCmd_OPTION_WAITFORRSP option, so as to wait for command 
+		response.
+	14. Modified the definition and prototype declarations of PSWakeup() 
+		and PSSleep() so as add one more parameter to specify whether to
+		wait for the command response or not. Modified the calls to 
+		these functions to pass 0 or HostCmd_OPTION_WAITFORRSP option to
+		specify the wait option as per the new implementation.
+	15. Modified the main thread in wlan_main.c to invoke the 
+		ExecuteNextCommand() depending on the status of the dnld_sent 
+		flag.
+	16. Modified DownloadCommandToStation() in wlan_cmd.c to remove the 
+		while loop in which the wlan_shed_timeout() was invoked 
+		depending on the dnld_sent flag, as the status of this flag is 
+		checked in the main thread itself now, before calling the 
+		ExecuteNextCommand().
+	17. Renamed wlan_sched_timeout to os_sched_timeout, 
+		wlan_upload_rx_packet to os_upload_rx_packet, 
+		wlan_free_tx_packet to 	os_free_tx_packet, wlan_carrier_on to 
+		os_carrier_on, and wlan_carrier_off to os_carrier_off.
+	18. Defined a new macro OS_SET_THREAD_STATE in os_macros.h and 
+		replaced the invokation of set_current_state() with it in wlan 
+		source.
+	19. Replaced cli() and sti() invocations in wlan source files with 
+		OS_INT_DISABLE and OS_INT_RESTORE macros respectively.
+	20. Removed __ATTRIB_PACK__ and LARGE_INTEGER from hostcmd.h.
+	21. Extended RSN IE length from 24 to 48 bytes for PMKID.
+	
+05/02/05: version 48
+	1. Implemented Rx queuing in driver.
+		a) Added function wlan_send_rxskbQ to send the rx packets
+		   to the os from the skb queue.
+		b) Added wlan_pop_rx_skb to pop the skb from the queue.
+		c) ProcessRxedPacket is now called in sevice_main thread
+		   as long as there are Rx packets in the sk_buff queue.
+		d) ProcessRxedPacket now takes struct sk_buff as input instead
+		   of the actual data packet.
+		e) skb_pull is done to remove RxPD, SNAP header.
+		f) wlan_upload_rx_packet takes struct sk_buff* instead of
+		   u8* char, int size.
+		g) wlan_upload_rx_packet now will not allocate the sk_buff but,
+		   will make use of the allocated sk_buff.
+		h) memcpy from upld_buf to BufVirtualAddr is not done in 
+		   wlan_process_rx_command in wlan_cmdresp.c as we already 
+		   copied it.
+		i) wlan_send_rxskbQ is called before any netif_stop_queue
+		   or netif_carrier_off to send/flush data packets queued.
+	2. Changed Makefile to enable BG_SCAN for CF8385/H, SD8385/H and 
+		GSPI8385.
+	3. Modified 11D functions.
+
+04/28/05: version 47
+	1. Changed Makefile to DISABLE WPA2, 802_11D, TLV_SCAN for 
+		cards other than CF83831PN, CF8385, CF8385H, GSPI8385,
+		SD8385, SD8385H.
+		If we want to disable even for these Cards, please do
+
+			ifeq ($(CONFIG_CARD),y)
+				 ... 
+				CONFIG_WPA2=n
+				CONFIG_802_11D=n
+				CONFIG_TLV_SCAN=n
+			endif
+	2. Structured Adapter sleep_params fields into SleepParams Structure.
+	3. Added Handling of sleep params private ioctl to wlanconfig and 
+		Updated the README file respectively.
+	4. Modified the 11D state machine to transfer state to DISABLED_11D 
+		state when deauth with 11D disabled   
+	
+04/27/05: version 47
+	1. Added endian conversion for get_log
+
+04/27/05: version 46
+	1. Modified wlan_set_regioninfo() to generate the Country Info triplets
+		for the non-contiguous Band A channels, in wlan_main.c
+	2. Changed sleep params private ioctl to set and get decimal
+		values rather than hex values.
+	3. Added an extra field sp_reserved in Adapter structure 
+		which is used for hardware debugging.
+	4. Added macros to define max/min multiple dtim values
+	5. Added validation for multiple dtim settings
+	6. Added reset of ulNumOfBSSIDs in case of "essid any"
+	7. Moved KEY_INFO_ENABLED under WPA compiler flags
+	8. Modified AssocAdhocAllowed setting
+	9. Reset ulNumOfBSSIDs in wlan_scan_networks()
+	
+04/26/05: version 45
+	1. Removed hard coding of  #include "../io/sdio/pxa270/sdio.h" to
+		#include <sdio.h> in wlan_wext.c and wlan_cmd.c.
+	2. Removed redundant validation of rates in rate_to_index(), 
+		index_to_rate() and wlan_set_rate() in wlan_wext.c.
+	3. Added display_calibration_ext() in wlan_config.c to 
+		display Calibration Extension.
+	4. Added freeing of Adapter->BSSIDList in wlan_free_adapter() in
+		wlan_fw.c
+	5. Merged pxa270m. To use pxa270m change these configurations in
+		Makefile.
+		CONFIG_MAINSTONE=n
+		CONFIG_SDIO_M=y
+		USE_INTERNAL_SRAM=y
+	6. Updated README file.	
+	7. Removed wpa_supplicant and wpa2_supplicant from Adapter structure
+		and merged it into WLAN_802_11_BSSID structure.
+	8. Modified private cmd getaeskey/setaeskey/rmaeskey implementation to 
+		utilize the FW CMD_802_11_KEY_MATERIAL API, when WPA2 is 
+		defined. 
+		
+04/26/05: version 45
+	1. Add 3 config files for cal_data_ext as follows:
+	2. Add cal_data_ext_set_v5.conf
+	3. Add cal_data_ext_set_vA.conf
+	4. Add cal_data_ext_set_v7.conf
+	5. Comment out display_calibration in cal_data_ext
+
+04/25/05: version 45
+	1. Added code to update	rx_dropped, tx_dropped,	rx_length_errors.
+	2. Added code for updating the iw_statistics in wlan_get_wireless_stats
+		in wlan_wext.c
+	3. Merged ThreadX code.
+	4. Added compiler flag ADHOC_GRATE
+	5. Added AdhocRates_B[4]
+	6. Changed Adapter->Reassociate to "Reassoc_on"
+	7. Changed CurrentWepKeyIndex variable type from "u32" to "u16"
+
+04/25/05: version 45
+	1. Add support for new cal_data_ext to replace eeprom
+	2. Add new struct wlan_ioctl_cal_data_ext,
+	3. Add new struct HostCmd_DS_802_11_CAL_DATA_EXT
+	4. Add wlan_do_caldata_ext_ioctl(), 
+		and wlan_cmd_802_11_cal_data_ext()
+	5. Add process_cal_data_ext()
+	6. Add new macros HostCmd_CMD_802_11_CAL_DATA_EXT
+
+04/22/05: version 44
+	1. Added a private ioctl getadhocstatus. To know the status of Adhoc 
+		Network. And updated the README file.
+	2. Changed IW_MAX_BITRATES to sizeof(Adapter->CurBssParams.DataRates) 
+		when MediaStatusIsConnected is FALSE in get_active_data_rates().
+		This is done to display rates properly.
+	3. Commented out unused function wlan_Tx_Block in wlan_tx.c
+	4. Added AdHoc_BssDesc_t data structure and used in ad-hoc join
+
+04/21/05: version 44
+	1. Added wireless_send_event() for SCAN completion in wlan_set_scan()
+		in wlan_wext.c.
+	2. Added netif_carrier_on() when IsScanInProgress == TRUE.
+		netif_carrier_off() when IsScanInProgress == FALSE.
+		in wlan_cmd.c, wlan_cmdresp.c and wlan.h
+	3. Modified InterpretBSSDescriptionWithIE to ignore IE with zero length
+		in wlan_cmdresp.c
+	4. Fixed BG_SCAN_CONFIG wrong data retrieved from wlanconfig ioctl
+	5. Commented out setting CapInfo.Ibss and CapInfo.Privacy in associate
+		request
+	6. Changed watchdog_timeout from 2s to 50ms
+
+04/20/05: version 44
+	1. Removed BSS_DESCRIPTION_SET_ALL_FIELDS structure and merged its 
+		elements into WLAN_802_11_BSSID structure.
+	2. Fixed make build for CF interface.		
+	3. Fixed USB8388 scanning hang issue when associated in wlan_cmd.c
+
+04/19/05: version 43
+	1. Increased TX/RX buffer size of MRVDRV_ETH_TX[RX]_PACKET_BUFFER_SIZE
+		in dsdef.h
+	2. Reset SNR/NF/RSSI values to 0s in MacEventDisconnected()
+
+04/19/05: version 42
+	1. In CopyRates() in wlan_wext.c, copying rates by checking 
+		(pos >= sizeof(WLAN_802_11_RATES) rather than 
+		(pos >= IW_MAX_RATES). This is done to make the driver
+		accept datarates more than 18M in a/g for WE 14/15.
+	2. Added a private sub-ioctl "getrate" in wlan_wext.c. to display 
+		rates for WE 14/15(which only supports 8 rates).
+	3. Added process_get_rate() in wlan_config.c, to process the rates
+		given by "getrate" sub-ioctl.
+	4. Added code for netif_stop_queue() when IsScanInProgress == TRUE.
+		netif_wake_queue() when IsScanInProgress == FALSE.
+		in wlan_cmd.c, wlan_cmdresp.c and wlan.h
+	5. Modified Specific Scan initial parameter setting with 11D enabled,
+		in wlan_cmd.c
+	6. Added wlan_802_11d_sm_status to get 11D state machine status, in 
+		wlan_11d.c
+	
+04/18/05: version 42
+	1. Added 3rd param addtail in the QueueCmd() in wlan_cmd.c and 
+		Removed addtail	local variable.
+	   Passing addtail as,
+		In PrepareAndSendCommand(), in wlan_cmd.c as TRUE
+		In MrvDrvCommandTimerFunction(), in wlan_fw.c as FALSE
+		In wlan_stdcmd_ioctl(), in wlan_wext.c as TRUE.
+	2. Made changes to wlan_config.c to use wmm_tspec, wmm_ack_policy
+	   and wmm_para_ie.
+	3. Changed the implementation of above command in wlan_wmm.c, and 
+	   wlan_wext.c.
+	4. Moved 11D function to wlan_11d.c from wlan_fw.c, 11D related 
+	   definition to wlan_11d.h from wlan_fw.h; Changed make to handle the 
+	   new files 
+	5. Changed the default value from true to false(Disable11D in default)
+
+04/15/05: version 42
+	1. Added WMM features.
+	2. Modified wlan_tx.c, wlan_main.c for transmission of packets with
+	   4 queues.
+	3. Modified wlan_wext.c, wlan_cmd.c, and wlan_cmdresp.c for adding
+	   TSPEC, Para_IE, and ACK_Policy. WMM_STATUS_CHANGE event is added.
+	4. Added wlan_wmm.c and wlan_wmm.h for adding the above mentioned the
+	   functionality.
+	5. Added the configration file wmm_para.conf to enter the parameter
+	   configration.
+	6. Renamed RFI RX_MODE to TX_CONTROL_MODE.
+	7. Fixed issue on getting wrong band info from BG_SCAN_QUERY response.
+	8. Fixed Interrupt handling in DEEP_SLEEP mode.
+
+04/14/05: version 41
+	1. Added ifeq ($(CONFIG_CF83xx),y) for ifeq ($(CONFIG_MCF_USED),y)
+		in the master Makefile.
+
+04/13/05: version 41
+	1. Changed the BG_SCAN report event id to 0x18
+	2. Changed the BG_SCAN_CONFIG command variable "Reserved" to "Enable",
+		"ChannelIsPerScan" to "ChannelsPerScan"
+	3. Removed OPTION_WAITFORRSP for BG_SCAN_QUERY
+	4. Fixed Linux crash issue when BG_SCAN_QUERY command response is back:
+		Get band config info from ChannelList[0] of bgScanConfig
+	5. Updated default BG_SCAN_CONFIG settings
+
+04/13/05: version 40
+	1. Changed the name WCB to TxPD in dsdef.h
+	2. Removed #if 0 ... #endif code.
+	3. Changed pcountryinfo->Len > 256 to pcountryinfo->Len > 254 
+		in InterpretBSSDescriptionWithIE() in wlan_cmdresp.c
+	
+04/12/05: version 39
+	1. Removed warnings in PRINTK formatting, for changing ULONG to u32,
+		When DEBUG is enabled.
+	2. Changed the handling of scan response for BG_SCAN.
+	3. Added default BG_CONFIG configration in wlan_init_adapter.
+	4. Modifed the BG_SCAN_CONFIG command to the changed structure.
+	5. Removed specific scan related code.
+
+04/11/05: version 38
+	1. Changed UCHAR to u8, USHORT to u16, ULONG to u32
+	2. Added Constant definition HostCmd_SCAN_PASSIVE_MAX_CH_TIME,
+		HostCmd_SCAN_RADIO_TYPE_BG, HostCmd_SCAN_RADIO_TYPE_A, in 
+		host.h.
+	3. Added Endian Covertion for MaxScanTime in TLV_SCAN, in wlan_cmd.c  
+	4. Corrected HostCmd_RET_CMD_GSPI_BUS_CONFIG from 0x005A to 0x805A, in 
+		host.h.
+	5. Changed wlan_bg_scan() to wlan_bg_scan_enable()
+	6. Added CMD_DISABLED, CMD_ENABLED, CMD_GET macros in wlan_wext.h
+	
+04/08/05: version 38
+	1. Added code to convert CapInfo field into endian requirement in
+		wlan_cmd_802_11_ad_hoc_start() and wlan_cmd_802_11_associate()
+	2. Removed Check for IW_MAX_AP in wlan_get_scan() function, as IW_MAX_AP
+		should be used only in SIOCGIWAPLIST API handler.
+	3. Changed AdhocChannel variable type from int to u8 in wlan_adapter 
+		structure as this field is u8 for all the commands.
+	4. wlan_get_aplist() API handler is commented out as this function is
+		not required for API using SIOCGIWSCAN.
+
+04/08/05: version 37
+	1. Set CONFIG_BCA=y for MS83xx in src/Makefile, to enable BCA
+	2. Added V4_CMDS flag for inactive timeout command
+	
+04/08/05: version 37
+	1. Added new field u8 ExternalSleepClk and changed u16 CalControl field
+		to u8 CalControl in HostCmd_DS_802_11_SLEEP_PARAMS,
+		Added sp_extsleepclk member in Adapter Structure.
+		And Changed the related functionality and README.
+	2. Removed TX_THREAD code from the driver.		
+	3. Removed CUSTOM_SCAN code from wlan and the Makefile.
+	4. Removed MULTIPLE_DTIM macro(not the code) from wlan and the Makefile.
+
+04/07/05: version 37
+	1. Removed endian_convert_pBSSIDList() and endian_convert_pFixedIE()
+		macro definitions in macro_defs.h and their use 
+		in wlan_cmdresp.c
+	2. Modified wlan/Makefile to compile wlanconfig and wlancis for MIPS
+	3. Modified src/Makefile to change the install Target for MIPS
+	4. Added function definition wlan_memchr() in wlan_wext.c and function
+		call memchr is changed to wlan_memchr.
+
+04/07/05: version 37
+	1. Removed PER_CMD_WAIT_Q and INTR_SLEEP from all files and Makefile.
+	2. In wlan_ret_802_11_ad_hoc_start() changed 
+		u16 Result = (resp->Command);
+		u16 Result = (resp->Result);
+		As it was improper Result code and driver was failing for 
+		adhoc_stop.
+	3. In wlan.h #define PRINTK, specify KERN_DEBUG flag only for CONFIG_X86
+	4. Removed blocking of wep key commands when associated (for static wep);
+		Need fix for 3424 and 3561
+	5. Changed BG_SCAN_CONFIG ID to 0x006b and BG_SCAN_QUERY to 0x006c
+
+04/06/05: version 37
+	1. Removed endian_convert.h and the macro definitions are moved
+		to macro_defs.h
+	2. Added new macro endian_convert_RxPD() in macro_defs.h
+	3. Modified main Makefile to modify the install target for MIPS
+	4. Modified wlan.h to check for the Platform and define the PRINTK
+		accordingly.
+	5. Hardcoded values are defined with macro names in wlan_rx.c
+	6. Removed WLANWPAON/OFF and related functions in wlan_wext.c
+		set_wpa_ie() will enable/disable WPA
+		
+04/06/05: version 37
+	1. Added Backgroung scan support. Modifed the following files.
+	   host.h, hostcmd.h, wlan_wext.h, wlan_config.c, wlan_wext.c
+	   wlan_cmd.c, wlan_cmdresp.c.
+	2. Added Command HostCmd_DS_802_11_BG_SCAN_CONFIG, 
+	   HostCmd_DS_802_11_BG_SCAN_QUERY.
+	3. Added private command bgscan. 
+	4. Added support for event MACREG_INT_CODE_BG_SCAN_REPORT.
+	5. Modified wlan_config.c for adding bgscanconfig command.
+	6. Modified scan response to handle BG_SCAN response.
+	7. In ProcessRxed_802_11_Packet() in wlan_rx.c Changed memmove()
+		to memcpy(). As memmove() is expensive than memcpy().
+	8. Removed 24 bytes from dev_alloc_skb() in  wlan_upload_rx_packet() in
+		os_macros.h as 16 bytes is for RxPD and 8 bytes is for
+		SNAP header. With this change the kernel won't crash.
+	9. Removed file endian_convert.c
+	10. Added file bg_scan_config.conf
+
+04/05/05: version 37
+	1. Added wlan_get_essid() in wlan_wext.c, to make it backward 
+		and binary compatible with wpa supplicant-v0.2.4 by checking 
+		with WPA supplicant buffer size.  		
+	2. Removed "MrvDrvCommandDelayTimer" from Adapter and wlan_fw.c as it 
+		is obselete.
+        3. Reject sleep confirm if Adapter->CurrentTxSkb is not NULL.
+        4. Merged MIPS code changes, removed endian_convert
+
+04/04/05: version 37
+	1. Changed WLAN_SCAN_BSSID to WLANSCAN_BSSID, to make the name 
+		consistent 
+	2. Modified CMD_ID  WLAN_SETTWELEVEWORD_GETTWELEVEWORD in wlan_wext.h
+		to WLAN_SET64CHAR_GET64CHAR, to make it more clear.
+		Moved WLANSCAN_MODE and WLANSCAN_BSSID as subcmd of 
+		WLAN_SET64CHAR_GET64CHAR, in order to save cmd resource.
+		(Limit is 32).
+	3. Send getRSSI command in responding to "iwconfig ethX" command and
+		return BEACON values of RSSI/NF to user in iw_statistics()
+ 
+04/04/05: version 37
+	1. Removed the check FW_IS_EEPROM_EXIST from wlan_do_caldata_ioctl()
+		in wlan_wext.c as we are not calibrating the EEPROM instead
+		calibrating the RAM.
+	2. Updated the related change in the README file.		
+	
+04/01/05: version 37
+	1. In MrvDrvCommandTimerFunction(); removed MS83xx macro which
+		increments IntCounter as it is handled in mspio layer.
+	2. In enum IEEEtypes_ElementId_e in ieeetypes.h changed
+		POWER_CONSTAINT to POWER_CONSTRAINT.
+	3. Fixed bug #3633 in wlan_fw.h
+	4. Turn off SDIO/BULVERDE bus clock in Deep Sleep mode: fixed bug #3680
+	
+03/31/05: version 37
+	1. Updated host.h and endia_convert.c for BIG_ENDIAN
+	2. Merged MIPS changes
+
+03/30/05: version 37
+	1. CHANGES SCAN_11D to TLV_SCAN.
+
+03/30/05: version 36
+	1. Removed SetSpecificBSSID from mrvdrv_dev.h
+	   Removed calling to scan after SpecificBSSID is set from wlan_cmd.c
+	2. Changed the name MaxTxMsduLife_i(9) and MaxRxLife_t(10) to 
+	   Dot11D and Dot11HTPC, in hostcmd.h.
+	3. Added BINDIR definition for MS8380 in src/Makefile
+	4. Changed variable type of "nb" from "int" to "u16" for
+		sbi_host_to_card() in sbi.h
+
+03/30/05: version 36
+	1. Cleaned up Adapter Structure.
+	2. Removed INTCause, NullSSID, PrivacyFilter, bIsAdhocJoinBlockedByScan,
+		NullBSSID, ulLastScanRequestTime, AcceptAnySSID, AutoConfig, 
+		WcbCount, FirstSentDone, ProtocolOptions, NoOfWEPEntry, RssiAvg,
+		SNRNFType, SNRNFData, MrvDrvSpinLock, 
+		MrvDrvIndicateDisconnectTimer, DisconnectTimerSet from Adapter
+		Structure.
+	3. Resetting Adapter->SetSpecificScanBSSID state in 
+		wlan_scan_bssid_ioctl().
+	4. Removed __ATTRIB_PACK__ from Adapter Structure as it is
+		ineffective.
+	5. Added #ifndef WPA2 ... #endif for case WLANWPAON: in wlan_wext.c
+		as WPA2 doesn't use wlan_wpa_on[off]_ioctl().
+		
+03/29/05: version 35
+	1. Added a check in wlan/Makefile as endian_convert.c should be 
+		compiled/linked only if the driver is configured for
+		BIG_ENDIAN platforms.
+	2. Removed netif_carrier_on() from wlan_open() in wlan_main.c
+	   Added netif_carrier_on() to wlan_ret_802_11_ad_hoc_start()
+	   					in wlan_cmdresp.c
+	   This is done as we need to send packets only when we are 
+	   	associated/joined.
+	3. Modified wlan_get_essid() in wlan_wext.c, to make it backward 
+		and binary compatible with wpa supplicant-v0.2.4 by checking 
+		with WPA supplicant buffer size.  		
+	4. Removed BAND_CONFIG command before sending SCAN command in 
+		wlan_scan_networks(). As we are doing BAND_CONFIG command 
+		in wlan_cmd_802_11_scan() for every SCAN command.
+	5. Added ADHOC_BCN_LOST event handling.
+
+03/28/05: version 35
+	1. Removed MULTCAST_ENABLE flag from Makefile.
+	2. Cleaned up ioctl numbers as odd ioctls must be used for GET
+		and even for SET.
+	3. Added WLAN_1X_AUTH_ALG_LEAP check in wlan_set_encode_nonwpa()
+		in wlan_wext.c, as LEAP works only if associated.
+	4. Removed kernel .config inclusion in Makefile
+	5. Moved os/threadx/os_endian_convert.c to wlan/endia_convert.c
+	6. Moved command IDs defined in os/threadx/os_cmd_macros.h to
+		wlan/host.h
+	7. Added endiaSwap.h
+	8. Fixed bug #3626: cannot set data rate to fixed rates other
+		that 1, 2, 5.5 and 11Mbps
+	9. Removed main thread priority change for CF83xx
+	10. Changed variable type of "cmdno" for PrepareAndSendCommand()
+		from u8 to u16
+
+03/28/05: version 35
+	1. Added parsing for extra IE ID of 0x85.
+
+03/25/05: version 35
+        1. Send a wireless custom event to supplicant upon network 
+           EAP failure.
+
+03/24/05: version 34
+	1. Added new private ioctl scanbssid.
+
+03/22/05: version 34
+	1. Changed the ioctl number arrangement in wlan_wext.h, 
+		as odd ioctl numbers are for "get" and vice-versa.
+	2. Removed -static in wlan/Makefile for wlancis.c.		
+	3. Added tool-chain path for MIPS in Makefile.
+	4. Fixed bug 3424, 3561 by blocking wep key command when
+		associated or started/joined ad-hoc network.
+
+03/21/05: version 34
+	1. Added #define MRVDRV_RTS_MIN/MAX_VALUE and
+		MRVDRV_FRAG_MIN/MAX_VALUE in dsdef.h
+	2. Added enum type SNMP_MIB_VALUE_e in hostcmd.h
+	3. Modified code to send wireless event to upper layer in
+		both WPA and non-WPA modes in MacEventDisconnected()
+	4. Disabled MULTI_BANDS flag for all non-H cards in Makefile
+
+03/17/05: version 33
+	1. Added DNLD_STATE enum in mrvdrv.h for dnld_sent flag.
+	2. Removed fwtypes.h and its related macro from Makefile.
+	   Moved the macros from hostcmd.h to host.h.
+	3. Added support for MIPS platform in Makefile.
+	4. Changed variable BssType in new association command to Reserved.
+	5. Fixed bug 3478: return incorrect NF in scan command
+	
+03/16/05: version 33
+	1. Added code in wlan_add_card() in wlan_main.c, to kill the threads 
+		if firmware download fails.
+		Otherwise the threads are alive in the process table of the OS,
+		which on killing manually will crash the OS.
+	2. Setting bit 3 of register 0x70 to 1 for GSPI8385-B1 to support higher
+		frequency in CMD_GSPI_BUS_CONFIG (in wlan_fw.c).
+	3. Fixed "getNF returns 0" issue; removed LastNF.
+
+03/15/05: version 33
+	1. init_etherdev is called with sizeof wlan_private structure to 
+		allocate space for net_device + wlan_private structure
+	2. Removed the code to allocate and free private structure.
+	3. Changed the Makefile.
+	4. Added macro CAL_AVG_SNR_NF in macro_defs.h
+	5. Changed SNR/NF[][] type in Adapter from u8 to u16
+	6. Added AVG_SCALE for new averaging method:
+		1) initial condition: beacon_avg = beacon_raw*100
+		2) subsequent readings:
+			beacon_avg = (beacon_avg*31 + beacon_raw*100)/32
+		3) reported as: reported_beacon_avg = beacon_avg/100 
+	7. Moved ENABLE_RSN command from wlan_associate() to
+		wlan_setwpaie_ioctl(). This will take care of both
+		infra. and ad-hoc mode after wpa_supplicant exits
+	8. Enabled "wpaon" & "wpaoff" private commands for WPA only
+		(WPA2 does not need these two commands)
+
+03/14/05: version 33
+	1. Set Adapter->DataRate to 0 when Auto rate is configured
+	2. Return Adapter->DataRate in wlan_get_rate() no matter auto/fixed
+		rate or connected/disconnected.
+	3. Added macro SCAN_RSSI in macro_defs.h
+
+03/14/05: version 32
+	1. Changed the Makefile build option to copy wlancis into bin_xx 
+		directory.
+	2. In wlan_cmd_802_11_associate() changed adapter to Adapter, as 
+		it is giving compilation problem for MS83xx.
+			
+03/12/05: version 32
+	1. In hostcmd.h _HostCmd_DS_802_11_AD_HOC_RESULT structure member
+		PAD[3] is only applicable for MS8380. so changed MS83xx macro
+		to MS8380.
+	2. Modified wlan_remove_card() in wlan_main.c to move the setting of
+		SurpriseRemoved flag after terminating the threads.
+	3. Modified wlan_cmd_802_11_associate() for OLD_ASSOCIATION to get
+		the common data rates to fix the issue of MS83xx driver
+		not being able to associate to AP when fixed data rate
+		is set.
+	4. Modified MrvDrvCommandTimerFunction() in wlan_fw.c to add a
+		workaround for MS83xx to overcome the issue of command
+		timeout by incrementing the IntCounter so that the main
+		thread will invoke the sbi_get_int_status().
+	5. Added declaration for a new array in wlan_main.c to hold the valid
+		transmit data rates. Added a extern declaration for the
+		WlanDataRates array in wlan.h.
+	6. Modified get_common_rates() in wlan_cmd.c, index_to_data_rate()
+		and data_rate_to_index() for simplification, optimization and
+		better readability by using the WlanDataRates table.
+	7. Added a new inline function CopyRates() and modified
+		get_active_data_rates() to avoid redundancy.
+
+03/11/05: version 32
+	1. Fixed the re-opened bug #3413: bue to different reasons than the
+		previous.  The first time the key was truncated to 64 bit.
+		This fix is about ascii to hex conversion error.
+
+03/10/05: version 32
+	1. Lower the Default Power constraint to 0, Min PowerCapability to 5.
+
+03/10/05: version 31
+	1. Fixed bug #3413: Inability to retrieve ADHOC AES key with iwpriv 
+		command.  This is fixed in wlan_getadhocaes_ioctl().
+	2. Also fixed problems with ADHOC AES key truncation problem in
+		wlan_setadhocaes_ioctl().
+	3. Fixed 0 channel issue in BAND_CONFIG cmd when scan after association.
+		Bug #3410
+
+03/09/05: version 31
+	1. Added Set DomainInfo before ad-hoc Start when 11H/11D 11D eanbled.
+	2. Added index_to_data_rate() & data_rate_to_index to convert data rate
+		to index and vice versa
+	3. Added reset retcode to 0 in CleanUpCmdCtrlNode() in wlan_cmd.c
+
+03/08/05: version 31
+	1. Added: Store CountryInfo in BssDescList for each BSS.
+	2. Modified: set TPC_INFO and Country Info before send Join/Associate 
+		command to FW.
+	3. Moved: wlan_802_11h_init and wlan_802_11d_init from wlan_init_adapter
+		to wlan_init_fw, in order to get the correct init regioncode.
+
+03/08/05: version 31
+	1. Added 11H(TPC) realted new commands:
+		setpowercap( Set power capability)
+		setpowercons(Sey Power Constraint)
+	2. Added 11H(TPC) related IE types: PowerConstraint, 
+		PowerCapability, TPCReport to BssDescList
+	3. Fixed bug #3360: unable to change to managed mode from ad-hoc
+		power save mode.
+		It was caused by the retry of enter-power-save command in
+		ExecuteNextCommand().
+	4. Added check for fixed rate in get_common_rates() to make sure it is
+		compatible with the network.
+	5. Changed HostCmd_SCAN_MAX_CH_TIME back to 100ms
+		bug 3403, 3404
+	6. Changed wlan_get_range, wlan_set_rate, wlan_get_rate to implement
+		data rates functions
+
+03/07/05: version 30
+		1. Implemented the following commands
+			- BCA_CONFIG_TIMESHARE
+			- INACTIVITY_TIMEOUT
+			- SLEEP_PERIOD.
+			and updated the README file for the above commands.
+		2. Updated the README file with the missing commands.
+		3. Removed compilation flag SLEEP_PARAMS.
+		4. Fixed wrong name of wlan device/protocol
+			in wlan_get_name() in wlan_wext.c
+
+03/04/05: version 30
+		1. Added 802.11H(TPC) support Functions
+		2. Added 11H(TPC) related private command 
+			enable11htpc(enable/disable 11H TPC) and
+			requesttpc(Request 11H TPC INfo)
+		3. Updated README file
+ 				
+03/04/05: version 30
+		1. Added a new source file wlancis.c for wlancis application
+			which can be used to dump the CIS Information using 
+			WLANDUMPCIS ioctl.
+		2. Modified wlan_do_getcis_ioctl() in wlan_wext.c to remove
+			unwanted local variables and to copy the CIS info
+			directly from the Adapter.
+		3. Modified wlan Makefile to add rule to compile wlancis and
+			to clean it.
+		4. Added getcis support for SPI(not yet tested).
+		5. Changed to use CurBssParams.DataRates for "iwlist rate"
+			when connected (associated, ad-hoc started/joined)
+		6. Fixed "beacons found at band_a/channel 36 in ad-hoc
+			creating after setting to b/bg band"
+		7. Changed CAL_NF calculation 
+		8. Changed Scanned AP RSSI calculation in wlan_get_aplist()
+		9. Fixed bug 3290: display auto rate 1Mb/s in ad-hoc a/b/g band
+
+03/03/05: version 30
+		1. Implemented getcis private ioctl
+		2. Commented out setting TX_RETRYCOUNT in wlan_init_fw()
+		3. Changed HostCmd_SCAN_MAX_CH_TIME to 50ms
+		4. Removed check for 28 bytes in wlan_set_rts()
+		5. Fixed bug #3341, changing mode from ad-hoc to infra should 
+			not generate de-auth packet.
+		6. Modified wlan_get_name() to display the wireless device name
+
+03/02/05: version 30
+		1. Removed version ioctl from wlanconfig.
+		2. Modified Makefile to add a new compilation flag
+			SNAP_HEADER_REMOVED to enbale the SNAP stripping
+			in WLAN driver except USB8388.
+		3. Added Compilation flag SNAP_HEADER_REMOVED in 
+			function ProcessRxed_802_3_Packet() in wlan_rx.c
+		4. Removed m_NumScanInAssociationBlocked
+		5. Fixed the 1st association failure issue after iwpriv deauth
+		6. Removed bIsAssociationBlockedByScan
+		7. Removed MOD_SCAN related variables and functions
+		8. Changed HostCmd_SCAN_MAX_CH_TIME_MULTI_BANDS to 20ms
+
+03/02/05: version 30
+		1. Added option 2 (read current setting) for 11D related private 
+			cmd: disable11d and alloweepromrgn
+		2. Changed WLAN_SETONEINT_GETONE_INT with WLANIOCTL+23
+			to enable wireless extension return result to application.
+			Even IOCTL ID number doesnot return values.
+		   Changedd WLAN_SCANMODE with WLAN_IOCTL+22
+		3. Set the length as 1 for wlan_get_nf, wlan_get_rssi, wlan_get_snr function.
+			Cmd iwpriv ethx getNR iwpriv ethx getSNR iwpriv ethx getRSSI will 
+			return value 
+ 
+03/01/05: version 30
+		1. Updated the README file with wlanconfig Manual.
+		2. Added a structure for Current BSS State Structure.
+		3. Moved connected_band, connected_channel, CurrentSSID from
+			Adapter Sturcture to CurBssParams.
+		4. Copying current BSSID into CurBssParams.bssid while
+			associating and creating/joining.
+		5. Coping datarates into CurBssParams while association and
+			ad-hoc creating/joining
+		6. Added flag CONFIG_ARM_2_4_21 in Makefile to support SD8385
+			driver for kernel 2.4.21-rmk
+		7. Added handling of unexpected PS SLEEP/AWAKE events
+		
+02/28/05: version 30
+		1. Added private ioctl to set and get PMU state machine 
+				oscillator and the PLL parameters.
+			Usage:
+			# iwpriv eth1 sleepparams get
+			# iwpriv eth1 sleepparams "set
+				< Sleep clock error in ppm (0-65535) > 
+				< Wakeup offset in usec (0-65535) > 
+				< Clock stabilization time in usec (0-65535) >  
+				< Control periodic calibration (0-2) >" 
+		2. Added Compilation flag SLEEP_PARAMS in Makefile.
+		3. Added if_mcf and mcf.
+		4. Added CONFIG_MCF_USED flag in Makefile. 
+		5. Changed AdhocRates_A in wlan_main.c 
+
+02/25/05: version 30                            
+		1. Disabled beacon period copying, in function 
+				wlan_cmd_802_11_associate().
+		2. Reserved BcnPeriod & DtimPeriod in associate in hostcmd.h
+		3. Changed HostCmd_SCAN_MAX_CH_TIME_MULTI_BANDS to 50ms
+		4. Added iwlist rate handling in wlan_get_range()
+
+02/23/05: version 29
+		1. When 11d is disabled, 11D state machine does not make state 
+		transformation while 11d compliant AP is not sensed, in function
+		wlan_802_11d_sm_transfer(), wlan_fw.c.
+
+02/23/05: version 29
+	    1 Updated 11d state machine
+	    2 Updated wlan_ret_802_11_scan() supporting 11D
+	    3 Added Scan_11D compiler option to use scan cmd supporting 11D
+	    4 Added MaxTxPwr initial value in wlan_main.c
+	    5 Moved TLV type definition to hostcmd.h
+
+02/23/05:  version 29
+		1. Added wlan_ret_802_11_ad_hoc_stop()
+			added MacEventDisconnected() call in this function
+		2. In wlan_cmd_802_11_ad_hoc_stop()
+			removed ResetDisconnectStatus() call in this function
+		3. Removed ResetDisconnectStatus()
+		4. Modified StartReassociation() & MacEventDisconnected()
+		5. Replaced ResetDisconnectStatus with MacEventDisconnected
+			in wlan_cmd.c & wlan_cmdresp.c
+		6. Changed BCA_CONFIG command ID to 0x0065 in host.h & hostcmd.h
+
+02/22/05:  version 29
+		1. Removed the typedefs for BYTE, WORD and DWORD in the wlan.h 
+		2. Added REMOVE_WEP handing in _set_wep() in wlan_cmd.c,
+			Fixed bug #3277
+		
+02/21/05:  version 29
+		1. Made wlan_add_card() as static function.
+		2. Defined macros, REG_MAC, REG_BBP, REG_RF and REG_EEPROM
+			in wlan_wext.h and used them in wlan_config.c
+			and wlan_wext.c.
+		3. Removed the unused code for rd_eeprom related code. 
+
+02/19/05:  version 29
+                1. Added code to support 802.11D w/ ENABLE_802_11D compiler option.
+                      
+02/18/05:  version 29
+		1. made wlan_add_card() return pointer to wlan_private structure
+		2. Changed wlan_notifier_fn_t to wlan_notifier_fn_add and 
+			wlan_notifier_fn_remove correspondingly. 
+			
+02/17/05:  version 28
+		1. Removed second arg pt_regs of wlan_interrupt(), as it is 
+			obsolete.
+		2. Changed USHORT/u16 to UCHAR/u8 for "Wpa_ie_len" variables
+			in _WPA_SUPPLICANT/Adapter in dsdef.h/mrvdrv_dev.h
+		3. Changed "buf[80]" to "buf[16+256*2]" in wlan_get_scan()
+			to avoid buffer overflow
+		4. Added "KERN_CRIT" in wlan_set_freq() to printk error msg
+			on x86 console
+
+02/16/05:  version 28
+		1. Moved sbi_register_dev() function call after creating 
+			thread.
+
+02/15/05:  version 27
+		1. Print out error message when user tries to change ad-hoc
+			channel when MULTI_BANDS is enabled
+
+02/14/05:  version 27
+		1. Changed mrvl_thread and friends to wlan_thread and friends.
+
+02/11/05:  version 27
+		1. Implemented WPA2 feature (WPA2 flag turned off by default)
+
+02/11/05:  version 27
+		1. Added USB support in the IF layer, the functions are dummy 
+			and the code is	compiling.
+		2. Added support in the Makefile to support if_usb compilation.
+		3. make USB8388 to enable Makefile for compiling USB IF layer.
+		4. In os layer changed os_header1.h to os_defs.h
+		5. Cleaned up if layer.
+		6. Removed PSWakeup() call in _associate() in wlan_cmd.c
+		7. Added back ATIMWindow
+		8. Renamed Adapter->atim to Adapter->AtimWindow
+
+02/10/05:  version 26
+		1. Merged ThreadX code.
+
+02/09/05:  version 26
+		1. Changed the name of ActiveScan to SpecificScan.
+
+02/08/05:  version 26
+		1. Removed ATIMWindow.
+		2. Added structure wlan_802_11_security_t in mrvdrv.h
+		3. Merged Threadx Code.  
+
+02/07/05:  version 26
+		1. Added interruptible_sleep_on_timeout() call in 
+			wlan_scan_networks() in wlan_wext.c to handle the
+			condition when progressive scan is defined, but
+			PER_COMMAND_WAIT_Q is not defined.
+		2. Fixed bug #3158: association fails with LEAP + Network-EAP:
+			In "key off" case, set AuthMode to "open" only if
+			previuos mode is "shared" (in wlan_setencode_nonwpa())
+		3. Fixed "AtimWindow = 0" issue in ad-hoc joiner case in
+			_ad_hoc_join() in wlan_cmd.c
+		4. In wpaon_ioctl/wpaoff_ioctl: do not send ENABLE_RSN command
+		5. In wlan_cmdresp.c: break out for ENABLE_RSN and
+			RSN_AUTH_SUITES command response
+
+02/04/05:  version 26
+		1. Rewritten kthread.h file and renamed kthread.h to 
+			mrvl_thread.h. For this, changes are also made in
+			wlan layer. 
+		2. Merged Threadx Code.
+		3. Fixed pre-TBTT private command
+		4. Removed fastListenDelay & fastListenInterval
+		5. Removed "power timeout" & "power period" support
+
+02/03/05:  version 26
+		1. Modified wlan_associate() in wlan_wext.c to avoid sending 
+			UNICAST and MULTICAST CIPHER commands for MS8380 cards
+			as these are not supported by MS8380 firmware.
+			It is done by using #ifndef MS8380 directive.
+		2. Changed the return value from '-ENOTSUPP' to '-EBUSY'
+			when the user tries to send the command, when the card
+			is in deepsleep, in wlan_wext.c and wlan_cmd.c.
+		3. Merged Threadx code.
+		4. Use PS_REQUIRED flag for pre-TBTT private command.
+		5. Fixed AUTH issue when WPA & ADHOCAES are not defined.
+			AP set to WEP, client no security: IsNetworkCompatible()
+			incorrectly returned OK for AUTH in WPA/WPA2/ADHOCAES
+			case
+		
+02/02/05:  version 26
+		1. Changes are made to show updated Rx and Tx Statistics when
+			user issues 'ifconfig eth1' after pinging to any network
+			(statistics such as, number of packets, errors, dropped
+			 and bytes transfered/received).
+		2. Added private command adhocstop.
+		3. Modified deauth command to send DEAUTH only 
+			if station is in infrastructure mode.
+		4. Added support for MS interface. Modified Makefile, added
+			'if_ms' directory in IF, and mspio directory in	IO.
+		5. Commented out Privacy check in WPA/WPA2 cases.
+			Some APs such as LinkSys WRT54G may NOT set Privacy
+			bit in certain conditions.
+
+02/01/05:  version 26
+		1. Removed the following macros & data structures from host.h:
+			host_CMD_802_11_QUERY_SCAN_RESULT
+			host_CMD_802_11_GPIO_CFG
+			host_CMD_802_11_GPIO_OP
+			host_CMD_802_11_RGN_CODE
+			host_CMD_802_11_LED_CONTROL
+			host_CMD_802_11_KEY_DECRYPT
+			host_CMD_802_11_KEY_ENCRYPT
+		2. Fixed RTS and frag. threshold display "off" in wlan_get_rts()
+			and wlan_get_frag() in wlan_wext.c, bug #2908
+		3. Fixed WPA displays "Encryption off" issue in
+			wlan_get_encode() in wlan_wext.c, bug #2979
+			
+
+01/31/05:  version 26
+		1. Changed Makefile, for make install.
+		2. Changed functions related to 802.11 and 802.3 statistics.
+		3. Replaced sizeof(wlan_do_ioctl) to 1.
+		4. Cleaned up sbi.h 
+		5. ThreadX macros are eliminated in both *.h and *.c files.
+		6. Changed "msd25" to "wlan" in wlan_add_card() in wlan_main.c
+		7. Reset bIsScanInProgress to FALSE if SCAN command Result != 0
+		8. Removed comments for "SD25"
+		9. Fixed compiler warnings in wlan_ret_802_3_stat()
+
+01/28/05:  version 26
+		1. Changed ADHOCAES implementation, now the support is given
+			from iwpriv as
+			iwpriv eth1 setaeskey <16-byte value>
+			iwpriv eth1 getaeskey
+			iwpriv eth1 rmaeskey
+		   Added new function definition wlan_remove_aes() 
+		   	int wlan_wext.c
+		2. Removed support from wlan_cofnig.c application.
+		3. AUTO_FREQ_CTRL (SET_AFC and GET_AFC), MANF_CMD_SUPPORT
+			commands are handled using the PrepareAndSendCommand
+			function for sending of the above commands.
+		4. In wlan_stdcmd_ioctl(), the command in queued and the
+			main thread is wokenup instead of calling the
+			DownloadCommandToStation(), for handling STDCMD.
+		5. Renamed the structure wlan_dev_rec_t to wlan_dev.
+			changes are made in wlan.h, wlan_main.c and wlan_rx.c.
+		6. Removed "typedef struct wep_key_t" in wlan_wext.c as it's
+			not used in anywhere
+		7. Removed MRVDRV_NUM_OF_WEP_INFO macro in dsdef.h
+		8. Moved macro MAX_KEY_SIZE & MIN_KEY_SIZE from wlan_wext.c to
+			macro_defs.h
+		9. In wlan_associate() call _ENABLE_RSN command to enable/disable
+			RSN in firmware if WPA is enabled/disabled
+		10. Removed unused PS command response handing code in wlan_cmd.c
+
+01/27/05:  version 26
+		1. Merged the THREADX code.
+		2. Modified the ExecuteNextCommand and DownloadCommandToStation
+			functions. Now ExecuteNextCommand() calls 
+			DownloadCommandToStation(). And ExecuteNextCommand()
+			is called only from the main_thread().
+		3. Added functions StopAdhocNetwork() and SendDeauthentication()
+			in wlan_wext.c. These functions are used to send the
+			AD_HOC_STOP and DEAUTHENTICATE commands respectively.
+		4. Added resetting AdhocChannel to default when user switches
+			mode to Ad-Hoc. (Bug #3094)
+		5. Removed TYPE_WEP_128_BIT and TYPE_WEP_TX_KEY
+		6. Fixed changing ad-hoc channel when Ad-hoc connected in
+			ChangeAdhocChannel() function
+		7. Rewrote _set_wep() in wlan_cmd.c
+		8. Removed LastAddedWEPKey, IV, WEP_INFO_LIST, KeyMap[],
+			usCurrentUsedKeyIdx, pLastAddedPWK, pLastAddedGRK,
+			UpdateWEPTable(), AddWEPKey(), SearchWEPKey(),
+			RemoveWEPKey() and related code
+		9. Added WpaPwkKey, WpaGrpKey
+		10. Modified _pwk_key() and _grp_key() in wlan_cmd.c
+
+01/26/05:  version 26
+		1. Removed TX_ENCRYPT flag and code
+		2. Cleaned up "#if 0 / #endif"
+		3. Removed InterpretBSSDescriptionWithoutIE()
+		4. Removed code in the case FWVERSION3 is not enabled
+			as we no longer support FWVERSION2
+		5. Removed CurrentWEPKey and related code
+		6. Added CurrentWepKeyIndex
+
+01/25/05:  version 26
+		1. Moved all the ThreadX and linux specific code to the
+			'os' layer.
+
+01/24/05:  version 26
+		1. Fixed wpa supplicant always sets value to 1 issue
+			for SETONEINT_GETNONE sub-commands:
+			authalgs, 8021xauthalgs, encryptionmode
+		2. Renamed AdhocAES to AdhocAESEnabled and controlled by
+			compiler flag ADHOCAES
+		3. Removed setadhockey and getadhockey private commands
+			(keep in wlanconfig only)
+
+01/24/05:  version 25
+		1. Added IBSS Privacy check for WEP/AES in ad-hoc start/join
+
+01/21/05:  version 25
+		1. In Makefile, Removed ACTIVE_SCAN, NO_CMD_RESP compile flags, 
+			As they are not used at all. 
+		2. In Makefile, INTR_SLEEP is Added to CFLAGS only when 
+			PER_CMD_WAIT_Q is disabled.
+		3. Removed Roaming related code.
+		4. Fixed issue of kernel crash with authalgs private command.
+		5. Moved thread handler funtions to wlan_main.c and re-named 
+			wlan_service_event_ints() to 
+			wlan_reassociation_thread().
+		6. Merged ThreadX code.
+		7. Removed AuthenticationType from Adapter
+		8. Added Auth1XAlg, EncryptionMode, AdhocAES & wpa2_supplicant
+			to Adapter
+		9. Added NetworkEAP AuthType = 0x80
+		10. Added sub-command "encryptionmode" for supplicant & iwpriv
+		11. Rewrote IsNetworkCompatible() in wlan_fw.h
+
+01/20/05:  version 25
+		1. Removed the array CmdRespRetCode[MRVDRV_NUM_OF_CMD_BUFFER]
+			from the adapter structure. We now have one variable 
+			'retcode'' in the CmdCtrlNode structure to handle this.
+			In new implementation, prepare and send command returns
+			the status 'ret', if (ret ==  0) indicates that the 
+			command is  successful, if (ret < 0) indicates that the 
+			command preparation failed, Note: 'ret' will be greater
+			than zero only if the PER_CMD_WAIT_Q is enabled and it 
+			is used to send the command. So, if (ret > 0) indicates
+			that the command response returned error.		
+			Thus 'retcode' variable holds the command response 
+			return code only if the PER_CMD_WAIT_Q macro is enabled
+			and it is used to send the command.
+		2. Used memcpy to copy the structure contents, instead of 
+			copying indivisual structure variables one by one.
+		3. Removed Wlan802_11AuthModeWPA* from enum
+			_WLAN_802_11_AUTHENTICATION_MODE in wlan_defs.h
+			Added ModeNetworkEAP
+		4. Added _WLAN_802_1X_AUTH_ALG in mrvdrv_dev.h
+		5. Added *_MCAST_CIPHER definitions/data structire/functions
+		6. Added WPA2_IE 
+		7. Added wlan_associate() and moved PrepareAndSendCommand calls
+			for _ASSOCIATE to this function in wlan_wext.c
+		8. Removed IsWPAEnabled in wlan_fw.h
+
+01/19/05:  version 25
+		1. Fixed the problem of CmdNode free issue.
+			Changes are made in wlan_cmd.c, wlan_cmdresp.c
+			and wlan_fw.c files.
+		2. Partially implemented the command response error handling.
+			Currently the error handling is done in the 
+			wlan_set_rate().
+			For the above implementation added the variable,
+			'int CmdRespRetCode[MRVDRV_NUM_OF_CMD_BUFFER]' in the 
+			adapter structure and 'int id' in the CmdCtrlNode 
+			structure.
+			They are initialized in AllocateCmdBuffer() 
+			in wlan_cmd.c.
+
+			In this implementation, prepare and send command returns
+			a 'ret' value. if (ret < 0), indicates that the command 
+			preparation has failed. if (ret >= 0), indicates that 
+			the 'ret' contains command node id, which is used for 
+			tracking the command response return code. That is 
+			CmdRespRetCode[ret] gives the command response error 
+			code of the command that is sent.
+		
+			Note:	CmdRespRetCode[ret] contain the valid response 
+				error code only if we wait for the response 
+				after sending the command. That is, it is valid 
+				only if PER_CMD_WAIT_Q is defined and used for 
+				sending the command or 
+				'wlan_sched_timeout(delay)' or 
+				interruptible_sleep_on()' are used after 
+				sending the command.
+		3. Added private ioctl regarding ATIM in ad-hoc power-save.
+			
+			usage:
+			# iwpriv eth1 atim <value>
+				`to set the ATIM period value, which has to be 
+					upto 50`
+		4. Merged GSPI_BUS_CONFIG command and handling
+		5. Removed WPA_AES compiler flag
+		6. Moved sending AUTHENTICATE command from wlan_set_essid() &
+			wlan_set_wap() in wlan_wext.c to
+			wlan_cmd_802_11_associate() in wlan_cmd.c
+		7. Added WLANSET8021XAUTHALG for 802.1x authentication algs
+			Usage: # iwpriv eth1 8021xauthalgs <value>
+
+01/18/05:  version 25
+		1. Modified wlan_config.c application file to support for 
+			subcommand implementation in host driver.
+		2. Modified WLANSETADHOCAES switch case to handle the wrq 
+			structure passed from the user space.
+
+01/17/05:  version 24
+		1. Added copy_to_user check and copying the key instead of ssid
+			in the switch case of WLANGETADHOCKEY.
+		2. Added macro check PER_CMD_WAIT_Q in WLANGETADHOCKEY switch
+			case.
+
+01/15/05:  version 24
+		1. Added host command to read EEPROM data
+
+01/13/05:  version 24
+		1. Reordered IOCTL numbers, because WE-16 strictly enforces
+			SET and GET conventions, wlan_wext.c and wlan_wext.h. 
+		2. Added find_cfp_by_band_and_freq() function and fixed Linux null
+			pointer issue in wlan_set_freq() when "iwconfig eth1 channel x"
+			is invoked in ad-hoc mode before any AP scanning
+		3. Fixed non-Progressive scan in wlan_cmd_802_11_scan():
+			wrong channl numbers were filled in the scan list
+			so not able to scan/associate to APs in channel 3,6,8,9,10 
+		4. Modified *_DRIVER_RELEASE_VERSION per project in wlan_version.h
+		5. Increased length of version string from 32 to 128 bytes in wlan_wext.c
+
+01/12/05:  version 24
+		1. Added "#if WIRELESS_EXT > 14" conditional compiling
+			in wlan_wext.c for WE14/15/16 compatibilities.
+		2. In wlan_scan_networks(): in the following cases,
+			1) PROGRESSIVE_SCAN is used (no matter PER_CMD_WAIT_Q is defined
+				or not);
+			2) neither PROGRESSIVE_SCAN nor PER_CMD_WAIT_Q is defined;
+			call interruptible_sleep_on_timeout(&scan_q) function to wait
+			10 seconds for the scan response.
+		3. Added KERNEL_WE for Wireless Ext 14/15/16 in Makefile
+		4. Changed omap1510-linux kernel directory to "/usr/src/omap1510-linux-we15"
+
+01/11/05:  version 24
+		1. Added setting the iwe.len before calling the following functions
+			iwe_stream_add_event(), iwe_stream_add_point()
+			and iwe_stream_add_value() 
+			to fix the problem of wrong scan results, 
+			when the kernel "2.4.28" is used, in wlan_wext.c.
+		2. Changed "#define __inline" to "#define _inline" 
+			in wlan_defs.h to remove the compilation errors
+			when the code was compiled with linux-2.4.28
+		3. Changed data type of RFI variable "mode" from "u8" to "u16"
+		4. Changed main_thread to sleep on waiting for command rsp of
+			previous command even new command is pending
+
+01/10/05:  version 24
+		1. Merged the THREADX code.
+		2. Added ioctl command WLANREGCFWR and definition in 
+			wlan_wext.h and wlan_wext.c to support read
+			and write of CF registers.
+		3. Modified wlan_config.c
+			Added function definitions process_read_cfreg() and
+			process_write_cfreg() to support the above mentioned
+			feature addition.
+
+01/10/05:  version 23
+		1. Commented the code, 
+				ptr += sprintf(ptr, "*");
+				break;
+			in wlan_get_scan(), since the card was unable to
+			associate to the WPA enabled AP.
+
+01/07/05:  version 23
+		1. Defined 'HostCmd_OPTION_WAITFORRESP' macro in hostcmd.h 
+			to remove the THREADX code compilation errors.
+		2. Removed the warnings and compilation errors when the 
+			'PROGRESSIVE_SCAN' flag is disabled. 
+			Changes are made in wlan_wext.c, wlan_cmd.c, wlan_fw.c and
+			marvdrv_dev.h files.
+		3. Moved BAND_CONFIG commands from the beginning to the end of 
+			associate/adhoc_start/join functions
+		4. Removed RF_CHANNEL commands in wlan_wext.c
+
+01/06/05:  version 23
+		1. Moved RF_ANTENNA_* macro from wlan_wext.c to macro_defs.h
+		2. Removed bIsScanOrAssociatationInProgress variable in Adapter
+		3. Added bIsScanInProgress and bIsAssociatationInProgress
+		4. Cleaned up unused lines
+		5. In find_cfp_by_band_and_channel(), modified
+			the check (rc->Band != band) to the followings:
+			1) BAND_A matches exactly
+			2) BAND_B matches B or G
+			3) BAND_G matches G or B
+		6. In SendActiveScan(), do active scan only if Scan is NOT in progress
+			This is to fix the following issue:
+			1) scan during reassociation
+		7. In wlan_get_scan(), removed GET_RF_CHANNEL command and using Adapter->Channel
+			to fix the following issue:
+			1) scan after ad-hoc start/join
+		8. In wlan_get_scan(), removed passing actual wpa_ie string to iwtools
+			This to to save space for listing more APs in scan results
+		9. Added CmdWaitQWoken to CmdCtrlNode structure
+		10.In PrepareAndSendCommand(), wait_event_interruptible(cmdwait_q, CmdWaitQWoken);
+			instead of interruptible_sleep_on(&cmdwait_q);
+
+01/04/05:  version 23
+		1. Implementing the region channel in the common module.
+ 		   ( Not yet completed ).
+		2. Modified the data structure _HostCmd_DS_802_11_RF_TX_POWER
+			and also removed the "TX_POWER_LEVEL_*" macros.
+		3. Removed the TX_POWER_CTRL compiler flag from the Makefile
+			and also from the common module.
+		4. Changed SQ1/SQ2 to Rsvd1/Rsvd2 in RSSI command structure
+
+01/03/05:  version 23
+		1. Implementing the region channel in the common module.
+ 		   ( Not yet completed ).
+		2. Added "#define MRVDRV_MAX_CHANNEL_NUMBER_USA 11" macro and 
+			fix for bug #2942, #2945 in dsdef.h and wlan_wext.c
+		3. Removed calls sbi_write_reg() for deep sleep wakeup
+			in wlan_cmdresp.c
+		4. Added prototype and calls for sbi_reset_deepsleep_wakeup()
+			in sbi.h and wlan_cmdresp.c, bug #2727
+		5. Added wlan_sched_timeout(200) for AFC commands in 
+			wlan_freq_ctrl() in wlan_wext.c
+
+12/28/04:  version 23
+		1. Changed status string to "setting to on/off" for
+			Enter/Exit Deep Sleep private command: bug #2948,#2953
+		2. Added setting MRVDRV_MAX_TX_POWER at device init time
+		3. Removed mdelay(500) after f/w downloading in wlan_fw.c
+
+12/27/04:  version 23
+		1. Removed developers' names
+		2. Removed scan_flag from Adapter structure
+		3. Removed parameters "wait_q" and "delay" in function
+			wlan_scan_networks in wlan_wext.c
+		4. Added interruptible_sleep_on_timeout(&Adapter->scan_q,
+			10 * HZ); in wlan_scan_networks() to fix bug #2946
+		5. Added "#ifndef PER_CMD_WAIT_Q" and "#endif" around
+			interruptible_sleep_on_timeout(&Adapter->association_q,
+			10 * HZ); in wlan_set_wap() to fix 10 second delay issue
+		6. Removed "SetActiveScanSSID = TRUE;" in wlan_scan_bands()
+		7. Commented out "SendActiveScan" and "FindSSIDInList" calls
+			in wlan_set_wap()
+
+12/23/04:  version 23
+		1. In wlan_service_main_thread(), After the check
+			if(Adapter->PSState == PS_STATE_SLEEP)
+		   the Adapter variable 'IntCounter' is decremented.
+		   (but not set to zero)
+
+		   This is to make sure that, we don't schedule out
+		   the main thread even after we got the awake event. 
+
+		   That is, if the interrupt is generated for awake event 
+		   just after the check, 
+			if(Adapter->PSState == PS_STATE_SLEEP)
+		   and before cli() is called, 'IntCounter' is incremented in 
+		   the interrupt service routine.
+		   So, in the main thread if we set the 'IntCounter' to zero 
+		   after cli() and then continue() is called, the main thread 
+		   will schedule out even though the driver got the awake event.
+
+		   To avoid this happening, 'IntCounter' is decremented.
+		2. Removed SPIN8385 flag
+		3. Changed version buffer len from 64 to 128
+		4. Added DEBUG_VER flag in Makefile and wlan_versiob.h
+		5. Commented out "rtsr -= 28;" in wlan_set_rts(), bug #2874
+		5. Improved function Is_Command_Allowed_In_PS() in wlan_cmd.c
+
+12/22/04:  version 23
+		1. In wlan_service_main_thread(), After the check
+			if(Adapter->PSState == PS_STATE_SLEEP)
+		   the Adapter variable 'IntCounter' is set to zero.
+
+		   This is done to increase the CPU idle time from 30% to 95%
+		   when the card is put to power save mode on BULVERDE.
+		   (verified using the 'top' command).
+		   
+		   Observed that when the card is in PS_STATE_SLEEP, 
+		   IntCounter is not zero, thus the thread is continiously 
+		   running and consuming lot of CPU time. 
+		2. Removed FW_DATA_RATE flag; added G_RATE flag for W8385
+		3. Added G_AdhocRates[] in wlan_main.c
+		4. Rewrote wlan_get_range() function for data rates: #2890
+		5. Removed Adapter->adhoc_start_ch (AdhocChannel is used):
+			fixed bugs #2943, #2947
+
+12/21/04:  version 23
+		1. Added/Changed versioning for multiple SOC/RF projects
+			SD8385+8015:	make SD8385
+			SD8385+8031:	make SD8385H
+			SPI8385+8015:	make SPI8385
+			SPI8385+8031:	make SPI8385H
+			CF8385+8015:	make CF8385
+			CF8385+8031:	make CF8385H
+			GSPI8385+8015:	make GSPI8385
+			SD8305:		make SD8305
+			CF8305:		make CF8305
+			SPI8381+8015:	make SPI8381PN
+			CF8381+8010:	make CF8381P
+			CF8381+8015:	make CF8381PN
+		2. Added RF8010/RF8015/RF8031 compiler flags
+
+12/21/04:  version 22
+		1. Removed the variable 'MacAddr' in Adapter structure.
+
+12/20/04:  version 22
+		1. SPI8381/CF8381 NF/RSSI new calculations
+		2. MAX_CH_TIME_MULTI_BANDS changed to 10ms (was 100ms)
+		3. Fixed #bug 1100,
+			i.e, accepts invalid command '$iwpriv ethX deepsleep 3'.
+			If the deepsleep command is issued with the options 
+			other than '0', '1' & '2', the command is returned with 
+			the appropriate error code. The fix is added in 
+			do_ioctl(), in wlan_wext.c
+		4. Modified the function get_common_rates(), to solve the
+			problem when the rates are not in 'small to large' order
+		5. SupportedRates_A updated
+
+12/17/04:  version 22
+		1. Added 802.11a channels in the common module, in wlan_main.c,
+			wlan_wext.c and macro_defs.h.
+		2. To support 802.11a channels of all regions, added functions 
+			find_channel() and find_frequency() to get the required
+			channel and frequency respectively, in wlan_wext.c.
+		3. Commented out setting MSB for basic rates in _scan()
+		4. Hardcoded AdhocRates for _ad_hoc_start() in wlan_cmd.c
+		5. G-SuppordedRates array updated in wlan_main.c
+		6. Added Commands_Allowed_In_PS and it's handling in wlan_cmd.c
+		7. Added 802.11 RSSI command into Commands_Allowed_In_PS
+			if MULTI_BANDS is enabled
+		8. Removed unused code in wlan_wext.c
+		
+12/16/04:  version 22
+		1. Added new private ioctl wlanidle.
+			usage:
+			$ iwpriv eth1 wlanidle-off
+				--to get into idle state
+			$ iwpriv eth1 wlanidle-on
+				--to come out of idle state
+		2. Before going to DeepSleep, netif_carrier_off is called
+			and after exiting from DeepSleep, netif_carrier_on
+			is called, in SetDeepSleep(), in wlan_wext.c.
+		3. Reversed the the working of reasso-on/off.
+			i.e, $ iwpriv eth1 reasso-on
+			      -- Driver does the reassociation automatically.
+			     $ iwpriv eth1 reasso-off
+			      -- User has to associate to the network manually
+		4. Added the checks to find out whether the card is in
+			DeepSleep. If the card is in DeepSleep, IOCTLS are
+			returned back with appropriate error condition,
+		5. Changed USER_DOES_REASSOCIATION flag name to
+			USER_DOES_PS_AFTER_REASSOCIATION
+		6. Changed "getadhocchannel to "getadhocch" and
+			"setadhocchannel to "setadhocch" in wlan_ext.c
+		7. Commented out set RF_CHANNEL command in JoinAdhocNetwork
+		8. Modified SupportedRates(b/g) array in the case MULTI_BANDS
+			isn't defined
+		9. In wlan_get_range(), mask out MSB of SupportedRates[] while
+			calculating range->bitrate[]
+
+12/15/04:  version 22
+		1. Moved definition of 'MIN' macro to wlan.h
+		2. Added TXthruput/RXthruput calculations
+
+12/15/04:  version 22
+		1. Added flag USER_DOES_REASSOCIATION and changed the
+			flag CONFIG_PM to CONFIG_MARVELL_PM in Makefile.
+		2. Added variables PM_State, DeepSleep_State, RxPDSNRAge and
+			LastNF in adapter data structure in mrvdrv_dev.h.
+		3. Added the flag '#ifndef USER_DOES_REASSOCIATION' before
+			calling wlan_send_deauth() in reassociation_off(),
+			in wlan_wext.c.
+		4. Added the code 'Adapter->RxPDSNRAge = jiffies' 
+			in wlan_compute_rssi(), in wlan_rx.c.
+		5. Modified the value in SupportedRates_A/G array 
+			in wlan_main.c.
+		6. Added DEEP_SLEEP related enum flags in wlan_defs.h.
+		7. Added the check 'if(Adapter->Reassociate == FALSE)' before
+			setting the PSMode to Power_Mode_CAM in function 
+			MacEventDisconnected(), in wlan_cmdresp.c.
+		8. Used 'MIN' macro instead of 'min' finction in 
+			wlan_cmd_802_11_ad_hoc_start(), in wlan_cmd.c.
+			(this is done to remove error in THREADX).
+		9. Modified the functions, wlan_get_snr() and wlan_get_nf().
+			Here, changed the way the in which the NF values are
+			given to the user.
+			To get the NF value, first the user should issue,
+				$ iwpriv ethX getSNR <option>
+			and then issue,
+				$ iwpriv ethX getNF <option same as above>
+			to get the NF values.
+		10. Moved the handling of Power Management form low-level 
+			driver to wlan module.
+		
+12/15/04:  version 22
+		1. Added the flag THROUGHPUT_TEST in Makefile.
+		2. Added a private command("thruput") to handle the THROUGHPUT_TEST.
+		   (Usage: iwpriv eth1 thruput 1 - Tx Throughput test starts
+			   iwpriv eth1 thruput 2 - Rx Throughput test starts
+			   iwpriv eth1 thruput 3 - Tx/RX Throughput test starts
+			   iwpriv eth1 thruput 0 - Stops the througput test going on)
+		3. Modified wlan_service_main_thread to handle the TX/RX throughput
+		   tests.
+		4. Added 3 variable to wlan_adapter in case of Throughput tests for
+		   statistics.
+
+12/14/04:  version 22
+		1. Corrected the display of the channels for band 'a'
+			when user issues 'iwconfig ethX' and 
+			'iwlist ethX channel'.
+		2. IEEERegionChannelA is used during the active scan, if the
+			current band is 'a', in wlan_cmd_802_11_scan().
+		3. DataRate field of the scan command is filled with the 
+			current band data-rate, in wlan_cmd_802_11_scan().
+		4. Merged the THREADX code.
+		5. Added reassociation_on and reassociation_off functions.
+		6. call reassociation_off on WLANREASSOCIATIONNAUTO and
+		   reassociation_on on WLANREASSOCIATIONUSER in wlan_wext.c
+		7. Modified the value in SupportedRates_A/B/G array in wlan_main.c
+		8. Specifying the correct length for memcpy in wlan_cmd.c
+		
+12/13/04:  version 22
+		1. Corrected a typo in wlan_config.c: "rdrd" -> "rdrf"
+		2. Commented out SetRadioControl in association command
+
+12/13/04:  version 21
+		1. wlan_scan_networks() and wlan_set_scan() finctions are 
+			modified to scan at the max two bands, i.e, b/g and a,
+			depending on the F/W and user configuration.
+		2. In wlan_get_rate(), removed the data rate command to get 
+			the data rate from the F/W.
+		3. Added the variable Is_DataRate_Auto in the adapter structure
+			to know whether the data rate is set to auto/fixed type 
+		4. Added the below code in ProcessRxed_802_3_Packet(),
+			if (Adapter->Is_DataRate_Auto)
+				Adapter->DataRate = pRxPD->RxRate; 
+			to store the data rate form 'pRxPD->RxRate' in to the 
+			adapter variable 'DataRate' only if the rate type set by
+			the user is auto. 
+		5. Is_DataRate_Auto variable is set or reset in the function 
+			wlan_set_rate(), if the user sets the rate as 
+			auto or fixed.
+		6. Added AUTO_FREQ_CTRL in Makefile for Auto Frequency Control
+			added new private ioctls 'setafc' & 'getafc' to support
+ 			this feature.(not yet tested)
+		7. #define BS_802_11A, BS_802_11B, BS_802_11G
+
+12/10/04:  version 21
+		1. Changes are made with respect to the multi-bands support.
+			All related code are present within the MULTI_BANDS
+			flag.
+		2. In macro_defs.h, 'FW_MULTI_BANDS_SUPPORT' is defined to
+			(DW_BIT_8 | DW_BIT_9 | DW_BIT_10).
+		3. Updated the BAND_CONFIG command structure.
+			i.e, added Channel variable to the command.
+		4. Removed the configuration flags, i.e, 'CONFIG_CARD', 
+			'CARD_A', 'CARD_B' and 'CARD_G' from the common module.
+		5. Removed the variable 'bss_band' from IEEETypes_BssDesc_t
+			data structure.
+		6. Commented out DSConfig checking in SCAN response.
+		7. Fixed ALL_802_11_BANDS define for BAND_A
+
+12/09/04:  version 21
+		1. Changes are made with respect to the multi-bands support.
+			All related code are present within the MULTI_BANDS
+			flag.
+		2. Modified the command to get/set ad-hoc band and channel for 
+			starting the ad-hoc network.
+			usage: 
+				$iwpriv ethX setadhocchannel "a 36"
+					-- this will store the band 'a' and 
+					   channel 36 info in adapter variables 
+					   adhoc_start_band and adhoc_start_ch 
+					   This information will be used only to
+					   start the ad-hoc network.
+
+				$iwpriv ethX getadhocchannel
+					-- this will get current band and 
+					   channel of ad-hoc network that is
+					   created(started).
+		3. Removed commented code in wlan_fw.h.
+		4. Removed LEAP_ENABLED flag from the wlan module.
+		5. Added private command getlog
+			Added case to handle the command in wlan_do_ioctl()
+			of wlan_wext.c
+			Added function HandleGetLogResponse() in wlan_cmdresp.c
+			Added new command definition HostCmd_DS_802_11_GET_LOG
+			in hostcmd.h
+		6. Modified PrepareAndSendCommand() function to check if the 
+			station is deepsleep enabled and return -1 if it is true
+		7. Modified wlan_set_txpow() function to make sure not to call
+			interruptible_sleep_on_timeout() if PER_CMD_WAIT_Q is
+			used.
+		8. Changed "UCHAR MacAddr[8];" to "u8 MacAddr[6];" and
+			"ULONG ReasonCode;" to "u16 ReasonCode" in
+			DEAUTHENTICATE command structure in hostcmd.h
+			to macth the Firmware spec v3.1
+
+12/08/04:  version 21
+		1. In wlan_process_tx: handling of MrvDrvSend failure case
+
+12/08/04:  version 20
+		1. Added new function wlan_scan_networks(), in wlan_wext.c
+			to do the scan. If multiband support is enabled,
+			it does the scan in all the user configured bands.
+			This function is called from all the functions where
+			we are preparing the scan command.
+		2. Added variables adhoc_start_band and adhoc_start_ch
+			in adapter structure.
+		3. Added the new command get/set ad-hoc band and channel for 
+			starting the ad-hoc network.
+			usage: 
+				$iwpriv ethX setadhocchannel a36
+					-- this will store the band 'a' and 
+					   channel 36 info in adapter variables 
+					   adhoc_start_band and adhoc_start_ch 
+					   This information will be used only to
+					   start the ad-hoc network.
+				$iwpriv ethX getadhocchannel
+					-- this will get current band and 
+					   channel of ad-hoc network that is
+					   created(started).
+		4. Initialized the adapter variables adhoc_start_band and 
+			adhoc_start_ch in init_adapter(), in wlan_fw.c.
+		5. Default ad_hoc channel macro for band 'a' is set to 36
+			in hostcmd.h.
+		6. In wlan_cmd_802_11_ad_hoc_start(), if the AdhocChannel value
+			is zero and the band is 'a', then set the default adhoc
+			channel of 'a' band. Currently the default channel
+			for 'a' band is set to 36.
+		7. SCAN_MAX_CH_TIME for multibands is set to 100 in hostcmd.h
+		8. Added DataRate variable in SCAN command. Increased size of
+			Datarate and Reserved variable in ad-start command to 14
+			and also increased the DataRates variable in ad-join
+			command to 14 in hostcmd.h.
+
+12/07/04:  version 19
+		1. Changed the variable name from BasicDataRates to DataRates 
+			and from OpRateSet to Reserved in the structure 
+			_HostCmd_DS_802_11_AD_HOC_START in hostcmd.h.
+		2. In wlan_cmd_802_11_ad_hoc_start(), the current band
+			data rates are used to start the ad-hoc network if 
+			MULTI_BANDS support exist, otherwise the information
+			in the SupportedRates is used to start the ad-hoc
+			network.
+		3. In wlan_cmd_802_11_ad_hoc_start(), after copying the 
+			required data rates, the MSB of the basic rates are set.
+		4. The rate information in the SupportedRates array is not 
+			changed in the wlan_ret_802_11_band_config(), in
+			wlan_cmdresp.c.
+		5. Changed main thread name from "wlan_service_pending_ints" to
+			"wlan_service_main_thread".
+		6. HOST_WAKEUP: in non-PS mode, Host_Wake_Up_Cfg_Done is NOT 
+			sent.
+		
+12/06/04:  version 19
+		1. Added configuration flag MULTI_BANDS in Makefile.
+		2. In ad-hoc start, the BasicDataRates and the OpDataRates
+			are copied from the SupportedRates array in
+			wlan_cmd_802_11_ad_hoc_start().
+		   In ad-hoc join, the DataRates are copied from the rates
+		   	got from scan response in wlan_cmd_802_11_ad_hoc_join(),
+			in wlan_cmd.c.
+		3. Removed HostCmd_OPTION_WAITFORRSP flag for DEEP_SLEEP command
+		4. Clear Host_Pwr_Up bit when DeepSleepAwake/HostAwake event
+			is received on SD interface.
+		5. In wlan_send_deauth(): if Ad-hoc, send AD_HOC_STOP command.
+
+12/04/04:  version 19
+		1. wlan_cmd.c QueueCmd(): for Exit_PS command in PS mode:
+			use list_add() instead of list_add_tail()
+		2. HOST_WAKEUP: DownloadCommandToStation(): special handing
+			of HOST_WAKE_UP_CFG and HOST_AWAKE_CONFIRM commands
+		3. HOST_WAKEUP: wakeup firmware in PS mode, if no
+			pending interrupt but Tx data or command is ready
+		4. Removed unused variable tx_done_received
+
+12/03/04:  version 19
+		1. Added new flag MULTI_BANDS in Makefile.
+			Added 3 flags:
+			config_bands		- user's requested bands.
+			fw_bands		- bands supported by FW.
+			bss_band		- band of a particular node.
+			curr_band		- operating band
+
+			band configuration	- user can set a band, which the
+							FW supports.
+			scan 	 		- Remembering the bss_band of 
+						the node if connected and scan 
+						all config_bands and set the 
+						band to remembered bss_band.
+			association/adhoc	- The user has to know the band
+						of the node he wants to connect
+						either by scanning (or by other
+						means) and set to the band if 
+						not in, and then connect.
+			rate setting		- TODO 
+		2. Commented out the code that changes DataRate in 
+			wlan_set_mode(), wlan_set_essid() & JoinAdhocNetwork()
+		3. Changed HOST_WAKEUP related commands' names
+
+12/02/04:  version 18
+		1. Added get_version() function: changed versioning format to
+		   "sd8385-3.0.17-19-(5.11.18)" --- no f/w patch number, or
+		   "spi8381-3.1.5.p2-21-(9.13.18)" --- f/w patch number is 2
+		2. Removed 50ms delay in association response
+
+12/01/04:  version 18
+		1. Set max_qual.level and max_qual.noise to 0 in wlan_get_range()
+		2. Fixed bug #2796: Buffalo AP set to g-only won't associate
+		   NEW_ASSOCIATION not to use infraCapInfo, instead,
+		   We use BssDescList[i].Cap (from SCAN response) as pAsso->CapInfo
+		   This is to fix association problem with g-only Buffalo
+		   (reserved bit: G mode short Slot Time)
+		3. Adapter->infraCapInfo defined for OLD association only
+		4. wlan_service_pending_ints(): RX(rx data, cmd response, mac event)
+		   handling: update HisRegCpy before processing
+
+11/30/04:  version 18
+		1. Added a new field to display the type of AP (b/g/a) 
+			in the scan results.
+		2. Added new flags (CARD_A/CARD_B/CARD_G) in the Makefile 
+			to configure the type of card.
+		3. BAND_CONFIG command is sent before the ASSOCIATE, 
+			AD_HOC_START and AD_HOC_JOIN commands.
+			Note: still working on, sending the BAND_CONFIG 
+			      Command before SCAN Command.
+		4. Added private command to set/get the bands, which is used by 
+			the driver during the scan.
+			
+			usage:
+				$ iwpriv ethX getscanband
+				   - this will get the current band status
+				     that is used by the Scan Command.
+				     				     
+				$ iwpriv ethX setscanband abg
+				   - to scan the bands 'a','b' and 'g',
+				     when user does a Scan.
+
+				$ iwpriv ethX setscanband bg
+				   - to scan the bands 'b' and 'g',
+				     when user does a Scan.
+
+				 similarly other combinations can be done.
+		5. Added variable bHostWakeupDevRequired and its handling
+				     
+11/29/04:  version 18
+		1. Debug levels are added in the code to control the number of
+			debug statements logged/displayed.
+			In 'wlan/' directory all the 
+				1. PRINTK are changed to PRINTK1, 
+				2. printk are changed to PRINTK and 
+				3. ENTER/LEAVE use PRINTK2.
+			The debug level is configured in Makefile,
+			LEVEL:
+			  n:	No Debug
+			  0:	Only PRINTK
+			  1:	PRINTK and PRINTK1
+			  2:	PRINTK, PRINTK1, PRINTK2, ENTER and LEAVE.
+		2. wlan_cmdresp.c: InterpretBSSDescriptionWithIE():
+			#define IE_ID_LEN_FIELDS_BYTES 2
+			
+
+11/24/04:  version 18
+		1. New list implementation is added in the driver to handle 
+			the CmdFreeQ and CmdPendingQ instead of the Q_Keeper.
+		2. Initialized the CmdFreeQ and CmdPendingQ before 
+			starting the service_pending_ints thread in 
+			wlan_add_card(), in wlan_main.c during initialization.
+			This is because, when the service_pending_ints thread 
+			is started, it checks the CmdPendingQ before the
+			schedule() call in the thread. So CmdPendingQ has to 
+			be initialized before this thread is started.
+		3. Changed the type of CapInfo in old association command and 
+			association response structure from USHORT to 
+			IEEEtypes_CapInfo_t.
+		4. Added the BAND_CONFIG command to support 802.11a band,
+			and added WLAN_802_11a flag in the Makefile to support 
+			this (not yet complete).
+		5. Added the private ioctl to allow the user to set or get 
+			the band.
+		6. BAND_CONFIG cmd is sent from set_band private ioctl to set
+			the band to 'a' or 'b/g' in the firmware.
+
+11/23/04:  version 18
+		1. Moved the TXRX_DEBUG in sbi.h. Added 2 macros 
+		   TXRX_DEBUG_GET_ALL, TXRX_DEBUG_GET_TIME.
+		2. Updated the files wlan_tx.c, wlan_fw.c, wlan_cmdresp.c,
+		   for the above macro change.
+		3. Removed "static" in file wlan_main.c for TXRX_DEBUG 
+			variables.
+		4. Added HOST_WAKEUP implementation 
+		5. HostWakeUp private command usage: 
+			iwpriv eth1 hostwakeup "7 ff a"
+
+11/22/04:  version 18
+		1. Added macro for MRVDRV_DEFAULT_MULTIPLE_DTIM = 1 in dsdefs.h
+		2. Changed SetTimer() to ModTimer()
+		3. Changed the type of CapInfo in NEW_ASSOCIATE command 
+			structure to IEEEtypes_CapInfo_t
+
+11/20/04:  version 18
+		1. Changed the main Makefile for SPIn8385 --> SPIN8385, 
+		   SD_SPI8381 / SD_SPI8385 --> SPI8381 / SPI8385, added
+		   GSPI8385.
+		2. Updated files macro_defs.h, wlan_fw.c, wlan_version.h,
+		   wlab_wext.c for the above macro changes.
+
+11/19/04:  version 17
+		1. Fixed dead loop when CurrentTxSkb is set and waiting for 
+			TxDone
+		2. IsQEmpty used to check CmdPendingQ in 
+			wlan_service_pending_ints()
+		3. Bug fixed: in PS, any host cmd will exit PS mode but not 
+			re-entry
+
+11/18/04:  version 17
+		1. Bug fixed: 2026: auto rate display (DW_BIT_31)
+		2. Bug fixed: 2680, 2733: sdspi8381/omap hangs
+
+11/17/04:  version 17
+		1. Special handling of IntCounter for PS on SDIO/Bulverde
+
+11/16/04:  version 17
+		1. PrepareAndSendCommand call is added in 
+			wlan_process_rx_command() in wlan_cmdresp.c to do the 
+			progressive scan. This is to handle progressive scan 
+			command in scan-command response instead of in 
+			ExecuteNextCommand.
+			Also commented the PrepareAndSendCommand call, to do
+			progressive scan in ExecuteNextCommand() in wlan_cmd.c
+			Reset the variable 'Adapter->ScanChannelsLeft' in 
+			wlan_process_rx_command() in wlan_cmdresp.c, when the 
+			scan command is not successfull.
+		2. Removed the DelayedExec List implementation. Also removed 
+			DelayedExec Thread code and PowerSave Thread code,
+			since it was commented and not used in the driver.
+		3. Added code to update the Preamble information in the 
+			Association command. Modified wlan_cmd_802_11_associate
+			function to update the change.
+			Added new variable infraCapInfo in Adapter structure.
+		4. Added new implementation for SCAN+ASSOC.
+			Added new flag PER_CMD_WAIT_Q in Makefile.
+			Added new flag HostCmd_OPTION_WAITFORRSP for intoption
+			in PrepareAndSendCommand() in wlan_wext.c to block
+			the userspace untill we get the response.
+			
+11/16/04:  version 17
+		1. Added new flag bIsScanInProgress. This is done as fix for 
+			SCAN+ASSOC.
+		2. ExecuteNextCommand: Check if ScanChannelsLeft then 
+			PrepareAndSendCommand
+		3. Also check !Adapter->CmdCmd before DownloadCommandToStation
+
+11/16/04:  version 16
+		1. Handle Progressive SCAN in ExecuteNextCommand
+
+11/11/04:  version 16
+		1. Moved ListenInterval out of PS_REQUIRED in Adapter struct
+		2. In wlan_cmd.c, added TX_INTERRUPT_SAVE_AREA for THREADX
+		3. Do not SleepConfirm, if IntCounter != 0
+		4. After SleepConfirm, free CurrentTxSkb if any
+		5. Check !dnld_sent and CurrentTxSkb (instead of HisRegCpy) 
+			for wlan_process_tx
+		6. Check packet size of Tx data received from kernel, report 
+			error and free skb
+
+11/10/04:  version 16
+		1. CmdNode removed from Adapter struct
+		2. IntCounterSaved added to Adapter struct to save any int(s) 
+			before DS CMD
+		3. In wlan_cmd.c: clear TxDnLdRdy bit in HisRegCpy right after 
+			host_to_card cmd download
+		4. In wlan_cmd.c: set TxDnLdRdy bit in HisRegCpy and clear 
+			dnld_sent for DS cmd 0x003e and IEEE Enter_PS, we 
+			won't expect TxDnLdRdy interrupt for these commands.
+		5. After DS cmd 0x003e is sent: backup IntCounter and 
+			free/drop CurrentTxSkb if any
+		6. In wlan_wext.c: before sbi_deep_sleep_wakeup() restore 
+			IntCounter
+		7. In wlan_wext.c: after sbi_deep_sleep_wakeup() wakeup 
+			intThread if IntCounterSaved > 0
+
+11/09/04:  version 16
+		1. Removed the check for CurrentTxSkb in wlan_service_pending_ints(),
+		in wlan_fw.c. When we get the txdone event or when we get skb
+			from the OS we increment the IntCounter. So checking for 
+			CurrentTxSkb is not required. This also prevents from freezing 
+			of the system when, while fast ping + removal of the card.
+		2. Reset the flag 'priv->wlan_dev.dnld_sent' before calling wlan_process_tx()
+			in wlan_service_pending_ints(), in wlan_fw.c.
+			This is done because we have to reset this flag when we get the 
+			txdone event.
+		3. Added function call wireless_send_event() in the function wlan_remove_card() 
+			to notify the supplicant by sending the event on removal 
+			of card. This is the fix for WPA reassociation on unplug/plug
+			of the CF card.
+		4. Modified wlan_cmd_802_11_scan() and wlan_init_adapter() function to
+			use ScanMode flag to support iwpriv ethX scanmode priate ioctl
+			command.
+		5. Changes are made for WPA-AES in fwtypes.h, hostcmd.h and in function
+			Changed wlan_set_encode_wpa() in wlan_wext.c file.
+		6. Updated distclean target in the Makefile to remove .config file in 
+			'Src' directory.
+		7. In DownloadCommandToStation, if dnld_sent is set call wlan_sched_timeout(100)
+			and wait for the TxDone then retry.
+		8. Added the check for 'Adapter->SurpriseRemoved' flag along with 
+			kthread->Terminate to break out of loop, when card is unplugged
+			in wlan_service_pending_ints(), in wlan_fw.c.
+			This is the fix for freezing of the system, while fast ping + un-plug 
+			the card.
+		9. Retained the check for CurrentTxSkb in wlan_service_pending_ints(),
+			in wlan_fw.c.
+		10. Removed the resetting of the flag 'dnld_sent' in wlan_serveice_pending_ints() 
+			before calling wlan_process_tx() in wlan_fw.c.
+		11. Removed the implementation of CMD_802_11_BEACON_CW and 
+			CMD_802_11_GENERATE_ATIM from common module.
+		12. Merged the THREADX code. 
+			Changes are also made in the adapter structure.
+		13. Resolved bug# 2720.
+			Modified wlan_set_freq(), to send the command to set the wep key
+			in the f/w.
+		14. Resolved bug# 2722.
+			Modified wlan_set_mode() to send command to remove wep key and
+			modified wlan_set_essid() to check for authentication mode
+			before sending the authentication mode.
+		15. CmdNode added in Adapter struct to send CMD in intThread
+		16. In wlan_cmd.c: point current command to CmdNode and wake up intThread to download
+		17. In PrepareAndSendCommand(): check for CurCmd (CMD sent waiting for resp) and
+		    CmdNode (CMD pending for Tx). wlan_sched_timeout for 100ms and retry if busy
+		18. DELAYED_EXEC macro disabled (check if it's OK for other platforms !!!)
+		19. In wlan_tx.c: for Tx data, removed IntCounter++ flag
+		20. In wlan_fw.c: Added Adapter->CmdNode check and CMD Tx handling in intThread
+		21. In wlan_fw.c: call sbi_get_int_status() ONLY if Adapter->IntCounter is set for
+		    interrupts(Rx data, MAC event, CMD Resp, TxDone)
+		22. Implemented the private command to set and get the 
+			listen interval.
+		23. Implemented the private command to set and get the 
+			Multiple DTIM value.
+		24. Tested WPA-AES, changed related structures in hostcmd.h and removed obselete
+			code from wlan_cmd_802_11_associate() in wlan_cmd.h
+
+
+11/03/04:  version 15
+		1. Added new private command setwpaie.
+		2. Changed if (pkey->keylength <= 16) to (pkey->keylength < 16) in
+			wlan_set_encode_wpa(). This is done to support WPA_AES.
+		3. Added a WPA_AES flag in Makefile.
+		4. New private ioctl region code frame work is added (not yet complete).
+		5. Added new private ioctl radioon and radiooff.
+			usage:
+				# iwpriv eth1 radioon 
+				# iwpriv eth1 radiooff
+			This is done to support threadx code.
+		6. Implemented the set and get region code private command.
+			Removed the old framework since it is not required.
+			And also removed related dummy datastructures that
+			was used in old framework in mrvdrv_dev.h file.
+		7. Removed the compilation errors when CONFIG_WPA flag, 
+			CONFIG_ADHOCAES flag and CONFIG_WPA_AES flag were disabled 
+			in the MakeFile. For this, changes are also made in the MakeFile.
+		8. Added code '#if !defined(linux) && !defined(THREADX)' in host.h
+				for THREADX code compilation.
+		9. Added THREADX code.
+		8. New function wlan_set_region() is added to set the region code
+			in wlan_wext.c. This is required for THREADX.
+
+11/02/04:  version 14
+		1. Added definition for SPIn8385 which is a G card along with SD8385 in
+		   wlan_wext.c, wlan_cmd.c, and wlan_fw.c.
+		2. Added g-rates #if defines for all W8385 cards (SPIn8385 bug fixed: #2690, #2691)
+		3. Changed "cf83xx-3.x.x" version display to "COMM-CF83xx-3.x.x"
+
+11/01/04:  version 14
+		1. Added CAL_DATA flag for OMAP in Makefile
+		2. In wlan_process_tx() in wlan_tx.c: check dnld_sent before sending data packet to card
+		3. In DownloadCommandToStation() in wlan_cmd.c: check dnld_sent before sending cmd to card
+		4. In PrepareAndSendCommand() in wlan_cmd.c: if no more free CmdCtrlNote, ExecuteNextCommand()
+		5. In wlan_cmd.c: not to confirm sleep if dnld_sent is set
+		6. Different NF calculations are used for 8385-A0/B0.
+		7. Implemented the new command CAL_DATA.
+			Added a flag CAL_DATA in Makefile and also in wlan/Makefile.
+			usage:
+				$./wlanconfig eth1 caldata <file-name>
+				
+		Note:   Added a configuration file cal_data.conf in wlan directory, 
+			to support the above command.
+			The values present in the configuration file are hexa-decimal values.
+		8. ported pre-Tbtt and WPA_AES, not yet tested.
+		
+10/27/04:  version 14
+		1. commented out #ifdef SD8385 for WLANCMD52RDWR ioctl command in 
+			wlan_wext.c, we need it for all SD83xx.
+		2. corrected a type in wlan.h.
+		3. DEEP_SLEEP_AWAKE mac event is used for both DEEP_SLEEP_CMD and 
+			io driven DEEP_SLEEP in hostcmd.h and wlan_cmdresp.c
+		4. IsDeepSleep is handled for DEEP_SLEEP instead of DEEP_SLEEP_CMD
+		5. Resolved #bug 1080 and 2026,
+			If set rate is auto, data rate is set to 1Mbps in function 
+			wlan_ret_802_11_data_rate() in wlan_cmdresp.c.
+			adapter->DataRate is initialized to 0 in wlan_init_adapter()
+			in wlan_fw.c
+		6. Resolved #bug 1092,
+			Variables fastListenDelay and fastListenInterval are initialized
+			in wlan_init_adapter() in wlan_fw.c.
+			Changed the calculation of fastListenDelay and fastListenInterval
+			in function wlan_get_power() in wlan_wext.c for the correct display
+			of power managemant values in wireless statistics, when the card 
+			is put to power save mode.
+		7. Resolved #bug 2535,
+			Authentication mode is set to open in IsWPAEnabled() in wlan_fw.h
+		8. In wlan_cmd.c, mask TxDnLdRdy interrupt for enter DEEP_SLEEP_CMD
+		9. In wlan_cmdresp.c, clear CONFIGURATION_REG after DEEP_SLEEP_AWAKE event 
+			is received
+		10. Added wlan_read_write_rfreg() in wlan_setup_station_hw(), in wlan_fw.c
+			Added a flag PCB_REV4 in Makefile.
+		11. Added private ioctl scanmode:
+			usage:
+			iwpriv eth1 scanmode bss -  for  HostCmd_BSS_TYPE_BSS
+			iwpriv eth1 scanmode ibss - for HostCmd_BSS_TYPE_IBSS
+			iwpriv eth1 scanmode any -  for HostCmd_BSS_TYPE_ANY
+			iwpriv eth1 scanmode get -  to get the current configuration
+		12. Added private ioctl setadhockey and getadhockey.
+			Added a flag ADHOCAES in Makefile.
+		13. Added new file fwtypes.h to map the definitions to new firmware
+			file host.h.
+			Added a flag USE_FW_HOST in Makefile.
+		14. Resolved #bug 1106,
+			If the rate is not auto, only then we set the rate to max 
+			supported rate (fixed rate). Change is made in wlan_set_essid() 
+			and wlan_set_wap() in file wlan_wext.c.
+		15. Resolved #bug 1140,
+			In wlan_get_range() in wlan_wext.c, we were displaying incorrect
+			data rates in ad-hoc mode. Now we are displaying the rates
+			appropriately.
+		16. Added structure HostCmd_DS_802_11_CAL_DATA in hostcmd.h
+		17. Restructured the IOCTL numbers to support more private 
+			ioctls.
+		18. Changed Implementation of authalgs private command from 
+			subcommand back to main command.
+		19. Restructured the IOCTL numbers to support more private ioctls.
+		20. Cleaned up unused variables in wlan_adapter structure in mrvdrv_dev.h
+		21. Indented wlan_config.c file and also changes are made in the file
+			for CAL_DAT command implementation.
+		22. Added new command CAL_DATA.
+			Added a flag CAL_DATA in Makefile and also in wlan/Makefile.
+			Added variables 'caldata' and 'wait_cal_dataResponse' in
+			adapter structure.
+			Added new function wlan_cmd_802_11_cal_data() in wlan_wext.c.
+			Added new ioctl for CAL_DATA command.
+			Added new structure 'wlan_ioctl_cal_data' in wlan_wext.h.
+
+			USAGE: ./wlanconfig eth1 caldata < options >
+			-----
+				The options are:
+					-a	action: i.e, to set | get <val>
+					-o	calibration option <val>				
+					-e	type of PA <val>
+					-A	Antenna selection <val>
+					-i	calibiration for channel <val>
+					-c	calibiration for RF register <val>
+					-d	Regularitaty domain <val>
+					-E	ECO present or not <val>
+					-l	VGA capacitor calibiration <val>
+					-m	MAC Address <a:b:c:d:e:f>
+
+				Here the MAC Address is also required since we 
+				have to send MAC Address after we send the set
+				cal_data command.
+		
+			NOTE: The PrepareAndSendCommand in do_ioctl for sending 
+			----    this command is commented for now.
+			
+10/21/04:  version 13
+		1. merged THREADX code
+		2. fixed Watchdog timeout for each ping request (in wlan_tx.c)
+
+10/20/04:  version 12
+		1. fixed: a line break caused compiling error when 
+			NEW_ASSOCIATE enabled
+		2. BIG_ENDIAN and THREADX defined code added
+		3. 4 *.h files for THREADX added: 
+			ThreadX_macros.h wireless.h 
+			conversion_routines.h wlan_net_device.h
+		4. Removed elements in struct _HostCmd_DS_802_11_ASSOCIATE in
+			hostcmd.h. This is done for NEW_ASSOCIATION.
+		5. NF calculation added for SPIn8385.
+		6. wlan_process_tx is called after handling TxDnLdRdy.
+		7. netif_wake_queue is commented before calling wlan_process_tx
+			in service_pending_int thread
+		8. netif_wake_queue is uncommented in wlan_process_tx().
+		9. Added "dev->trans_start = jiffies" in wlan_hard_start_xmit.
+		10. Commented trans_start and netif_wake_queue in MACREG_INT_CODE_DUMMY_PACKET
+			case of wlan_process_event function.
+		12. Changed the order of handling servicing the interrupts in
+			wlan_pending_ints.
+		13. sbi_reenable_host_interrupt is called before calling 
+			wlan_process_rx_command function, in 
+			wlan_service_pending_ints
+		14. Modified Makefile to support CF8305 and changes compilation
+			flag naming convention for SPIn.
+		15. In wlan_service_pending_ints(): set tx_done_received to 1 if HIS_TxDnLdRdy is set
+		    and call wlan_process_tx if tx_done_received is set AND CurrentTxSkb is filled.
+		    This will prevent the TX from dead lock if TxDone received earier than CurrentTxSkb 
+		    is filled.
+		16. 'HisRegCpy' variable is used to check the type of the interrupt instead of 
+			'ireg' variable in wlan_service_pending_ints().
+		17. Added code 'priv->adapter->HisRegCpy |= ireg' after reading the interrupt 
+			status by calling sbi_get_int_status() in wlan_service_pending_ints().
+		18. Added code 'Adapter->HisRegCpy &= ~HIS_RxUpLdRdy' before calling 
+			ProcessRxedPacket() in wlan_service_pending_ints().
+		19. Uncommented the call to wlan_process_tx() after checking TxDnLdRdy bit in 
+			HisRegCpy variable in wlan_service_pending_ints().
+		20. Commented the check for 'tx_done_received' and 'Adapter->CurrentTxSkb' and 
+			also the call to wlan_process_tx(). This is removed because we accumulate 
+			the TxDnLdRdy event in the HisRegCpy variable after reading the interrupt 
+			status and in wlan_process_tx() we also make the check for 
+			Adapter->CurrentTxSkb. So, when we get the tx_done event, we accumulate it
+			in HisRegCpy. Only when the CurrentTxSkb is filled we send down the packet.
+		21. Added the code 'priv->adapter->HisRegCpy &= ~HIS_TxDnLdRdy' in wlan_process_tx(),
+			after we send down the skb successfully and before making the call
+			netif_wake_queue().
+		22. Added new wlan_set_mac_address() in wlan_main.c,
+			Changed wlan_main.c, wlan_cmd.c, wlan_cmdresp.c, hostcmd.h.
+			usage:
+			# ifconfig eth1 hw ether <MAC Address>
+			# ifconfig eth1 up
+			# ifconfig
+		23. Changed 'ULONG i' to 'int i' in wlan_cmd_802_11_associate().
+			This is done for new association reassociation.
+	
+
+10/15/04:  version 11
+		1. Changed function names as per linux coding style
+		2. Removed CMDRESP_SCHED macro from Makefile and wlan module.
+		3. Moved proc fs related from wlan_main.c to wlan_proc.c
+			and Modified the Makefile respectively.
+		4. Added IFF_MULTICAST for dev->flags in wlan_add_card(),
+			in wlan_main.c 
+		5. Removed initialization of sleep_q in wlan_add_card()
+		6. added DEEP_SLEEP_CMD
+		7. Moved MrvDrvSend from wlan_main.c to wlan_tx.c
+		8. Added parameters to display in proc interface, in wlan_proc.c
+		9. Resolved bug #1068, In wlan_ret_802_11_scan() in wlan_cmdresp.c
+			Added check, if ad-hoc mode then only do AppendCurrentSSID().
+		10. Resolved bug #968, In wlan_set_wap() of wlan_wext.c,
+			setting the appropriate rate.
+		11. wlan_wext.c: Added a private command "authalgs".
+		12. mrvdrv_dev.h: Added a variable AuthenticationType in Adapter
+		   structure.
+		13. wlan_wext.c: In set_essid removed some redundant code.
+			(Look at the comments for details).
+		14. wlan_fw.h: Added a check for LEAP in IsNetworkCompatible. 
+		15 added WLANCMD53RDWR ioctl for testing SDIO CMD53
+		16. Removed the psThread from wlan_cmdresp.c, wlan_main.c, wlan_fw.c
+			wlan.h and mrvdrv_dev.h
+		17. Commented TX_THREAD in wlan_cmd.c, wlan_fw.c, wlan_main.c,
+			wlan_tx.c, wlan.h, wlan_fw.h
+		18 MRVDRV_DEFAULT_LISTEN_INTERVAL changed from 3 to 10
+		19. Changed wrqu.ap_addr.sa_data in StartReassociation() of
+			wlan_cmdresp.c. 
+			This is done to support reassociation in TLS.
+		20. Changed the Adapter->Reassociate values in case 
+			WLANREASSOCIATIONUSER & case WLANREASSOCIATIONAUTO,
+			in wlan_wext.c. 
+			And made Adapter->Reassociate = TRUE in wlan_init_adapter(),
+			in wlan_fw.c. This is to map the reasso-on and resso-off
+			private ioctls oppositly and to enable reassociation
+			by default.
+		21. Added three private ioctls atimgen, set/getbcncw, setpretbtt.
+			but these are not supported in 3.0.14 firmware.
+		22. dnld_sent is added to indicate CMD and DAT is sent and 
+			waiting for tx_done
+		23. Added new Implementation for wlan_set_txpow() in wlan_wext.c,
+			wlan_cmd.c and wlan_cmdresp.c
+			In Makefile added TX_POWER_CTRL flag.
+		24. Removed DelayedExec-Thread. Modified the, wlan_add_card() 
+			and wlan_remove_card() in wlan_main.c, DelayedExecAdd(), 
+			TimerHandler() and removed wlan_delayed_exec() in wlan_fw.c
+		25. Resolved bug #1080, modified the wlan_set_wap(),
+			wlan_set_essid() in wlan_wext.c and
+			wlan_ret_802_11_data_rate() in wlan_cmdresp.c
+		26. For resolving bug #970: Fails to associate with
+			Orinoco AP-600 with WPA. 
+			Modified the wlan_get_scan(), here the buf size is increased 
+			form 64 to 80 and removed the hard coded value 24 with 
+			wpa_ie_len in wlan_wext.c.
+			Modified InterpretBSSDescriptionWithIE(),
+			here the hard coded value 24 is removed with 
+			the ucElemLen for WPA in wlan_cmdresp.c
+		27. Commented out SetMacPacketFilter in scan response
+		28. Added WLANCMD52RDWR ioctl for testing SDIO CMD52
+		29. Changed the prototype of PrepareAndSendCommand  in wlan.h &
+			wlan_cmd.c to support txpow functionality.
+		30. Completely removed DELAYED_EXEC macro from wlan module.
+		31. Merged Common CF changes.
+		32. Added new macro HIM_ENABLE and HIM_DISABLE into 
+			wlan_setup_station_hw to keep the code generic the value is
+			defined in sbi.h. Added Macro directives to check for CF8385
+			and SD8385.
+		33. Removed spinlock for TxSpinLock in wlan_hard_start_xmit().
+		34. Merged spin and sdspi in to the common driver.
+		35. Modified Makefile to support for sdspi and spin. Added new target
+			distclean.
+		36. Added a new macro AUTH_ALG_TLSWEP in enum _WLAN_802_11_AUTH_ALG 
+			in mrvdrv_dev.h, Adapter->AuthenticationType != AUTH_ALG_TLSWEP in 
+			IsNetworkCompatible() in wlan_fw.h and StartReassociation() in 
+			wlan_cmdresp.c.
+			In wlan_cmdresp.c, Changed ucElemLen to 24, in case WPA_IE,
+			in InterpretBSSDescriptionWithIE() in wlan_cmdresp.c
+			This is done to support WPA+TLS in driver.
+		
+09/24/04:  version 10
+		1. Resolved bug #1030, Modified wlan_set_wap() in wlan_wext.c
+			And also modified SSIDcmp(), FindSSIDInList(),
+			FindBSSIDInList(), FindBestSSIDInList() and added
+			IsNetworkCompatible() in wlan_fw.h.
+			Moved IsWPAEnabled() from wlan_wext.c to wlan_fw.h.
+		2. Enabling and Disabling of RSN by sending ENABLE_RSN command to 
+			firmware is done when wpa_supplicant does ioctl for "wpa on"
+			and "wpa off" respectively. so removed the code where we send this command 
+			to firmware i.e., wlan_cmd_802_11_associate() in wlan_cmd.c and
+			ResetDisconnectStatus() in wlan_cmdresp.c
+		3. Changed wlan_encode_nonwpa() in wlan_wext.c 
+			If user changes to ad-hoc mode and says $iwconfig eth1 key [1]; then 
+			we are sending a error message operation not permitted as the 
+			key is not specified. Previously, with out user giving the key
+			we were enabling the transmit key.
+		4. Resolved bug # 968, Removed wlan_get_rate() call in wlan_set_essid();
+			This is for when the user associates to a new AP, we are setting the data rate
+			to  max. supported data rate.
+		5. Resolved bug #996, sending de-authentication command, if the media status is 
+			connected in wlan_set_essid() and wlan_set_wap() in wlan_wext.c
+		6. Indented the wlan module code.
+		7. Resolved bug #1049, Modified wlan_remove_card() in wlan_main.c,
+			If the card is put to deep sleep and tried to unload the module,
+			we are making the card full power and then allowing to unload the module.
+		8. Added new private ioctls to support Radio Frequency Interface Tx mode and Rx mode.
+			in wlan_cmd.c, wlan_cmdresp.c, wlan_wext.c, wlan_wext.h & hostcmd.h
+		9. Bluetooth Coexistence Arbitration (BCA) configuration API added.
+			usage:
+			# iwpriv eth1 bca "get"		
+				--- read current bca configuration
+			# iwpriv eth1 bca "set 0 x x xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx"
+				--- disable bca (default)
+			# iwpriv eth1 bca "set 3 1 3 f0001000 0000aaaa f0001000 0000aaaa"	
+				--- set CSR bluetool priority highest
+			# iwpriv eth1 bca "set 7 1 3 f0001000 0000aaaa f0001000 0000aaaa"
+				--- set wlan priority highest
+		10. In Makefile, Added a variable CONFIG_SD_SPI8381_B1 for enabling support 
+			for SD_SPI8381_B1 card.
+	     	11. Changed Adapter->IntCounter in wlan_fw.c to make multi cast command
+	        	work properly.
+		12. wlan_wext.c wlan_get_power function return 0,
+			if we are not connected to any AP.
+		13. In Makefile, Added the OMAP_GPIO_WORKAROUND as GPIO1 line 
+		  	is not working on one of the OMAPs.
+
+09/13/04:  version 9
+		1. Modified the WPA buffer size from 50 to 64, the buffer size increase is because of the 
+			"wpa_ie=" string that is added at the beginning of the custom event.
+			So we would need at least 14 more bytes.
+		2. Added Reassociation on and off; when the user sets on, then Reassociation is disabled
+			and vice-versa.
+		3. Added code for new deep sleep, the code is not tested.
+		4. Added new sub-commands for getSNRbeacon, getSNRdata, getNFbeacon, getNFdata.
+			these are for giving the raw SNR and NF values to the user.
+			Needed to define CAL_SNR appropriately.
+		5. Added passive scan.	
+		6. Resolved #bug 983.
+		7. Resolved bug #958, #968.
+			In wlan_set_essid();
+			we are getting current data rate by calling wlan_get_rate().
+			And comparing the current data rate with AP supported data rates.
+			If current date rate is greater than max data rate the AP supports
+			then we are calling wlan_set_rate() with APs max. rate.
+			In wlan_set_rate();
+			If user requests a data rate value other than Supported rates(basic & extended),
+			then we are returning an error EINVAL.
+		 	when the mode is changed to ad-hoc the data rate is set to 11Mbps.
+		        The user is not allowed to set data rate more than 11Mbps in ad-hoc mode or when
+			associated to B access point.
+		8. Cleaned up WITH_SUB_CMDS in wlan_wext.h and wlan_wext.c
+		9. LEAP_ENABLED macro is added to support LEAP + WPA. 
+			Note: LEAP is working, but it is not stable.
+			LEAP_ENABLED macro should be enabled in Makefile.
+	        10. wpaon and wpaoff in wlan_private_handler[] have been moved in the array, as
+		   	the ioctl numbers were not mapped properly.
+		11. Modified the implementation SNR, NF and RSSI.
+			in wlan_wext.c,
+				merged wlan_get_snr_beacon() and wlan_get_snr_data() to 
+					wlan_get_snr().
+				merged wlan_get_nf_beacon() and wlan_get_nf_data() to	
+					wlan_get_nf().
+				merged wlan_get_rssi_beacon() and wlan_get_rssi_data() to	
+					wlan_get_rssi().
+				And Modified the respective sub commands.
+		12. change to use 3 ioctl for SNR/NF/RSSI: getSNR(0-3),getNF(0-3),getRSSI(0-3)
+	 		  0: beacon raw, 1: beacon avg, 2: data raw, 3: data avg
+		    CAL_NF and CAL_RSSI marcos: (char)->(int) conversion to avoid positive dBM number issue
+		    NFbeacon and NFdata: use CAL_NF conversion before reporting to user
+		13. wlan_get_range(): max_qual.level, max_qual.noise, max_qual.sensitivity value changed
+		14. wlan_set_wap(); Added Adapter->ulNumOfBSSIDs = 0; for bug #996. 
+		15. Resolved bug #996. 
+		16. MULTICAST_ENABLE macro added
+		17. AD-HOC PS added
+		18. Added #ifdef LEAP_ENABLED in function wlan_set_encode() in file wlan_wext.c
+		19. Uncommented 	range->freq[j].m = frequency_list[i + 1] * 100000; in wlan_get_range();
+			this is done to display the frequencies mapped to channels properly in iwlist.
+ 
+08/30/04:  version 8
+	      1. wlan_end_packet() error check to avoid kernel tx watchdog timeout
+	      2. tx/rx share one thread (TX_THREAD macro added in case later we need separate tx thread)
+	      3. MAC events MIC_ERR_UNICAST & MIC_ERR_MULTICAST handling added (need redefine in f/w and driver to work)
+	      4. code cleanup for MS8380
+	      5. implementation of subcommands for
+                WLANSETRXANT, WLANSETTXANT, WLANGETRXANT, WLANGETTXANT
+                the first 2 commands are combined as WLANSETANTENNA and
+                the next 2 commands are combined as WLANGETANTENNA.
+                Also formed the sub-commands for WLANRSSIBEACON, WLANNFBEACON
+                WLANRSSIAVG, WLANNFAVG all these are combined as
+                WLANRSSI_AND_NF command.
+                SetRxAntenna(), SetTxAntenna(), GetRxAntenna(), GetTxAntenna()
+                wlan_get_rssi_beacon(), wlan_get_nf_beacon(),
+                wlan_get_rssi_avg(), wlan_get_nf_avg() added 
+              6. Added wpaon/wpaoff support, for this modified wlan_set_essid() function
+                by commenting the  Adapter->WPAEnabled flag update.
+	      7. Added check for adhoc mode, if user tries to set the data rate above 11Mbps, 
+		driver would give an error code: Operation not supported.
+	      8. Resolved bug #968, when we set the essid after we associate,
+		we are setting rate to the max.supported rate if fixed-rate specified(before association) exceeds the max rate.
+              9. Resolved bug #958, we are not allowing user to set data rate 
+		more than supported rates of the AP.
+	     10.Added new deauth command for iwpriv 
+	     11. Added the fix of new association command. 
+	     12. Added check for association for WiFi negative test
+		in wlan_set_essid(i.e., both AP and STN has to be either WEP enabled
+		or WEP disabled to associate).
+	     13. Resolved Bug #291, when we associate with 3 APs with same configuration(same SSID) and
+		different encryption (WPA, WEP and none) then we associate to AP without Encryption.
+	     14. Changed the buffer size from 50 to 54 in get_scan() for WPA fix. 	
+	     15. changed RSSI to SNR
+	     16. fixed bug: in PS reassociate to wpa AP, cannot re-enter PS
+	     17. fixed bug: when associate to wpa AP, cannot associate to a shared key ap
+	     18. throughput significantly improved, in shield room tx/rx no security: > 9Mbit/second
+	     19. tx watchdog timeout (tx missing packets) issue fixed
+	     20. FTP/TTCP tx transfering session stop problem fixed 
+	     21. new association response data structure changed to match SD8385 firmware 3.0.10 (NEW_ASSOCIATION_RSP added)

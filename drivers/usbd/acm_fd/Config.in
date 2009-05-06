@@ -1,0 +1,48 @@
+#
+# CDC ACM Function Driver
+#
+# Copyright (C) 2003,2004 Belcarra
+#
+
+# Copyright 2007 - Motorola
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 2 as
+# published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+#  Author     Date                Comment
+# ======== ===========   =====================================================
+# Motorola 2007-Jan-09   Add speed definition for USBD ACM
+
+mainmenu_option next_comment
+comment "CDC ACM Function"
+
+dep_tristate '  CDC ACM Function' CONFIG_USBD_ACM $CONFIG_USBD
+if [ "$CONFIG_USBD_ACM" = "y" -o "$CONFIG_USBD_ACM" = "m" ]; then
+   hex     'VendorID (hex value)' CONFIG_USBD_ACM_VENDORID "12b9"
+   hex     'ProductID (hex value)' CONFIG_USBD_ACM_PRODUCTID "f002"
+   hex     'bcdDevice (binary-coded decimal)' CONFIG_USBD_ACM_BCDDEVICE "0100"
+
+   int     'connection speed' CONFIG_USBD_ACM_SPEED "115200"
+
+   string 'iManufacturer (string)' CONFIG_USBD_ACM_MANUFACTURER "Belcarra"
+   string 'iProduct (string)' CONFIG_USBD_ACM_PRODUCT_NAME "Belcarra ACM Device"
+
+   string 'iConfiguration (string)' CONFIG_USBD_ACM_DESC "Acm Cfg"
+   string 'Comm Interface iInterface (string)' CONFIG_USBD_ACM_COMM_INTF "Comm Intf"
+   string 'Data Interface iInterface (string)' CONFIG_USBD_ACM_DATA_INTF "Data Intf"
+
+   bool    '  ACM Tracing' CONFIG_USBD_ACM_TRACE
+   comment ''
+fi
+
+endmenu

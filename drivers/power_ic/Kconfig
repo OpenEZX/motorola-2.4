@@ -1,0 +1,6 @@
+# Copyright 2005 - Motorola
+#
+# Character device configuration
+#
+
+source drivers/power_ic/core/Kconfig

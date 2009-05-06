@@ -1,0 +1,113 @@
+03/01/05:  version 11
+	1. Added flag CONFIG_ARM_2_4_21 in Makefile and in sdio.c to support
+		the driver for kernel 2.4.21-rmk.
+
+02/22/05:  version 10
+	1. Added "hw_tx_done", "block_size_512", "async_int_mode" to struct
+		_mmc_card_rec
+	2. Removed setting ASYNC_INT_MODE for 1-bit mode as it will be done in
+		IF layer
+
+01/17/05:  version 9
+	1. Added code, 
+			#ifdef MMC_X 
+			#undef MMC_X
+			#endif  
+			.
+			.
+			.
+
+			#define MMC_X (my_define)
+
+		for some macros in sdio_bulverde.h, to remove the compilation
+		warnings, when the driver is compiled with MontaVista
+		Kernel-2.4.20 + WE-16 patch.
+	2. Added code,
+		#ifndef PIO
+			if (hostdata->state != PXA_MMC_FSM_BUFFER_IN_TRANSIT) 
+		#endif
+		
+		in interrupt handler irq() before the call 
+		'complete(&hostdata->completion)', to fix the problem of 
+		"Read buffer error" on TCP/Rx path when 1-bit mode is used on 
+		Bulverde.
+
+		The above code is added because, in 1-bit mode, some times the 
+		driver is getting the card interrupt just after starting the
+		DMA channel in read_buffer() and before the DMA interrupt occurs.
+
+		That is in read_buffer() before starting the DMA channel, the state 
+		is set to PXA_MMC_FSM_BUFFER_IN_TRANSIT, then start DMA channel and 
+		wait for DMA interrupt. Before the DMA interrupt is generated, a card
+		interrupt is generated and the irq() interrupt handler is called.
+		So in irq(), at the end 'complete(&hostdata->completion)' is called
+		which wakes up the read_buffer() which is waiting for the DMA 
+		interrupt. Now, when the read_buffer() is woken up, it checks 
+		whether the state is PXA_MMC_FSM_END_BUFFER, and finds that the 
+		state is not correct, so it returns error.
+
+		So, by adding the above code, 'complete(...)' will not be called
+		in irq() when the state is set to PXA_MMC_FSM_BUFFER_IN_TRANSIT.
+
+01/05/05:  version 8
+	1. Fixed issue: 1/4-bit modes settings for rev ids other than 0x10, 0x03
+
+01/03/05:  version 8
+	1. Changed command line parameter "clkrt" to "clkdiv"
+
+12/27/04:  version 8
+	1. Removed developers' names and typo
+
+12/20/04:  version 7
+	1. Added compiler flag for Intel Bulverde _MAINSTONE Register access
+
+12/15/04:  version 7
+	1. Removed the flag CONFIG_PM before suspend variable in 
+		_pxa_mmc_hostdata_rec data structure, in sdio_bulverde.h.
+	2. Changed the flag CONFIG_PM to OLD_CONFIG_PM. 
+		This is because, the handling of the power management is moved 
+		to wlan module.
+	3. Added _DRAIN_WRITE_BUFFER macro for _USE_INTERNAL_SRAM implementation
+	
+12/13/04:  version 7
+	1. Added compiler flag "_USE_INTERNAL_SRAM" for using PXA270 internal memory as DMA buffer
+
+12/07/04:  version 6
+	1. SD8385-B0 and SD8381-B2: Async interrupt mode (BUS_INTERFACE_CONTROL bit 5)
+		must be enabled (set to 1) in order for SDIO 1 bit mode and SPI mode to work
+
+11/29/04:  version 5
+	1. Debug levels are added in the code to control the number of
+		debug statements logged/displayed.
+		The debug level is configured in Makefile,
+		LEVEL:
+		  n:	No Debug
+		  0:	Only PRINTK
+		  1:	PRINTK and PRINTK1
+		  2:	PRINTK, PRINTK1, PRINTK2, ENTER and LEAVE.
+	2. Changed PRINTK2 to PRINTK3 in io/sdio/pxa270/sdio.h, due to 
+		conflict after introducing _debug levels_.
+	3. Added '#ifdef SDIO_DEBUG1' in __rw_ioreg() before PRINTK2 
+		in io/sdio/pxa270/sdio.c.
+
+09/30/04:  version 5
+	1. Kite 2 (SD8385-B0) card: 1-bit mode needs ECSI (bit 5) to be 1 in BusInterfaceControl register (0x07)
+	2. added "chiprev" to struct _mmc_card_rec 
+
+08/30/04:  version 4
+	io: 1. set 1/4-bit mode & clkrt via command line options
+	    2. MMC_I_MASK_SDIO_INT not cleared in drv_init_completion()
+	    3. check if stop_bus_clock_2 returns error to avoid kernel tx watchdog timeout
+	    4. udelay(500) removed from read_buffer() & write_buffer() due to fix #2
+	    5. #2 also fixes SDIO interface error issue
+	    6. 10MHz PS sleep/awake event missing issue fixed (need more verifications)
+	    7. functions added: sdio_enter/exit_deep_sleep, changed: suspend(), resume()
+
+07/22/04:  version 3
+	1. io: a) fixed "rmmod sdio" device busy
+	       b) added code to cold restart-- using IOABORT function 
+		  FN0, register 0x06, value to be written - 0x08
+	       c) ENABLE_4BIT_MODE defination
+
+07/20/04:  version 2
+	1 io: a) clock speed settings not consistent, fixed

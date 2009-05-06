@@ -1,0 +1,40 @@
+#
+#  Motorola USB VIDEO CLASS Device subsystem.
+#
+#  Copyright (C) 2005,2006 Motorola Inc.
+#
+#  This program is free software; you can redistribute it and/or modify it
+#  under the terms of the GNU General Public License version 2 as published
+#  by the Free Software Foundation.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+# Revision History:
+#                    Modification   
+# Author                 Date        Description of Changes
+# -----------------  ------------   --------------------------------
+# Motorola   	     01/10/2006     Initial Version
+
+
+mainmenu_option next_comment
+comment "Motorola UVC Function"
+
+dep_tristate '  Motorola UVC Function' CONFIG_USBD_UVC  $CONFIG_USBD
+if [ "$CONFIG_USBD_UVC" = "y" -o "$CONFIG_USBD_UVC" = "m" ]; then
+   hex     ' VendorID (hex value)' CONFIG_USBD_UVC_VENDORID "22b8"
+   hex     ' ProductID (hex value)' CONFIG_USBD_UVC_PRODUCTID "6006"
+   hex     ' bcdDevice (binary-coded decimal)'  CONFIG_USBD_UVC_BCDDEVICE "0001"
+   string  ' Product Name(string)' CONFIG_USBD_UVC_PRODUCT_NAME "UVC 1.0"
+   string  ' UVC Video Control INTF(string)' CONFIG_USBD_UVC_VC_INTF "Video Control Interface"
+   string  ' UVC Video Streaming INTF(string)' CONFIG_USBD_UVC_VS_INTF "Video Streaming Interface"
+   string  ' UVC Video Streaming Standard INTF(string)' CONFIG_USBD_UVC_VS_STANDARD_INTF "Video Streaming Standard Interface"
+   string  ' UVC Video Streaming Class INTF(string)' CONFIG_USBD_UVC_VS_CLASS_INTF "Video Streaming Class Interface"
+fi
+endmenu

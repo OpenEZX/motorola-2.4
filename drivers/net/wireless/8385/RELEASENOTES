@@ -1,0 +1,14 @@
+11-14-05
+
+Driver Release Version: 138.p4
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388:	   Based on feature pack(A1 chipset only works on 1 bit mode)
+3. CF/SD8381:	   Based on feature Pack
+4. SD/GSPI/CF8399: Based on feature Pack
+5. wpa_supplicant-0.3.8-MSI-8 should be used
+6. WMM_TSPEC and WMM_Para_IE are not supported
+7. Fixed bugs:
+	7068: Set unused PowerMode field in HostCmd_DS_802_11_PS_MODE structure 
+		to Zero
+

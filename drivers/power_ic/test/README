@@ -1,0 +1,28 @@
+Power IC test code
+------------------
+
+The code in this directory is used to test the power IC driver. This software
+is not included in any kernel build. Also, since some of thest test apps provide
+generic access to all power IC registers, the apps are not released in any
+filesystem image - they have to be imported manually.
+
+>ls -la
+total 46
+drwxrwxrwx    2 crae     devsrc        288 Sep 23 10:15 .
+drwxrwxrwx    5 crae     devsrc        452 Sep 22 15:56 ..
+-r--r--r--    1 crae     devsrc         57 Sep 23 10:15 Makefile
+-r--r--r--    1 crae     devsrc        995 Sep 23 10:21 README
+-r--r--r--    1 crae     devsrc      73198 Sep 23 10:15 test_pcap.c
+
+
+Makefile    - makes the various test tools to be run on a phone.
+test_pcap.c - pcap-specific application to test power IC driver.
+
+
+How to build
+------------
+
+To build, cd to this test directory and run 'make <target>'. The Makefile 
+knows about the following targets:
+
+   test_pcap: builds test_pcap.c for the PCAP-specific test app.

@@ -1,0 +1,32 @@
+#
+# This makefile assumes GNU make features
+#
+
+#Include master environment and project specific options
+include ../../../../../../buildenv.mk
+include ../../../../../projenv.mk
+
+# Include some general definitions:
+CONFIGDIR = $(XTENSA_ROOT)
+include $(CONFIGDIR)/misc/hostenv.mk
+include $(CONFIGDIR)/misc/build.mk
+
+.PHONY: all clean cleand
+
+#  objects to build:
+SRC = $(WIRELESS_PROTOCOL_C)
+ASRC =
+
+OBJS = $(SRC:.c=.o) $(ASRC:.S=.o)
+DEP = $(SRC:.c=.d) $(ASRC:.S=.d)
+
+all: buildconfig $(OBJS)
+
+clean:
+	-$(RM) $(TARGETDIR)\*.o
+
+cleand:
+	-$(RM) *.d
+
+include ../../../../../../buildrules.mk
+

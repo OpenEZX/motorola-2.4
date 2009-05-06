@@ -7,10 +7,44 @@
 #
 # Note 2! The CFLAGS definitions are now inherited from the
 # parent makes..
-#
+# 
+# Copyright (C) 2005,2006 Motorola, Inc.
+# 
+#******************************** history *****************************
+#    author          date                  title
+#    Motorola        2005-06-30            update pcap interface to spi mode
+#    Motorola        2005-08-18            remove no use files' object
+#    Motorola        2006-01-18            Add EzX touch screen support.
+#                                          Add EzX keypad support.
+#                                          Add EzX keylight and PCAP RTC support.
+#                                          Add EzX log and fmradio support.
+#    Motorola        2006-06-15            Add PENGLAI support
 
-O_TARGET := misc.o
+O_TARGET                        := misc.o
+
+export-objs			:= ezx-ts.o keylight.o log.o pcap_rtc.o
+
+obj-$(CONFIG_ARCH_EZX_TS)       += ezx-ts.o 
+
+obj-$(CONFIG_ARCH_EZX)          += ezx_keypad.o
+
+
+obj-$(CONFIG_FMRADIO_E680)	+= fmradio.o
+obj-$(CONFIG_MOT_POWER_IC_PCAP_RTC)     += pcap_rtc.o
+obj-$(CONFIG_MOT_POWER_IC_KEYLIGHT)     += keylight.o
+obj-$(CONFIG_HAINAN_LED)	+= pwm-led.o
+obj-$(CONFIG_SUMATRA_LED)  	+= pwm-led.o
+obj-$(CONFIG_MACAU_LED)  	+= pwm-led.o
+obj-$(CONFIG_PENGLAI_LED)  	+= pwm-led.o
+
+ifeq ($(CONFIG_PANIC_LOG),y)
+obj-$(CONFIG_PANIC_LOG)		+= log.o
+ifeq ($(CONFIG_ARCH_EZX),y)
+obj-$(CONFIG_ARCH_EZX)		+= ezx-log.o
+endif
+endif
 
 include $(TOPDIR)/Rules.make
+
 
 fastdep:

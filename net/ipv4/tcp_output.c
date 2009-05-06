@@ -36,10 +36,44 @@
  *
  */
 
+
+/*
+ * Copyright©2005, 2007 Motorola
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 as published
+ * by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+ * 02111-1307, USA
+ *
+ */
+ 
+/*
+ *  Author           Date                    Comment
+ * ========   ===========   =====================================================
+ * Motorola   2005-Jul-5    limit mss be no bigger than 1372(0x55C) to solve compatibility issue with CMCC
+ * Motorola   2007-Jan-9    use EZX_MAX_TCP_SEGMENT_SIZE to replace 0x55c and set the maximum segment
+                                size in function tcp_sync_mss to not bigger  than 0x55c
+ */
+
 #include <net/tcp.h>
 
 #include <linux/compiler.h>
 #include <linux/smp_lock.h>
+
+
+/* 
+ *  limit mss to be not bigger than 1372(0x055C) to solve compatiblity issue with CMCC 
+ */
+#define EZX_MAX_TCP_SEGMENT_SIZE 0x055C
 
 /* People can turn this off for buggy TCP's found in printers etc. */
 int sysctl_tcp_retrans_collapse = 1;
@@ -88,6 +122,14 @@ static __u16 tcp_advertise_mss(struct sock *sk)
 	struct tcp_opt *tp = &(sk->tp_pinfo.af_tcp);
 	struct dst_entry *dst = __sk_dst_get(sk);
 	int mss = tp->advmss;
+
+    /* 
+     * to solve compatiblity issue with CMCC 
+     */
+    if( mss > EZX_MAX_TCP_SEGMENT_SIZE )
+    {
+        mss = tp->advmss = EZX_MAX_TCP_SEGMENT_SIZE;
+    }
 
 	if (dst && dst->advmss < mss) {
 		mss = dst->advmss;
@@ -514,6 +556,16 @@ int tcp_sync_mss(struct sock *sk, u32 pmtu)
 	/* Clamp it (mss_clamp does not include tcp options) */
 	if (mss_now > tp->mss_clamp)
 		mss_now = tp->mss_clamp;
+
+        /* 
+         * limit mss to be not bigger than 1372(0x55C)
+         * to solve compatiblity issue with CMCC 
+         */
+        if( mss_now > EZX_MAX_TCP_SEGMENT_SIZE )
+        {
+            mss_now = EZX_MAX_TCP_SEGMENT_SIZE;
+        }
+
 
 	/* Now subtract optional transport overhead */
 	mss_now -= tp->ext_header_len;

@@ -1,0 +1,43 @@
+Date : 2004-11-04 
+	SHIMC 
+	1> Removed Hard coding of mode to infra 
+	2> Added Wep Encryption related code in ProcessSetEncrytion
+	Wlan
+	1> Removed Variables defined in .h file
+________________________________________________________________
+Date : 2004-11-03
+	SHIMC
+	1> Added code to set Radion on off
+	2> Added code to set Antenna
+	3> Added code to set Region 
+	4> Added code to set Max_tx_pow on based on region
+
+	Merge
+	1> Merged the driver changes .. wlan_tx.c
+	
+________________________________________________________________
+
+Date	:2004-11-02
+	1> Taken the Base Kamino code from MSI
+	2> Taken Wlan driver from
+           mrv-wlan-linux-v14-private-041101-MSI release
+	3> Merged Jay's changes with this code in wlan & Interface_sdspi
+	4> Taken Lowlevel driver from Jay's code
+	5> Added ProcessSetRF_RX_MODE
+____________________________________________________________________
+Version :
+Date 	: 2004-10-29
+
+	1> Merged mrv-linux-v14-private-041028GES code.
+	2> Modified the Command delay timer
+	3> Changed the Priority of the Rx Thread in wlan_main.c
+	4> Modified the IF interface sbi_interrupt function 
+		calling of wlan_interrupt function.
+	5> Added function for set_Mac_Address 
+	6> Added function for set_mutlicast 
+	7> Modified Adapter Structure added wait_queue_head_t 
+		variable cmd_enckey
+	8> Added WPA Macro for PWK Key
+	9> Added changes for Compiler flag ifdef ADHOCAES 
+
+

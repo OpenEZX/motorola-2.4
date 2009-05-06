@@ -1,4 +1,9 @@
 #
+# Copyright (C) 2006 Motorola Inc.
+#
+# 2006-Feb-05   Add IPSEC nat support  
+
+#
 # Network configuration
 #
 mainmenu_option next_comment
@@ -98,5 +103,7 @@ mainmenu_option next_comment
 comment 'Network testing'
 tristate 'Packet Generator (USE WITH CAUTION)' CONFIG_NET_PKTGEN
 endmenu
+
+bool 'IPSEC NAT-Traversal' CONFIG_IPSEC_NAT_TRAVERSAL
 
 endmenu

@@ -3,6 +3,12 @@
  *
  *  Copyright (C) 1991, 1992  Linus Torvalds
  */
+/*
+ * Copyright (C) 2005-2006 Motorola Inc.
+ *
+ *  2005-Nov-11  add panic reboot on EzX platform
+ *  2006-Aug-18  add log record support for interprocessor communication paralysis
+ */
 
 /*
  * This function is used through-out the kernel (including mm and fs)
@@ -17,9 +23,14 @@
 #include <linux/sysrq.h>
 #include <linux/interrupt.h>
 
+#ifdef CONFIG_808A5PANIC_LOG
+#include <asm/hardware.h>
+extern int bp808a5_is_happened(void);
+#endif
+
 asmlinkage void sys_sync(void);	/* it's really int */
 
-int panic_timeout;
+int panic_timeout = 1;
 
 struct notifier_block *panic_notifier_list;
 
@@ -66,7 +77,30 @@ NORET_TYPE void panic(const char * fmt, ...)
 	smp_send_stop();
 #endif
 
+#ifdef CONFIG_808A5PANIC_LOG
+	if(bp808a5_is_happened())
+		printk(KERN_EMERG "BP 808A5 paniced, system will not automaticly reboot\n");
+	else {	
+#endif
+	if (panic_timeout > 0)
+	{
+		printk(KERN_EMERG "Kernel paniced, rebooting system in %d seconds...\n", panic_timeout);
+	}
+#ifdef CONFIG_808A5PANIC_LOG
+	}
+#endif
+	
 	notifier_call_chain(&panic_notifier_list, 0, NULL);
+
+#ifdef CONFIG_808A5PANIC_LOG
+	if(bp808a5_is_happened())
+	{ // do not restart until user pull out battery
+		cli();
+		OWER = 0x0;
+		while(1)
+			mdelay(1000);
+	}
+#endif		
 
 	if (panic_timeout > 0)
 	{
@@ -81,7 +115,11 @@ NORET_TYPE void panic(const char * fmt, ...)
 		 *	choosing not too. It might crash, be corrupt or do
 		 *	more harm than good for other reasons.
 		 */
+#ifdef CONFIG_ARCH_EZXBASE 
+		ezxpanic_machine_restart(NULL);
+#else
 		machine_restart(NULL);
+#endif
 	}
 #ifdef __sparc__
 	{
@@ -101,6 +139,7 @@ NORET_TYPE void panic(const char * fmt, ...)
 		panic_blink(); 
 #endif
 		CHECK_EMERGENCY_SYNC
+		barrier();
 	}
 }
 

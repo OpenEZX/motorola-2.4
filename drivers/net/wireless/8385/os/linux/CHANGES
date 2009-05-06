@@ -1,0 +1,12 @@
+06/06/05: version 57
+	1. Changed platform specific <asm/spinlock.h> with 
+		generic <linux/spin_lock.h> in wlan_thread.h.
+	
+06/02/05: version 45
+	1. Added os_schedule().
+
+04/25/05: version 44
+	1. Added two functions wlan_carrier_on() and wlan_carrier_off()
+		in os_macros.h
+	2. Added a dummy macro TX_EVENT_FLAGS_SET(x, y, z) in os_macros.h
+

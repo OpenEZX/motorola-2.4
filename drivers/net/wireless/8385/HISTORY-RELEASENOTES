@@ -1,0 +1,693 @@
+11-14-05
+
+Driver Release Version: 138.p4
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388:	   Based on feature pack(A1 chipset only works on 1 bit mode)
+3. CF/SD8381:	   Based on feature Pack
+4. SD/GSPI/CF8399: Based on feature Pack
+5. wpa_supplicant-0.3.8-MSI-8 should be used
+6. WMM_TSPEC and WMM_Para_IE are not supported
+7. Fixed bugs:
+	7068: Set unused PowerMode field in HostCmd_DS_802_11_PS_MODE structure 
+		to Zero
+==============================================================================
+
+
+11-10-05
+
+Driver Release Version: 138.p3
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388:	   Based on feature pack(A1 chipset only works on 1 bit mode)
+3. CF/SD8381:	   Based on feature Pack
+4. SD/GSPI/CF8399: Based on feature Pack
+5. wpa_supplicant-0.3.8-MSI-8 should be used
+6. WMM_TSPEC and WMM_Para_IE are not supported
+7. Fixed bugs:
+	6848: AC parameters changed on AP not relayed to driver by firmware
+	6932: UAPSD Transmit Latency higher than expected
+	6936: fix Memory corruption issues on wlanconfig		
+	7005: Change the dev->watchdog_timeo to 50 ms
+
+==============================================================================
+
+10-27-05
+
+Driver Release Version: 138.p2
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388:	   Based on feature pack(A1 chipset only works on 1 bit mode)
+3. CF/SD8381:	   Based on feature Pack
+4. SD/GSPI/CF8399: Based on feature Pack
+5. wpa_supplicant-0.3.8-MSI-8 should be used
+6. WMM_TSPEC and WMM_Para_IE are not supported
+7. Fixed bugs:
+	6269: fix re-assoc when hostsleep + deauth script is running
+
+===============================================================================
+
+09-26-05
+
+Driver Release Version: 138.p1
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388:	   Based on feature pack(A1 chipset only works on 1 bit mode)
+3. CF/SD8381:	   Based on feature Pack
+4. SD/GSPI/CF8399: Based on feature Pack
+5. wpa_supplicant-0.3.8-MSI-8 should be used
+6. WMM_TSPEC and WMM_Para_IE are not supported
+7. Fixed bugs:
+	6270: bus driver IDLE state: cannot enable SDIO_INT sometimes
+
+===========================================================================
+
+09-07-05
+
+Driver Release Version: 138
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388:	   Based on feature pack(A1 chipset only works on 1 bit mode)
+3. CF/SD8381:	   Based on feature Pack
+4. SD/GSPI/CF8399: Based on feature Pack
+5. wpa_supplicant-0.3.8-MSI-8 should be used
+6. WMM_TSPEC and WMM_Para_IE are not supported
+7. Fixed bugs:
+	5981: there is mmc_irq error every time when host wake up from sleep
+	5983: SDIO command response timeout errors when unload the wlan/sdio modules
+	5986: V5: CF8399 can not work properly
+
+===========================================================================
+
+09-01-05
+
+Driver Release Version: 137
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388:	   Based on feature pack(A1 chipset only works on 1 bit mode)
+3. CF/SD8381:	   Based on feature Pack
+4. SD/GSPI/CF8399: Based on feature Pack
+5. wpa_supplicant-0.3.8-MSI-8 should be used
+6. WMM_TSPEC and WMM_Para_IE are not supported
+7. Fixed bugs:
+	5871: Scan result : IE lengths (TLV length field) are wrong
+
+===========================================================================
+
+08-30-05
+
+Driver Release Version: 136
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388:	   Based on feature pack(A1 chipset only works on 1 bit mode)
+3. CF/SD8381:	   Based on feature Pack
+4. SD/GSPI8399:	   Based on feature Pack
+5. wpa_supplicant-0.3.8-MSI-8 should be used
+6. WMM_TSPEC and WMM_Para_IE are not supported
+7. Replace with new cal_data_ext-set_vA.conf for over 256-bytes
+8. Fixed bugs:
+   5912:MOT-GSM issues, most of them are code improvement
+   5924: ATIMGEN compiler flag to control atimgen private command;
+   5925: ported workaround to poll cmdDnLdRdy in function cf_IsCmdReady()
+
+===========================================================================
+
+08-26-05
+
+Driver Release Version: 135
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388:	   Based on feature pack(A1 chipset only works on 1 bit mode)
+3. CF/SD8381:	   Based on feature Pack
+4. wpa_supplicant-0.3.8-MSI-8 should be used
+5. README is updated
+6. WMM_TSPEC and WMM_Para_IE are not supported
+7. Replace with new cal_data_ext-set_vA.conf for over 256-bytes
+8. Fixed bugs:
+	5898: rateadapt private command needs to be issued twice to get the previous settings
+
+============================================================================
+
+08-23-2005
+
+Driver Release Version: 134
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388H:        Based on feature pack(A1 chipset only works on 1 bit mode)
+3. CF/SD8381:      Based on feature Pack
+4. wpa_supplicant-0.3.8-MSI-8 should be used
+5. README is updated
+6. WMM_TSPEC and WMM_Para_IE are not supported
+7. Fixed bugs:
+	5780:Port RC4/AES API
+	5818:Added missed sbi_suspend and sbi_sbi_resume function
+	5835:Add private command atimgen
+	5836:Corrected hostwakeupcfg parameter parsing problem
+	5822:BG scan data structure updated
+	5699:Added GPIO 1 ISR support for SDIO pax270m bus driver
+	5856: Support SD8388-PN on SDIO/Bulverde platform
+8. Background scan data structure changed 
+
+============================================================================
+
+
+08-12-2005
+
+Driver Release Version: 133
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388H:        Based on feature pack
+3. CF/SD8381:      Based on feature Pack
+4. wpa_supplicant-0.3.8-MSI-8 should be used
+5. README is updated
+6. WMM_TSPEC and WMM_Para_IE are not supported
+7. Fixed bugs:
+	5716: Tx packets cannot wakeup firmware
+	5585: Infra WMM: AC_BE throughput is lower than AC_BK throughput
+	5754: WMM AIFS --- queue polling changes
+	5759: Allow zero sleep period
+	5774: Integrate Linux PM callbacks
+
+
+08-03-2005
+
+Driver Release Version: 132
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388H:        Based on feature pack
+3. CF/SD8381:      Based on feature Pack
+4. wpa_supplicant-0.3.8-MSI-8 should be used
+5. WMM_TSPEC and WMM_Para_IE are not supported
+6. Fixed bugs:
+	5319: [Mot-GSM] MMC IRQ errors returned while running power save tests
+	5631: Mot-GSM HostWakeupCfg+PS test scripts fail
+
+============================================================================
+
+08-02-2005
+
+Driver Release Version: 131
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388H:        Based on feature pack
+3. CF/SD8381:      Based on feature Pack
+4. wpa_supplicant-0.3.8-MSI-8 should be used
+5. README is updated
+6. WMM_TSPEC and WMM_Para_IE are not supported
+7. Fixed bugs:
+	5663: add Host_Wakeup_Cfg_CANCEL command
+	5664: add Mainstone Bulverde LED display for main thread status debug
+	5665: add txcontrol command to README
+	5667: add a generic function to send IWEVCUSTOM type of wireless events
+
+============================================================================
+
+08-01-2005
+
+Driver Release Version: 130
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388H:        Based on feature pack
+3. CF/SD8381:      Based on feature Pack
+4. wpa_supplicant-0.3.8-MSI-8 should be used
+5. WMM_TSPEC and WMM_Para_IE are not supported
+6. Fixed bugs: 5653, 5654.
+
+============================================================================
+
+07-31-2005
+
+Driver Release Version: 129
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388H:        Based on feature pack
+3. CF/SD8381:      Based on feature Pack
+4. wpa_supplicant-0.3.8-MSI-8 should be used
+5. WMM_TSPEC and WMM_Para_IE are not supported
+6. Fixed bugs:
+	5081: Support Host Wakeup and Background Scan Report 
+		(in Deep Sleep) wakeup through GPIO interrupt on Bulverde
+	5399: uut doesn't send probe req after entering deepsleep mode
+	5513: CCX V2 Linux driver support - Reassoc, CCKM ioctls
+	5631: Mot-GSM HostWakeupCfg+PS test scripts fail
+	5633: command can't be issued sometimes w/ BG scan enabled.
+	5634: script failed w/ host wake+ps on/off
+
+============================================================================
+
+07-27-2005
+Driver Release Version: 128
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388H:        Based on feature pack
+3. CF/SD8381:      Based on feature Pack
+4. wpa_supplicant-0.3.8-MSI-7 should be used
+5. README is updated
+6. WMM_TSPEC and WMM_Para_IE are not supported
+7. Fixed bugs:
+	5584: WMM AC_Priority value incorrect
+	5319: MMC IRQ errors returned while running power save tests
+	5582: Change the checking of TX download ready in cf_interrupt()
+	5580: Enter_deepsleep followed by an exit_deepsleep immediately fails
+	5573: Add new iwpriv command "txcontrol"
+	5577: Beacon SNR/NF/RSSI value incorrect if 802_11_RSSI command fails
+	5590: Add support of GPIO wakup in Bulverde Mainstone
+   
+============================================================================
+
+07-26-2005
+
+Driver Release Version: 127
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388H:        Based on feature pack
+3. CF/SD8381:      Based on feature Pack
+4. wpa_supplicant-0.3.8-MSI-7 should be used
+5. README is updated
+6. WMM_TSPEC and WMM_Para_IE are not supported
+7. Fixed bugs:
+8. Added reassociation support and CCX support
+9. Added GENIE set/get private ioctls, timestamps in scan results
+
+07-22-2005
+
+Driver Release Version: 126
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388H:        Based on feature pack
+3. CF/SD8381:      Based on feature Pack
+4. wpa_supplicant-0.3.8-MSI-7 should be used
+5. README is updated
+6. WMM_TSPEC and WMM_Para_IE are not supported
+7. Fixed bugs: 5504, 5482
+8. Added reassociation support and CCX support
+9. Added GENIE set/get private ioctls, timestamps in scan results
+
+07-15-2005
+
+Driver Release Version: 125
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388H:        Based on feature pack
+3. CF/SD8381:      Based on feature Pack
+4. wpa_supplicant-0.3.8-MSI-7 should be used
+5. README is updated
+6. WMM_TSPEC and WMM_Para_IE are not supported
+7. Fixed bugs: 5027,5464,5393,5434,5439,5401,4990,5254,5388,5384,5466
+
+
+
+07-08-2005
+
+Driver Release Version: 124
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388H: Based on feature pack
+3. CF8381/SD8381/SD-SPI8381: WMM, WPA2, Host Wakeup, 802.11d and 
+	background scan are supported
+4. wpa_supplicant-0.3.8-MSI-7 should be used
+5. README is updated
+6. WMM_TSPEC and WMM_Para_IE are not supported
+7. The private commands inactivityto is not supported. 
+8. PS command data structure PS_CMD_ConfirmSleep is updated.
+9. Fixed bugs: 
+
+============================================================================
+
+07-07-2005
+
+Driver Release Version: 123
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388H: WMM, WPA2, 802.11d and background scan are supported
+3. CF8381/SD8381/SD-SPI8381: WMM, WPA2, Host Wakeup, 802.11d and 
+	background scan are supported
+4. wpa_supplicant-0.3.8-MSI-7 should be used
+5. README is updated
+6. WMM_TSPEC and WMM_Para_IE are not supported
+7. The private commands inactivityto is not supported. 
+8. PS command data structure PS_CMD_ConfirmSleep is updated.
+9. Fixed bugs: 
+  5311: Feature pack support for SD8388H
+  5321: Change default local listen interval to zero
+
+============================================================================
+
+07-06-2005
+
+Driver Release Version: 122
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. SD8388H: WMM, WPA2, 802.11d and background scan are supported
+3. CF8381/SD8381/SD-SPI8381: WMM, WPA2, Host Wakeup, 802.11d and 
+	background scan are supported
+4. wpa_supplicant-0.3.8-MSI-7 should be used
+5. README is updated
+6. WMM_TSPEC and WMM_Para_IE are not supported
+7. The private commands inactivityto is not supported. 
+8. PS command data structure PS_CMD_ConfirmSleep is updated.
+9. Fixed bugs: 
+	5056: Implement private command and API for subscribe event in driver
+	5170: uut wake up at random dtim count in infra ps mode
+	5176: Association failes if AP doesn't support short preamble
+	5187: After joinning a g IBSS, uut cannot set rate >18M
+	5190: Modified private cmd ps_sleeppd to sleeppd accepting 
+		sleep_period only
+	5250: Add private cmd to hwmmode to set auto host wake mode 
+	5252: Combine private cmd setps_inactto and getps_inactto to 
+		inactivityto
+	5259: Added new private command rateadapt
+
+============================================================================
+
+
+
+
+06-27-2005
+
+Driver Release Version: 121
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. CF8381: WMM, WPA2, 802.11d and background scan are supported
+3. SD8381: All V3 features are supported
+4. SD8388H: WPA2 is supported
+5. wpa_supplicant-0.3.8-MSI-7 should be used
+6. README is updated
+7. WMM_TSPEC and WMM_Para_IE are not supported
+8. The following private commands are not supported: setps_inactto, 
+   getps_inactto, setps_sleeppd, and getps_sleeppd.
+9. Firmware image names are changed from 8385_B0.h to 8385.h
+10. BCA script is updated
+11. Fixed bugs: 4854, 4884, 5079, 5080, 5081, 5099, 5118, 5130, 5146
+
+
+
+
+06-22-2005
+
+Driver Release Version: 120
+
+1. CF/SD/GSPI8385: Based on feature pack
+2. CF8381: WMM, WPA2, 802.11d and background scan are supported
+3. SD8381: All V3 features are supported
+4. SD8388H: WPA2 is supported
+5. wpa_supplicant-0.3.8-MSI-7 should be used
+6. README is updated
+7. WMM_TSPEC and WMM_Para_IE are not supported
+8. The following private commands are not supported: setps_inactto, 
+   getps_inactto, setps_sleeppd, and getps_sleeppd.
+9. Fixed bugs: 4854, 4887, 4891, 4959, 4963
+
+====================================================================
+
+06-15-2005
+
+Driver Release Version: 119
+
+1. Basic features: Infrastructure, AD-HOC, WEP, WPA, PS
+2. CF/SD/GSPI8385: WMM, WPA2, 802.11d, WMM UAPSD and background scan are supported
+3. CF8381: WMM, WPA2, 802.11d and background scan are supported
+4. SD8388H: WPA2 is supported
+5. SD8381: All V3 features are supported
+6. wpa_supplicant-0.3.8-MSI-7 should be used
+7. README is updated
+8. WMM_TSPEC and WMM_Para_IE are not supported
+9. Fixed bugs: 4887, 4891, 4959, 4963
+
+====================================================================
+
+06-07-2005
+
+Driver Release Version: 118
+
+1. Basic features: Infrastructure, AD-HOC, WEP, WPA, PS
+2. CF/SD/GSPI8385:  WMM, WPA2, 802.11d and background scan are supported
+3. CF8381: WMM, WPA2, 802.11d are supported
+4. SD8388H: WPA2 is supported
+5. SD8381: All V3 features are supported
+6. wpa_supplicant-0.3.8-MSI-7 should be used
+7. README is updated
+8. Fixed bugs: 4065, 4731, 4782
+
+====================================================================
+
+
+
+06-07-2005
+
+Driver Release Version: 117
+
+1. Basic features: Infrastructure, AD-HOC, WEP, WPA, PS
+2. CF/SD/GSPI8385:  WMM, WPA2, 802.11d and background scan are supported
+3. CF8381: WMM, WPA2 are supported
+4. SD8388H: WPA2 is supported
+5. SD8381: All V3 features are supported
+6. wpa_supplicant-0.3.8-MSI-7 should be used
+7. README is updated
+8. Fixed bugs: 4065, 4731, 4782
+
+====================================================================
+
+
+
+06-02-2005
+
+Driver Release Version: 116
+
+1. Basic features: Infrastructure, AD-HOC, WEP, WPA, PS
+2. CF/SD/GSPI8385:  WMM, WPA2, 802.11d and background scan are supported
+3. CF8381: WMM, WPA2 are supported
+4. SD8388H: WPA2 is supported
+5. SD8381: All V3 features are supported
+6. wpa_supplicant-0.3.8-MSI-7 should be used
+7. README is updated
+8. Fixed bugs: 4572, 4614, 4686, 4762
+
+====================================================================
+
+
+
+05-27-2005
+
+Driver Release Version: 115
+
+1. Basic features: Infrastructure, AD-HOC, WEP, WPA, PS
+2. CF8381: WPA2 is supported
+3. CF/SD/GSPI8385:  WMM, WPA2, 802.11d and background scan are supported
+4. SD8388H: basic features, only 1-bit mode is supported
+5. wpa_supplicant-0.3.8-MSI-7 should be used
+6. Fixed bugs:
+
+====================================================================
+
+
+
+05-26-2005
+
+Driver Release Version: 114
+
+1. Basic features: Infrastructure, AD-HOC, WEP, WPA, PS.
+2. CF8381: WPA2 is supported
+3. CF/SD/GSPI8385:  WMM, WPA2, 802.11d and background scan are supported.
+4. wpa_supplicant-0.3.8-MSI-7 should be used
+5. adhoc g-rate is disabled by default. private command needs to be used to enable it if needed.
+6. README is updated
+7. Fixed bugs: 4573, 4602, 4607
+
+====================================================================
+
+
+
+05-23-2005
+
+Driver Release Version: 113
+
+1. Basic features: Infrastructure, AD-HOC, WEP, WPA, PS.
+2. CF8381: WPA2 is supported
+3. CF/SD/GSPI8385:  WMM, WPA2, 802.11d and background scan are supported.
+4. wpa_supplicant-0.3.8-MSI-7 should be used
+5. Fixed bugs: 4320, 4498
+
+====================================================================
+
+
+05-19-2005
+
+Driver Release Version: 112
+
+1. Basic features: Infrastructure, AD-HOC, WEP, WPA, PS.
+2. CF8381: WPA2 is supported
+3. CF/SD/GSPI8385:  WMM, WPA2, 802.11d and background scan are supported.
+4. wpa_supplicant-0.3.8-MSI-7 should be used
+5. README is updated
+6. Fixed bugs: 4317, 4376, 4377, 4457.
+
+====================================================================
+
+
+05-17-2005
+
+Driver Release Version: 111
+
+1. Basic features: Infrastructure, AD-HOC, WEP, WPA, PS.
+2. CF8381: WPA2 is supported
+3. CF/SD/SPI/GSPI8385:  WMM, WPA2, 802.11d and background scan are supported.
+4. wpa_supplicant-0.3.8-MSI-7 should be used
+5. Fixed bugs: 4423, 4420, 3558, 4448
+
+====================================================================
+
+
+05-13-2005
+
+Driver Release Version: 110
+
+1. Basic features: Infrastructure, AD-HOC, WEP, WPA, PS.
+2. CF8381: WPA2 is supported
+3. CF/SD/SPI/GSPI8385:  WMM, WPA2, 802.11d and background scan are supported.
+4. wpa_supplicant-0.3.8-MSI-7 should be used
+5. README is updated
+6. Fixed bugs: 4381, 4395,4331 
+
+====================================================================
+
+05-12-2005	
+
+Driver Release Version:  109
+
+1. Basic features: Infrastructure, AD-HOC, WEP, WPA, PS.
+2. CF8381: WPA2 is supported
+3. CF/SD/SPI/GSPI8385:	WPA2, 802.11d and background scan are supported.
+4. wpa_supplicant-0.3.8-MSI-7 should be used
+5. "iwpriv ethx get/setadhocch" is changed to "wlanconfig ethx get/setadhocch"
+6. README is updated
+7. Fixed bugs: 4155, 4166, 4165, 3685, 4092, 4204, 4273
+8. Fixed bug #4339, When WPA compiler option is turned off, association 
+   fails.
+====================================================================
+
+
+
+05/05/2005
+
+Release Version: 108
+
+1. All V2, V3 features supported
+2. WPA2, 802.11d and Background Scan supported
+3. wpa_supplicant-0.3.8-MSI-6 should be used
+4. README updated
+5. Added private commands "getbcnavg" and "setbcnavg".
+6. Fixed bug #4092, after association, IF interface should be up.
+
+End of Releasenotes
+
+
+
+04/28/2005
+
+Release Version: 107
+
+1. All V2, V3 features supported
+2. WPA2 supported
+3. wpa_supplicant-0.3.8-MSI-6 should be used
+4. README updated
+
+End of Releasenotes
+
+
+
+
+
+04/28/2005
+
+Release Version: 106
+
+1. All V2, V3 features supported
+2. WPA2 and 802.11d supported
+3. wpa_supplicant-0.3.8-MSI-6 should be used
+4. README updated
+5. Fixed bugs: 3996, 4034
+
+End of Releasenotes
+
+
+
+
+
+04/26/2005
+
+Release Version: 105
+
+1. All V2, V3 features supported
+2. WPA2 supported
+3. wpa_supplicant-0.3.8-MSI-6 should be used
+4. README updated
+
+End of Releasenotes
+
+
+
+
+
+04/26/2005
+
+Release Version: 104
+
+1. All V2, V3 features supported
+2. WPA2 and 802.11d supported
+3. wpa_supplicant-0.3.8-MSI-6 should be used
+4. Fixed bug: 4050
+
+End of Releasenotes
+
+
+
+
+
+04/22/2005
+
+Release Version: 103
+
+1. All V2, V3 features supported
+2. WPA2 and 802.11d supported
+3. wpa_supplicant-0.3.8-MSI-6 should be used
+
+End of Releasenotes
+
+
+
+
+
+04/20/2005
+
+Release Version: 102
+
+1. All V2, V3 features supported
+2. WPA2 and 802.11d supported
+3. wpa_supplicant-0.3.8-MSI-6 should be used
+
+End of Releasenotes
+
+
+
+
+04/12/2005
+
+Release Version: 101
+
+1. All V2, V3 features supported
+2. WPA2 and 802.11d supported
+
+End of Releasenotes
+
+
+
+
+03/30/2005
+
+Release Version: 100
+
+1. Initial V4 release
+2. Only V2, V3 features supported
+
+End of Releasenotes
